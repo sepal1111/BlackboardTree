@@ -1,0 +1,26 @@
+{
+  "mode": "smb",
+  "host": "0.0.0.0",
+  "port": 8080,
+  "session_hours": 12,
+
+  "data_dir": "MyScreen",
+  "browse_root": "",
+  "max_upload_mb": 20,
+
+  "ssl_certfile": "",
+  "ssl_keyfile": "",
+
+  "smb": {
+    "server": "192.168.1.10",
+    "port": 445,
+    "share": "{username}",
+    "domain": "",
+    "encrypt": false
+  },
+
+  "local": {
+    "root": "./data/{username}",
+    "users": {}
+  }
+}

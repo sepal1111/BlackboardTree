@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyScreen 教室白板</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='20' rx='4' fill='%234263eb'/%3E%3Crect x='12' y='24' width='8' height='4' fill='%234263eb'/%3E%3Ccircle cx='16' cy='14' r='5' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/qrcode.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div id="login" class="login hidden"></div>
+
+  <div id="app" class="hidden">
+    <main id="stage">
+      <div id="empty-hint" class="empty-hint hidden">
+        <div class="eh-icon">👇</div>
+        <div>從下方工具列加入計時器、抽籤、文字等小工具</div>
+        <small>拖曳標題列移動、拖曳右下角調整大小。按 H 隱藏工具列、F 全螢幕。</small>
+      </div>
+    </main>
+
+    <header id="topbar" class="chrome">
+      <button id="board-btn" class="tb-btn" title="切換白板"><span>☰</span> <b id="board-name"></b> ▾</button>
+      <div class="tb-spacer"></div>
+      <span id="sync" class="pill"></span>
+      <button id="bg-btn" class="tb-btn" title="背景">🎨 <span class="tb-label">背景</span></button>
+      <button id="clear-btn" class="tb-btn" title="清空白板">🧹 <span class="tb-label">清空</span></button>
+      <button id="fs-btn" class="tb-btn" title="全螢幕 (F)">⛶ <span class="tb-label">全螢幕</span></button>
+      <button id="user-btn" class="tb-btn" title="帳號">👤</button>
+    </header>
+
+    <nav id="dock" class="chrome">
+      <div id="dock-items"></div>
+    </nav>
+    <button id="hide-btn" title="隱藏 / 顯示工具列 (H)">👁</button>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast"></div>
+</body>
+</html>
