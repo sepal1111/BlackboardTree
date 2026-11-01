@@ -3,3 +3,11 @@ data/
 config.json
 __pycache__/
 *.pem
+desktop/bin/
+desktop/dist/
+desktop/out/
+desktop/resources/
+desktop/.tmp/
+
+# 學校網路磁碟機程式（獨立 repo）
+NetDrive/

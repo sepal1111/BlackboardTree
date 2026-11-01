@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from storage import AuthError, LocalStorage, SMBStorage, StorageError, split_rel  # noqa: E402
+from relay import router as relay_router  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "static"
@@ -53,6 +54,12 @@ def load_config() -> dict:
                 cfg[k] = v
     else:
         print("[MyScreen] 找不到 config.json，使用本機測試模式（資料存在 ./data）")
+    # Docker／NAS 可以直接用環境變數指定，例如 MYSCREEN_MODE=relay
+    import os
+    if os.environ.get("MYSCREEN_MODE"):
+        cfg["mode"] = os.environ["MYSCREEN_MODE"]
+    if os.environ.get("MYSCREEN_PORT"):
+        cfg["port"] = int(os.environ["MYSCREEN_PORT"])
     return cfg
 
 
@@ -62,6 +69,7 @@ ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 COOKIE = "ms_token"
 
 app = FastAPI(title="MyScreen", docs_url=None, redoc_url=None)
+app.include_router(relay_router)
 
 
 # ---------------------------------------------------------------- sessions
@@ -70,7 +78,7 @@ class Session:
         self.username = username
         self.storage = storage
         self.expires = time.time() + CONFIG["session_hours"] * 3600
-        self.lock = threading.Lock()
+        self.board_cache: dict[str, tuple[float, dict]] = {}
 
 
 sessions: dict[str, Session] = {}
@@ -80,6 +88,8 @@ failed: dict[str, list[float]] = defaultdict(list)
 
 def make_storage(username: str, password: str):
     mode = CONFIG["mode"]
+    if mode == "relay":
+        raise StorageError("這台伺服器只提供手機遙控，請改用網路磁碟機儲存白板")
     safe_user = username.split("\\")[-1]
     if mode == "smb":
         s = CONFIG["smb"]
@@ -192,7 +202,7 @@ async def login(request: Request, response: Response):
     response.set_cookie(COOKIE, token, httponly=True, samesite="strict",
                         secure=bool(CONFIG.get("ssl_certfile")),
                         max_age=CONFIG["session_hours"] * 3600)
-    return {"username": sessions[token].username}
+    return {"username": sessions[token].username, "dataPath": data_in_browse(sessions[token])}
 
 
 @app.post("/api/logout")
@@ -207,23 +217,53 @@ def logout(request: Request, response: Response):
 
 @app.get("/api/me")
 def me(request: Request):
-    return {"username": current(request).username}
+    s = current(request)
+    return {"username": s.username, "dataPath": data_in_browse(s)}
 
 
 # ---------------------------------------------------------------- boards
-def index_of(s: Session) -> dict:
-    idx = read_json(s.storage, data_path(s, "boards", "index.json"), {}) or {}
-    return idx.get("boards", {})
+def data_in_browse(s: Session) -> str:
+    """資料夾相對於可瀏覽根目錄的位置（前端用來組出圖片路徑）。"""
+    data, browse = split_rel(_tpl("data_dir", s)), split_rel(_tpl("browse_root", s))
+    return "/".join(data[len(browse):]) if data[: len(browse)] == browse else ""
+
+
+def scan_boards(s: Session) -> list[dict]:
+    """直接掃描 boards 資料夾，與桌面版／網頁資料夾模式寫入的檔案互通。只重讀有變動的檔案。"""
+    try:
+        files = s.storage.listdir(data_path(s, "boards"))
+    except StorageError:
+        return []
+    out, seen = [], set()
+    for f in files:
+        name = f["name"]
+        if f["dir"] or not name.endswith(".json") or name == "index.json" or not ID_RE.match(name[:-5]):
+            continue
+        bid = name[:-5]
+        seen.add(bid)
+        cached = s.board_cache.get(bid)
+        if not cached or cached[0] != f["mtime"]:
+            b = read_json(s.storage, data_path(s, "boards", name))
+            if not isinstance(b, dict):
+                continue
+            meta = {"id": bid, "name": b.get("name", "未命名白板"), "rev": b.get("rev", 0),
+                    "created": b.get("created", 0), "updatedAt": b.get("updatedAt", 0)}
+            cached = (f["mtime"], meta)
+            s.board_cache[bid] = cached
+        out.append(cached[1])
+    for bid in list(s.board_cache):
+        if bid not in seen:
+            s.board_cache.pop(bid, None)
+    return out
 
 
 @app.get("/api/boards")
 def list_boards(request: Request):
     s = current(request)
     try:
-        boards = index_of(s)
+        items = scan_boards(s)
     except Exception as e:  # noqa: BLE001
         raise err(e) from e
-    items = [{"id": k, **v} for k, v in boards.items()]
     items.sort(key=lambda b: b.get("created", 0))
     return {"boards": items}
 
@@ -264,10 +304,6 @@ async def put_board(board_id: str, request: Request):
             created = (cur or {}).get("created", now)
             board = {"id": board_id, "name": name, "rev": rev, "created": created, "updatedAt": now, "data": data}
             write_json(s.storage, rel, board)
-            idx_rel = data_path(s, "boards", "index.json")
-            idx = read_json(s.storage, idx_rel, {}) or {}
-            idx.setdefault("boards", {})[board_id] = {"name": name, "rev": rev, "created": created, "updatedAt": now}
-            write_json(s.storage, idx_rel, idx)
             return {"rev": rev, "updatedAt": now}
 
     from starlette.concurrency import run_in_threadpool
@@ -288,10 +324,7 @@ def delete_board(board_id: str, request: Request):
     try:
         with user_locks[s.username]:
             s.storage.delete(data_path(s, "boards", f"{board_id}.json"))
-            idx_rel = data_path(s, "boards", "index.json")
-            idx = read_json(s.storage, idx_rel, {}) or {}
-            idx.get("boards", {}).pop(board_id, None)
-            write_json(s.storage, idx_rel, idx)
+            s.board_cache.pop(board_id, None)
     except Exception as e:  # noqa: BLE001
         raise err(e) from e
     return {"ok": True}
@@ -367,10 +400,7 @@ async def upload(request: Request, name: str = "image.png"):
         ext = ".bin"
     fname = f"{time.strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}{ext}"
     rel = data_path(s, "media", fname)
-    # 回傳的路徑要相對於 browse_root，前端才能用 /api/file 讀取
-    browse = split_rel(_tpl("browse_root", s))
-    parts = split_rel(rel)
-    if parts[: len(browse)] != browse:
+    if not data_in_browse(s) and split_rel(_tpl("data_dir", s)) != split_rel(_tpl("browse_root", s)):
         raise HTTPException(500, "設定錯誤：data_dir 必須位於 browse_root 之內")
     from starlette.concurrency import run_in_threadpool
 
@@ -378,7 +408,7 @@ async def upload(request: Request, name: str = "image.png"):
         await run_in_threadpool(s.storage.write_bytes, rel, data)
     except Exception as e:  # noqa: BLE001
         raise err(e) from e
-    return {"path": "/".join(parts[len(browse):])}
+    return {"path": f"media/{fname}"}
 
 
 # ---------------------------------------------------------------- static

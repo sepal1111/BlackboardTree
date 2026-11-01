@@ -1,0 +1,8 @@
+.venv
+data
+desktop
+NetDrive
+.claude
+__pycache__
+*.md
+config.json

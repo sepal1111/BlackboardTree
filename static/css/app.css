@@ -65,6 +65,32 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .logo { font-size: 28px; font-weight: 800; color: var(--accent); letter-spacing: .5px; }
 .logo span { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 22px; vertical-align: -6px; }
 .login-err { color: #e03131; font-size: .9em; min-height: 1.2em; }
+.login-card.wide { width: min(620px, 100%); max-height: calc(100vh - 32px); overflow: auto; }
+.opt { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.opt.main { border-color: #bac8ff; background: #f8f9ff; }
+.opt-title { font-weight: 700; font-size: 1.02em; }
+.opt-status { color: var(--muted); font-size: .9em; line-height: 1.5; }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row-btns .input { flex: 1; min-width: 140px; }
+.row-btns > span:empty { display: none; }
+.grow { flex: 1; }
+.warn-text { color: #e8590c; margin-left: 4px; }
+
+/* 白板清單 */
+.login-card.boards { width: min(900px, 100%); max-height: calc(100vh - 32px); overflow: auto; gap: 16px; }
+.boards-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.boards-head h2 { margin: 0 0 4px; font-size: 22px; }
+.boards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.board-card {
+  text-align: left; border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-height: 104px; background: linear-gradient(160deg, #e7f5ff, #fff);
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px; transition: transform .1s, box-shadow .15s;
+}
+.board-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: #91a7ff; }
+.board-card.last { border: 2px solid var(--accent); }
+.bc-name { font-weight: 700; font-size: 17px; word-break: break-all; }
+.bc-time { font-size: 13px; color: var(--muted); }
+.board-card.new { align-items: center; justify-content: center; background: #fff; border-style: dashed; color: var(--accent); font-weight: 700; }
+.bc-plus { font-size: 30px; line-height: 1; }
 
 /* ---------- 主畫面 */
 #stage { position: fixed; inset: 0; overflow: hidden; transition: background .3s; }
@@ -168,6 +194,17 @@ body.dragging iframe { pointer-events: none; }
 .popmenu button.active { font-weight: 700; color: var(--accent); }
 .popmenu button.danger { color: #e03131; }
 .popmenu hr { border: 0; border-top: 1px solid #f1f3f5; margin: 4px 0; }
+
+/* 手機遙控 */
+.tb-btn.active { background: rgba(47, 158, 68, .92); }
+.remote-box { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; justify-content: center; min-height: 200px; }
+.remote-qr { width: min(300px, 70vw); aspect-ratio: 1; background: #fff; }
+.remote-qr svg { width: 100%; height: 100%; }
+.remote-info { display: flex; flex-direction: column; gap: 10px; min-width: 220px; }
+.remote-code { font-size: 48px; font-weight: 800; letter-spacing: 4px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.remote-url { font-family: monospace; font-size: 15px; background: #f1f3f5; padding: 6px 10px; border-radius: 8px; word-break: break-all; }
+.remote-count { font-weight: 600; }
+.remote-wait { color: var(--muted); padding: 40px; text-align: center; }
 
 /* 背景選擇 */
 .bg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; }

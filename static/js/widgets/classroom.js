@@ -81,6 +81,13 @@ export const names = {
     render();
     return {
       destroy: () => clearTimeout(anim),
+      remote: {
+        view: () => ({ current: s.current, left: pool().length, total: splitNames(s.names).length, picking: !!anim }),
+        act(a) {
+          if (a === 'pick') pickBtn.onclick();
+          else if (a === 'reset') { s.picked = []; s.current = ''; ctx.save(); render(); }
+        },
+      },
       settings: (c) => c.append(namesEditor(ctx, render),
         checkbox('抽過的人不再重複', s.removePicked, (v) => { s.removePicked = v; ctx.save(); render(); })),
     };
@@ -114,6 +121,10 @@ export const groups = {
     }
     render();
     return {
+      remote: {
+        view: () => ({ groups: s.groups, total: splitNames(s.names).length }),
+        act(a) { if (a === 'shuffle') make(); },
+      },
       settings: (c) => c.append(namesEditor(ctx, () => {}),
         h('div', { class: 'row' },
           field('分組方式', select([['count', '指定組數'], ['size', '每組人數']], s.mode, (v) => { s.mode = v; ctx.save(); })),
@@ -151,6 +162,10 @@ export const dice = {
     while (s.values.length < 6) s.values.push(1);
     render();
     return {
+      remote: {
+        view: () => ({ values: s.values.slice(0, s.count), rolling }),
+        act(a) { if (a === 'roll') roll(); },
+      },
       settings: (c) => c.append(field('骰子數量', select([1, 2, 3, 4, 5, 6].map((n) => [n, n + ' 顆']), s.count, (v) => { s.count = +v; render(); ctx.save(); }))),
     };
   },
@@ -173,7 +188,13 @@ export const traffic = {
     const ro = new ResizeObserver(() => wrap.classList.toggle('horizontal', body.clientWidth > body.clientHeight * 1.3));
     ro.observe(body);
     render();
-    return { destroy: () => ro.disconnect() };
+    return {
+      destroy: () => ro.disconnect(),
+      remote: {
+        view: () => ({ light: s.light }),
+        act(a, { light } = {}) { if (a === 'set' && ['red', 'yellow', 'green'].includes(light)) { s.light = light; render(); ctx.save(); } },
+      },
+    };
   },
 };
 
@@ -200,6 +221,10 @@ export const work = {
     }
     render();
     return {
+      remote: {
+        view: () => ({ mode: s.mode, custom: s.custom, modes: MODES.map(([k, e, l]) => ({ k, e, l })) }),
+        act(a, { mode } = {}) { if (a === 'set' && MODES.some((m) => m[0] === mode)) { s.mode = mode; s.custom = ''; render(); ctx.save(); } },
+      },
       settings: (c) => c.append(field('自訂文字（留空則使用預設）', h('input', { class: 'input', value: s.custom,
         oninput: (e) => { s.custom = e.target.value; render(); ctx.save(); } }))),
     };
@@ -230,6 +255,17 @@ export const poll = {
     }
     render();
     return {
+      remote: {
+        view: () => ({ question: s.question, options: s.options }),
+        act(a, { i } = {}) {
+          const o = s.options[i];
+          if (a === 'vote' && o) o.votes++;
+          else if (a === 'unvote' && o) o.votes = Math.max(0, o.votes - 1);
+          else if (a === 'reset') s.options.forEach((x) => { x.votes = 0; });
+          else return;
+          render(); ctx.save();
+        },
+      },
       settings: (c) => c.append(
         field('題目', h('input', { class: 'input', value: s.question, oninput: (e) => { s.question = e.target.value; render(); ctx.save(); } })),
         field('選項（每行一個）', h('textarea', { class: 'input', rows: 6, value: s.options.map((o) => o.label).join('\n'),

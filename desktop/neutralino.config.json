@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
+  "applicationId": "tw.edu.myscreen",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "port": 0,
+  "documentRoot": "/resources/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "one-time",
+  "logging": {
+    "enabled": false,
+    "writeToLogFile": false
+  },
+  "nativeAllowList": [
+    "app.*",
+    "os.*",
+    "filesystem.*",
+    "window.*",
+    "events.*"
+  ],
+  "globalVariables": {
+    "MSROOT": "V:",
+    "RELAY": "",
+    "NETDRIVE": "%LOCALAPPDATA%/Programs/NASDriveConnector/nas-drive-connector.exe"
+  },
+  "modes": {
+    "window": {
+      "title": "MyScreen 教室白板",
+      "useLogicalPixels": true,
+      "width": 1280,
+      "height": 800,
+      "minWidth": 800,
+      "minHeight": 560,
+      "center": true,
+      "maximize": true,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "icon": "/resources/icon.png",
+      "enableInspector": false,
+      "borderless": false,
+      "hidden": false,
+      "resizable": true,
+      "exitProcessOnClose": false
+    }
+  },
+  "cli": {
+    "binaryName": "myscreen",
+    "resourcesPath": "/resources/",
+    "extensionsPath": "/extensions/",
+    "clientLibrary": "/resources/neutralino.js",
+    "binaryVersion": "6.5.0",
+    "clientVersion": "6.5.0"
+  }
+}

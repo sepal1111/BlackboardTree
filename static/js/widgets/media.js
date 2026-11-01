@@ -1,5 +1,5 @@
 // 內容類：文字、畫板、圖片、QR Code、嵌入網頁、視訊鏡頭
-import { h, field, select, checkbox, pickImage, imageSrc, toast } from '../ui.js';
+import { h, field, select, checkbox, pickImage, setImage, toast } from '../ui.js';
 
 const COLORS = ['#1f2937', '#ffffff', '#ef4444', '#f97316', '#eab308', '#22c55e', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899'];
 
@@ -40,7 +40,17 @@ export const text = {
         document.execCommand({ b: 'bold', i: 'italic', u: 'underline' }[e.key.toLowerCase()]);
       }
     });
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/\n/g, '<br>');
     return {
+      remote: {
+        view: () => ({ text: ed.innerText.slice(0, 2000) }),
+        act(a, { text = '' } = {}) {
+          if (a === 'set') ed.innerHTML = esc(String(text).slice(0, 5000));
+          else if (a === 'append') ed.innerHTML += (ed.innerHTML ? '<br>' : '') + esc(String(text).slice(0, 5000));
+          else return;
+          s.html = ed.innerHTML; ctx.save();
+        },
+      },
       update(state) { if (document.activeElement !== ed) ed.innerHTML = state.html; },
       settings: (c) => c.append(
         field('字體大小', h('input', { type: 'range', min: 4, max: 30, step: 0.5, value: s.size, oninput: (e) => { s.size = +e.target.value; apply(); ctx.save(); } })),
@@ -156,7 +166,8 @@ export const image = {
         wrap.append(h('button', { class: 'btn primary', onclick: choose }, '選擇圖片'));
         return;
       }
-      const img = h('img', { src: imageSrc(s.ref), alt: s.caption || '', style: { objectFit: s.fit } });
+      const img = h('img', { alt: s.caption || '', style: { objectFit: s.fit } });
+      setImage(img, ctx.store, s.ref);
       img.onerror = () => { wrap.innerHTML = ''; wrap.append(h('div', { class: 'muted center' }, '圖片無法載入'), h('button', { class: 'btn', onclick: choose }, '重新選擇')); };
       wrap.append(img);
       if (s.caption) wrap.append(h('div', { class: 'image-cap' }, s.caption));

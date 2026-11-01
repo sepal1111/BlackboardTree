@@ -1,5 +1,4 @@
 // 共用 UI：DOM 輔助、對話框、提示訊息、選單、檔案選擇器
-import { api, fileUrl } from './api.js';
 
 export function h(tag, props, ...kids) {
   const el = document.createElement(tag);
@@ -131,14 +130,13 @@ export function fileToDataUrl(file, max = 1600) {
   });
 }
 
-export function imageSrc(ref) {
-  if (!ref) return '';
-  if (ref.kind === 'smb') return fileUrl(ref.path);
-  return ref.url || '';
+// 圖片網址要非同步取得（資料夾模式要先讀檔再轉成 blob 網址）
+export async function setImage(img, store, ref) {
+  img.src = (await store.imageUrl(ref)) || '';
+  if (!img.src || img.src === location.href) img.dispatchEvent(new Event('error'));
 }
 
-// ---------- 圖片選擇器：個人 SAMBA 資料夾 / 上傳 / 網址
-// 回傳 {kind:'smb', path} | {kind:'data', url} | {kind:'url', url} | null
+// ---------- 圖片選擇器：個人資料夾 / 上傳 / 網址（回傳圖片參照或 null）
 export function pickImage(store) {
   return new Promise((resolve) => {
     let result = null;
@@ -149,23 +147,31 @@ export function pickImage(store) {
 
     const choose = (r) => { result = r; m.close(); };
 
+    // 資料夾模式的縮圖要一張張讀檔，進入畫面才載入
+    const io = new IntersectionObserver((ents) => ents.forEach(async (en) => {
+      if (!en.isIntersecting) return;
+      io.unobserve(en.target);
+      en.target.src = (await store.backend.thumbUrl(en.target.dataset.path).catch(() => '')) || '';
+    }));
+    const thumb = (p) => { const img = h('img', { alt: '', 'data-path': p }); io.observe(img); return img; };
+
     async function open(path) {
       list.innerHTML = '<div class="fp-empty">讀取中…</div>';
       crumbs.innerHTML = '';
       const parts = path ? path.split('/') : [];
-      crumbs.append(h('button', { onclick: () => open('') }, '🏠 我的檔案'));
+      crumbs.append(h('button', { onclick: () => open('') }, '🏠 ' + (store.backend.fs?.label || '我的檔案')));
       parts.forEach((p, i) => crumbs.append(' / ', h('button', { onclick: () => open(parts.slice(0, i + 1).join('/')) }, p)));
       try {
-        const r = await api.get('/api/files?path=' + encodeURIComponent(path));
+        const all = await store.backend.listFiles(path);
         list.innerHTML = '';
-        const items = r.items.filter((it) => it.dir || it.type.startsWith('image/'));
+        const items = all.filter((it) => it.dir || it.type.startsWith('image/'));
         if (!items.length) list.append(h('div', { class: 'fp-empty' }, '這個資料夾沒有圖片'));
         for (const it of items) {
           const p = path ? path + '/' + it.name : it.name;
           list.append(it.dir
             ? h('button', { class: 'fp-item dir', onclick: () => open(p) }, h('div', { class: 'fp-thumb' }, '📁'), h('span', null, it.name))
-            : h('button', { class: 'fp-item', onclick: () => choose({ kind: 'smb', path: p }) },
-              h('div', { class: 'fp-thumb' }, h('img', { src: fileUrl(p), loading: 'lazy', alt: '' })), h('span', null, it.name)));
+            : h('button', { class: 'fp-item', onclick: () => choose({ kind: 'file', base: 'root', path: p }) },
+              h('div', { class: 'fp-thumb' }, thumb(p)), h('span', null, it.name)));
         }
       } catch (e) {
         list.innerHTML = '';
@@ -177,13 +183,13 @@ export function pickImage(store) {
       const f = fileInput.files[0];
       if (!f) return;
       try {
-        if (store.guest) {
+        if (!store.backend.canBrowse) {
           choose({ kind: 'data', url: await fileToDataUrl(f) });
         } else {
-          toast('上傳中…');
-          const r = await api.post('/api/upload?name=' + encodeURIComponent(f.name), f);
-          toast('已上傳到你的 SAMBA 資料夾');
-          choose({ kind: 'smb', path: r.path });
+          toast('儲存中…');
+          const ref = await store.backend.upload(f);
+          toast(`已存到 ${store.backend.label} 的 media 資料夾`);
+          choose(ref);
         }
       } catch (e) { toast('上傳失敗：' + e.message); }
     });
@@ -191,13 +197,13 @@ export function pickImage(store) {
     const urlInput = h('input', { class: 'input', placeholder: 'https://… 圖片網址' });
     const body = h('div', { class: 'fp' },
       h('div', { class: 'fp-bar' },
-        h('button', { class: 'btn primary', onclick: () => fileInput.click() }, store.guest ? '📤 從這台電腦選擇' : '📤 上傳圖片'),
+        h('button', { class: 'btn primary', onclick: () => fileInput.click() }, store.backend.canBrowse ? '📤 加入新圖片' : '📤 從這台電腦選擇'),
         urlInput,
         h('button', { class: 'btn', onclick: () => urlInput.value.trim() && choose({ kind: 'url', url: urlInput.value.trim() }) }, '使用網址')),
       fileInput,
-      store.guest ? h('p', { class: 'muted' }, '訪客模式無法瀏覽 SAMBA，登入後即可使用個人資料夾中的圖片。') : [crumbs, list]);
+      !store.backend.canBrowse ? h('p', { class: 'muted' }, '目前資料只存在這台電腦。改用網路磁碟機儲存後，就能直接選用個人資料夾裡的圖片。') : [crumbs, list]);
 
-    m = modal({ title: '選擇圖片', body, wide: true, onClose: () => resolve(result) });
-    if (!store.guest) open('');
+    m = modal({ title: '選擇圖片', body, wide: true, onClose: () => { io.disconnect(); resolve(result); } });
+    if (store.backend.canBrowse) open('');
   });
 }

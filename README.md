@@ -1,6 +1,6 @@
 # MyScreen 教室白板
 
-免費、自架的教室投影白板。老師用自己的 **SAMBA 帳號** 登入，白板存在個人 SAMBA 資料夾，換電腦、換教室都能接著用。
+免費的教室投影白板。白板存在老師自己的**網路磁碟機（V:）**，換電腦、換教室都能接著用。
 
 ## 功能
 
@@ -8,38 +8,68 @@
 |---|---|
 | 時間 | 計時器（時間到會閃爍、響鈴）、時鐘（數字／指針）、碼錶（可分段）、日期（民國年＋月曆） |
 | 班級經營 | 隨機抽籤（不重複）、隨機分組、工作模式、紅綠燈、音量計（麥克風）、骰子、投票 |
-| 內容 | 文字、畫板、圖片（可選 SAMBA 內的圖片）、QR Code、嵌入網頁（YouTube、Google 簡報）、視訊鏡頭 |
+| 內容 | 文字、畫板、圖片（可選個人資料夾裡的圖片）、QR Code、嵌入網頁（YouTube、Google 簡報）、視訊鏡頭 |
 
-- 可以建立多個白板（例如每個班一個），也可以複製、重新命名
-- 背景可選漸層、純色、格線，或用 SAMBA 裡的圖片
+- 可以建立多個白板（例如每個班一個），開啟時先從清單選擇要用哪一個
+- 背景可選漸層、純色、格線，或用個人資料夾裡的圖片
 - **班級名單**存一次，所有白板與裝置都能載入
 - 計時器、碼錶記錄的是「絕對時間」，換台電腦打開，倒數時間一樣是對的
 - 快捷鍵：`H` 隱藏工具列，`F` 全螢幕
-- 不登入也能用（「訪客模式」），資料只存在那台電腦的瀏覽器
 
-## 運作方式
+## 使用流程
+
+1. 先用學校的「網路磁碟機」程式登入，把個人資料夾連到 **V:**
+2. 開啟 MyScreen → 自動讀取 `V:\MyScreen`（第一次使用時會自動建立）
+3. 從清單選擇白板，或新增一個
+
+第一次開啟時，可以選擇白板要存在哪裡，之後會記住並自動讀取：
+
+| 儲存位置 | 說明 |
+|---|---|
+| 📁 網路磁碟機或資料夾 | **建議使用**。存在 `V:\MyScreen`，任何連上 V: 的電腦都能讀取 |
+| 🔑 學校帳號登入 | 不需要先連線網路磁碟機，由 MyScreen 伺服器代為連線 SAMBA（需要架設伺服器，見下方說明） |
+| 💻 只存在這台電腦 | 不同步，適合臨時使用 |
+
+三種「遠端」方式讀寫的是同一份資料：桌面版寫入 `V:\MyScreen` 的白板，用學校帳號登入伺服器版也看得到。
+
+### 資料夾內容
 
 ```
-瀏覽器（教室電腦、筆電、平板）
-        │  HTTP(S)
-        ▼
-MyScreen 伺服器（Python，放在學校任一台電腦或 NAS）
-        │  SMB2/3，用老師自己的帳密連線
-        ▼
-SAMBA：\\伺服器\老師帳號\MyScreen\
-          ├─ boards\index.json      白板清單
-          ├─ boards\<代碼>.json     每個白板的內容
-          ├─ settings.json          班級名單
-          └─ media\                 上傳的圖片
+V:\MyScreen\
+  ├─ boards\<代碼>.json     每個白板一個檔案
+  ├─ settings.json          班級名單
+  └─ media\                 加入的圖片
 ```
 
-瀏覽器本身無法直接連線到 SAMBA，所以需要這台小伺服器代為連線。伺服器**不會儲存老師的密碼**，只在登入期間暫存於記憶體中；伺服器重新啟動後，老師需要重新登入。
+V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連線恢復後會自動補存。兩台電腦同時修改同一個白板時，較晚存檔的那台會收到提示，並載入最新版本。
 
-每次修改約 0.7 秒後自動存檔，其他開著同一白板的裝置每 8 秒檢查一次並自動更新。如果兩台裝置同時修改，後存檔的那台會看到提示，並載入最新版本。
+## 三種執行方式
 
-## 安裝
+### A. 桌面版（建議）
 
-需要 Python 3.10 以上版本。
+和「網路磁碟機」程式一樣，是一個 Windows 程式（Neutralino）。開啟後直接讀寫 V:，**不需要架設伺服器，也不需要 HTTPS**。
+
+- V: 還沒連線時，畫面上有「開啟網路磁碟機程式」按鈕（會尋找 `%LOCALAPPDATA%\Programs\NASDriveConnector\nas-drive-connector.exe`）
+- 磁碟機代號、NetDrive 路徑可在 `desktop/neutralino.config.json` 的 `globalVariables` 修改
+
+建置方式（需要 Node.js，第一次建置需要網路來下載 Neutralino）：
+
+```
+cd desktop
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+產出 `desktop\out\MyScreen.exe`，單一檔案，複製到各台電腦即可執行。
+
+### B. 網頁版
+
+把 `static/` 資料夾放到任何網頁伺服器上，用 **Edge 或 Chrome** 開啟。選擇「網路磁碟機或資料夾」→ 選 V: 磁碟機（或 V: 裡的 MyScreen 資料夾）→ 瀏覽器詢問時選「允許」。之後開啟會自動讀取；部分瀏覽器版本每次開啟需要再按一次「繼續使用」。
+
+> 瀏覽器只允許 `https://` 或 `localhost` 網址存取資料夾。若用 `http://192.168.x.x` 開啟，將無法使用資料夾模式（麥克風、鏡頭也無法使用）。
+
+### C. 伺服器版（學校帳號登入）
+
+由一台伺服器用老師的 SAMBA 帳號代為連線，老師不需要先連網路磁碟機，手機或平板也能使用。
 
 1. 複製 `config.example.json` 為 `config.json`，修改 `smb` 區段：
 
@@ -57,47 +87,83 @@ SAMBA：\\伺服器\老師帳號\MyScreen\
    - 每位老師各自有一個分享資料夾（Samba 的 `[homes]`）：`"{username}"`
    - 所有老師共用一個分享資料夾，底下各有個人資料夾：`"share": "teachers"`，並將 `data_dir` 設為 `"{username}/MyScreen"`、`browse_root` 設為 `"{username}"`
 
-2. 執行：
-   - Windows：雙擊 `start.bat`（第一次會自動安裝相依套件）
-   - Linux / NAS：`sh start.sh`
+   **請讓 `share` 對應到和 V: 相同的資料夾**，這樣伺服器版和桌面版讀到的就是同一份白板。
 
-3. 用瀏覽器開啟 `http://伺服器IP:8080`
+2. 執行：Windows 雙擊 `start.bat`，Linux / NAS 執行 `sh start.sh`（第一次會自動安裝相依套件，需要 Python 3.10 以上）
+3. 開啟 `http://伺服器IP:8080`
 
-### 其他設定（`config.json`）
+伺服器不會儲存老師的密碼，只在登入期間暫存於記憶體中。正式使用時建議開啟 HTTPS（見下方說明），否則密碼會以明文傳送。
 
-| 欄位 | 說明 |
+| 設定欄位 | 說明 |
 |---|---|
-| `data_dir` | 白板資料存放在分享資料夾中的哪個子資料夾，預設為 `MyScreen` |
-| `browse_root` | 「選擇圖片」時可以瀏覽的根目錄，預設為整個分享資料夾 |
+| `data_dir` | 白板資料位於分享資料夾的哪個子資料夾，預設 `MyScreen` |
+| `browse_root` | 「選擇圖片」可以瀏覽的根目錄，預設為整個分享資料夾 |
 | `session_hours` | 登入有效時間，預設 12 小時 |
-| `mode: "local"` | 不使用 SAMBA，資料存在 `local.root`。`local.users` 可設定 `{"帳號":"密碼"}`；留空則只要輸入名稱即可登入（適合單一教室或測試用）。`root` 也可以填 UNC 路徑，例如 `\\\\nas\\teachers\\{username}` |
+| `mode: "local"` | 不使用 SAMBA，資料存在 `local.root`（測試用） |
 
-## ⚠️ 麥克風與鏡頭需要 HTTPS
+#### 開啟 HTTPS
 
-瀏覽器只允許 `https://` 或 `localhost` 的網頁使用麥克風（音量計）與鏡頭。若從其他電腦以 `http://192.168.x.x:8080` 開啟，這兩個小工具將無法使用。解決方法：
+1. 使用 [mkcert](https://github.com/FiloSottile/mkcert) 產生憑證，並在各台電腦安裝根憑證：`mkcert -install`、`mkcert 192.168.1.20`
+2. 在 `config.json` 填入 `"ssl_certfile": "192.168.1.20.pem"`、`"ssl_keyfile": "192.168.1.20-key.pem"`
 
-1. 使用 [mkcert](https://github.com/FiloSottile/mkcert) 產生憑證，並在各台電腦上安裝根憑證：
-   ```
-   mkcert -install
-   mkcert 192.168.1.20 myscreen.local
-   ```
-2. 在 `config.json` 填入：
-   ```json
-   "ssl_certfile": "192.168.1.20+1.pem",
-   "ssl_keyfile": "192.168.1.20+1-key.pem"
-   ```
+## 📱 手機／平板遙控
 
-啟用 HTTPS 也能保護老師登入時傳送的 SAMBA 密碼，建議在正式使用時開啟。
+老師在教室電腦（接大電視）開啟 MyScreen 後，可以用手機或平板遙控：
+
+1. 按上方的「📱 遙控」，電視上會顯示 QR Code 和 6 位數代碼
+2. 手機掃描 QR Code（或開啟網址後輸入代碼），不需要安裝 App
+3. 手機上會依白板內容列出按鈕：計時器開始／暫停／加減時間、抽籤、分組、骰子、紅綠燈、工作模式、投票、從手機打字到文字框，也可以切換白板、加入或移除小工具、隱藏工具列、全螢幕
+
+安全設計：
+
+- 代碼是隨機產生的，錯誤代碼嘗試太多次會暫時封鎖
+- 按「中斷全部並換代碼」會立刻踢掉所有遙控裝置，舊代碼隨即失效
+- 每個白板最多 8 台裝置同時連線
+- 遙控伺服器只負責轉送指令，不保存任何資料，白板仍然存在老師的 V:
+
+### 在 NAS 安裝遙控伺服器（只需一次，全校共用）
+
+手機無法直接連到教室電腦，所以需要學校 NAS 幫忙轉送指令。以 Synology 為例：
+
+1. 在「套件中心」安裝 **Container Manager**
+2. 把整個 MyScreen 資料夾（不含 `desktop`、`NetDrive`、`.venv`）複製到 NAS，例如 `/docker/myscreen`
+3. Container Manager →「專案」→「新增」→ 路徑選 `/docker/myscreen`，它會讀取裡面的 `docker-compose.yml` → 建立並啟動
+4. 用瀏覽器開啟 `http://NAS的IP:8080/remote.html`，看到輸入代碼的畫面就代表成功
+
+QNAP 可以用 Container Station 匯入同一份 `docker-compose.yml`。預設是 `MYSCREEN_MODE=relay`（只做遙控轉送）；若也要開放「學校帳號登入」，請改成 `smb` 並掛載 `config.json`（見檔案內的說明）。
+
+### 讓桌面版連到 NAS
+
+編輯 `desktop/neutralino.config.json`，把 NAS 的網址填進 `RELAY`，再重新建置：
+
+```json
+"globalVariables": {
+  "MSROOT": "V:",
+  "RELAY": "http://192.168.1.10:8080",
+  ...
+}
+```
+
+`RELAY` 留空時，「📱 遙控」按鈕不會出現。
+
+> **網路注意事項**：老師的手機必須能連到 NAS 的 8080 埠。若學校的無線網路（手機）和教學網路（NAS、教室電腦）是分開的網段，請資訊組開放手機網段連到 NAS 的 8080 埠。
 
 ## 檔案結構
 
 ```
-server/app.py        API 與靜態檔案伺服器（FastAPI）
-server/storage.py    儲存層：SAMBA（smbprotocol）或本機資料夾
-static/              前端（原生 JavaScript，不需要編譯）
-  js/app.js          主程式：白板、拖曳、工具列
-  js/store.js        存檔與跨裝置同步
-  js/widgets/        各個小工具
+static/                  前端（原生 JavaScript，不需要編譯）
+  js/app.js              主程式：選擇儲存位置、白板清單、拖曳、工具列
+  js/store.js            存檔、離線暫存、跨裝置同步
+  js/backends/index.js   三種儲存方式（資料夾／伺服器／本機）
+  js/backends/fs.js      資料夾存取：瀏覽器（File System Access）與桌面版（Neutralino）
+  js/widgets/            各個小工具
+static/remote.html       手機遙控頁（js/remote.js）
+static/js/remote-host.js 教室電腦端的遙控連線
+desktop/                 桌面版設定與建置腳本
+server/                  伺服器版（FastAPI + smbprotocol）
+server/relay.py          手機遙控轉送（WebSocket）
+Dockerfile               NAS 用 Docker 安裝
+docker-compose.yml
 ```
 
-新增小工具：在 `static/js/widgets/` 中新增一個物件 `{ type, title, icon, size, state(), mount(body, ctx) }`，並加入 `widgets/index.js` 的清單。
+新增小工具：在 `static/js/widgets/` 中新增一個物件 `{ type, title, icon, size, state(), mount(body, ctx) }`，並加入 `widgets/index.js` 的清單。若要支援遙控，讓 `mount` 回傳 `remote: { view(), act(action, args) }`，並在 `static/js/remote.js` 的 `RENDER` 加上手機畫面。

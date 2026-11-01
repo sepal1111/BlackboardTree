@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4263eb">
+  <title>MyScreen 遙控器</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='8' y='2' width='16' height='28' rx='4' fill='%234263eb'/%3E%3Ccircle cx='16' cy='24' r='2' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/remote.css">
+  <script type="module" src="js/remote.js"></script>
+</head>
+<body>
+  <div id="join" class="join hidden">
+    <form id="join-form" class="join-card">
+      <div class="join-logo">📱 MyScreen 遙控器</div>
+      <p>請輸入教室電視上顯示的 6 位數代碼</p>
+      <input id="join-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000 000">
+      <div id="join-err" class="err"></div>
+      <button class="big primary" type="submit">連線</button>
+    </form>
+  </div>
+
+  <div id="main" class="hidden">
+    <header>
+      <select id="board-select" aria-label="切換白板"></select>
+      <span id="conn" class="conn">連線中…</span>
+    </header>
+    <main id="cards"></main>
+    <footer>
+      <button id="btn-chrome">👁 工具列</button>
+      <button id="btn-fs">⛶ 全螢幕</button>
+      <select id="add-select" aria-label="加入小工具"><option value="">＋ 加入小工具</option></select>
+    </footer>
+  </div>
+  <div id="toast"></div>
+</body>
+</html>

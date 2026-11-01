@@ -1,5 +1,5 @@
-// 白板資料：伺服器模式存到 SAMBA（本機留快取），訪客模式只存在這台裝置的瀏覽器
-import { api } from './api.js';
+// 白板存檔與跨裝置同步。實際讀寫交給 backend（資料夾／伺服器／本機）。
+// 遠端儲存（資料夾、伺服器）在這台電腦另外保留快取，網路磁碟機暫時斷線時仍可使用並稍後補存。
 
 export const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
@@ -10,13 +10,14 @@ export const LS = {
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 export class Store extends EventTarget {
-  constructor(user, guest) {
+  constructor(backend) {
     super();
-    this.user = user;
-    this.guest = guest;
-    this.prefix = `ms:${guest ? '_guest' : user}:`;
+    this.backend = backend;
+    this.remote = backend.kind !== 'local';
+    this.guest = !this.remote; // 舊程式碼相容：沒有個人資料夾可瀏覽
+    this.prefix = `ms:${backend.id}:`;
     this.index = [];
-    this.pending = new Map();   // boardId -> board（待上傳）
+    this.pending = new Map();
     this.inflight = new Set();
     this.timers = new Map();
     this.status = 'synced';
@@ -32,19 +33,16 @@ export class Store extends EventTarget {
     this.dispatchEvent(new CustomEvent('status', { detail: s }));
   }
 
+  cache(board) { if (this.remote) LS.set(this.key('board:' + board.id), board); }
+
   // ---------- 白板清單
   async listBoards() {
-    if (this.guest) {
-      this.index = LS.get(this.key('index'), []);
-      return this.index;
-    }
     try {
-      const r = await api.get('/api/boards');
-      // 尚未上傳完成的白板，以本機為準
+      const list = await this.backend.listBoards();
       const local = new Map(this.index.map((b) => [b.id, b]));
-      this.index = r.boards.map((b) => (this.pending.has(b.id) || this.inflight.has(b.id)) && local.get(b.id) ? local.get(b.id) : b);
-      for (const id of this.pending.keys()) if (!this.index.find((b) => b.id === id)) this.index.push(local.get(id));
-      LS.set(this.key('index'), this.index);
+      this.index = list.map((b) => (this.hasLocalChanges(b.id) && local.get(b.id)) || b);
+      for (const id of this.pending.keys()) if (!this.index.find((b) => b.id === id) && local.get(id)) this.index.push(local.get(id));
+      if (this.remote) LS.set(this.key('index'), this.index);
       if (!this.pending.size && !this.inflight.size) this.setStatus('synced');
     } catch (e) {
       if (e.status === 401) throw e;
@@ -58,19 +56,17 @@ export class Store extends EventTarget {
     const entry = { id: board.id, name: board.name, rev: board.rev, created: board.created, updatedAt: board.updatedAt };
     const i = this.index.findIndex((b) => b.id === board.id);
     if (i >= 0) this.index[i] = entry; else this.index.push(entry);
-    LS.set(this.key('index'), this.index);
+    if (this.remote) LS.set(this.key('index'), this.index);
   }
 
   async getBoard(id) {
-    if (this.guest) return LS.get(this.key('board:' + id), null);
-    const cached = LS.get(this.key('board:' + id), null);
     if (this.pending.has(id)) return this.pending.get(id);
+    const cached = this.remote ? LS.get(this.key('board:' + id), null) : null;
     try {
-      const b = await api.get('/api/boards/' + id);
-      LS.set(this.key('board:' + id), b);
-      return b;
+      const b = await this.backend.getBoard(id);
+      if (b) { this.cache(b); return b; }
+      return cached && !cached.rev ? cached : null;
     } catch (e) {
-      if (e.status === 404) return cached && cached.rev === 0 ? cached : null;
       if (e.status === 401) throw e;
       if (cached) { this.setStatus('offline'); return cached; }
       throw e;
@@ -88,21 +84,16 @@ export class Store extends EventTarget {
   saveBoard(board, immediate = false) {
     board.updatedAt = Date.now();
     this.touchIndex(board);
-    if (!this.guest) {
-      this.pending.set(board.id, board);
-      this.setStatus('saving');
-    }
+    this.pending.set(board.id, board);
+    if (this.remote) this.setStatus('saving');
     clearTimeout(this.timers.get(board.id));
-    this.timers.set(board.id, setTimeout(() => this.flush(board.id, board), immediate ? 0 : 700));
+    this.timers.set(board.id, setTimeout(() => this.flush(board.id), immediate ? 0 : 700));
   }
 
-  async flush(id, boardRef) {
-    const board = this.guest ? boardRef : this.pending.get(id);
+  async flush(id) {
+    const board = this.pending.get(id);
     if (!board) return;
-    if (!LS.set(this.key('board:' + id), board) && this.guest) {
-      this.dispatchEvent(new CustomEvent('error', { detail: '瀏覽器儲存空間已滿，請刪除部分圖片或繪圖' }));
-    }
-    if (this.guest) return;
+    this.cache(board);
     if (this.inflight.has(id)) {
       this.timers.set(id, setTimeout(() => this.flush(id), 400));
       return;
@@ -110,14 +101,16 @@ export class Store extends EventTarget {
     this.pending.delete(id);
     this.inflight.add(id);
     try {
-      const r = await api.put('/api/boards/' + id, { name: board.name, data: board.data, baseRev: board.rev || null });
+      const r = await this.backend.putBoard(board, board.rev || null);
       board.rev = r.rev;
       board.updatedAt = r.updatedAt;
       this.touchIndex(board);
-      LS.set(this.key('board:' + id), board);
+      this.cache(board);
     } catch (e) {
       if (e.status === 409 && e.data?.current) {
         this.dispatchEvent(new CustomEvent('remote', { detail: { board: e.data.current, conflict: true } }));
+      } else if (!this.remote) {
+        this.dispatchEvent(new CustomEvent('error', { detail: e.message }));
       } else if (e.status !== 401) {
         if (!this.pending.has(id)) this.pending.set(id, board);
         this.setStatus('offline');
@@ -129,31 +122,35 @@ export class Store extends EventTarget {
     if (!this.pending.size && !this.inflight.size) this.setStatus('synced');
   }
 
+  async flushAll() {
+    for (const id of [...this.pending.keys()]) { clearTimeout(this.timers.get(id)); await this.flush(id); }
+  }
+
   async deleteBoard(id) {
     clearTimeout(this.timers.get(id));
     this.pending.delete(id);
     this.index = this.index.filter((b) => b.id !== id);
-    LS.set(this.key('index'), this.index);
-    LS.del(this.key('board:' + id));
-    if (!this.guest) await api.del('/api/boards/' + id).catch(() => {});
+    if (this.remote) { LS.set(this.key('index'), this.index); LS.del(this.key('board:' + id)); }
+    await this.backend.deleteBoard(id).catch(() => {});
   }
 
   hasLocalChanges(id) { return this.pending.has(id) || this.inflight.has(id); }
 
   // 定期檢查其他裝置的修改
   async poll(currentBoard) {
-    if (this.guest || document.hidden) return;
+    if (!this.remote || document.hidden) return;
     const before = new Map(this.index.map((b) => [b.id, b.rev]));
     await this.listBoards();
+    if (this.status === 'offline') return;
     const changedList = this.index.length !== before.size || this.index.some((b) => before.get(b.id) !== b.rev);
     if (changedList) this.dispatchEvent(new Event('index'));
     if (!currentBoard || this.hasLocalChanges(currentBoard.id)) return;
     const remote = this.index.find((b) => b.id === currentBoard.id);
     if (remote && remote.rev > (currentBoard.rev || 0)) {
       try {
-        const b = await api.get('/api/boards/' + currentBoard.id);
-        if (!this.hasLocalChanges(currentBoard.id)) {
-          LS.set(this.key('board:' + b.id), b);
+        const b = await this.backend.getBoard(currentBoard.id);
+        if (b && !this.hasLocalChanges(currentBoard.id)) {
+          this.cache(b);
           this.dispatchEvent(new CustomEvent('remote', { detail: { board: b } }));
         }
       } catch { /* 下次再試 */ }
@@ -165,22 +162,22 @@ export class Store extends EventTarget {
   // ---------- 共用設定（班級名單等）
   async getSettings() {
     if (this.settings) return this.settings;
-    const local = LS.get(this.key('settings'), { classLists: [] });
-    if (this.guest) return (this.settings = local);
+    const local = this.remote ? LS.get(this.key('settings'), null) : null;
     try {
-      const r = await api.get('/api/settings');
-      this.settings = { classLists: [], ...(r.data || {}) };
-      LS.set(this.key('settings'), this.settings);
+      this.settings = { classLists: [], ...(await this.backend.getSettings()) };
+      if (this.remote) LS.set(this.key('settings'), this.settings);
     } catch {
-      this.settings = local;
+      this.settings = local || { classLists: [] };
     }
     return this.settings;
   }
 
   saveSettings() {
-    LS.set(this.key('settings'), this.settings);
-    if (this.guest) return;
+    if (this.remote) LS.set(this.key('settings'), this.settings);
     clearTimeout(this.settingsTimer);
-    this.settingsTimer = setTimeout(() => api.put('/api/settings', { data: this.settings }).catch(() => {}), 500);
+    this.settingsTimer = setTimeout(() => this.backend.putSettings(this.settings).catch(() => {}), 500);
   }
+
+  // ---------- 圖片
+  imageUrl(ref) { return this.backend.imageUrl(ref).catch(() => ''); }
 }

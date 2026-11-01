@@ -6,7 +6,20 @@
   <title>MyScreen 教室白板</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='4' width='28' height='20' rx='4' fill='%234263eb'/%3E%3Crect x='12' y='24' width='8' height='4' fill='%234263eb'/%3E%3Ccircle cx='16' cy='14' r='5' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    // 程式出錯時直接顯示在畫面上，方便老師回報問題
+    function msFatal(m) {
+      var d = document.getElementById('fatal');
+      if (!d) { d = document.createElement('pre'); d.id = 'fatal'; (document.body || document.documentElement).appendChild(d); }
+      d.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#fff5f5;color:#c92a2a;border:1px solid #ffc9c9;border-radius:8px;padding:8px 12px;max-width:90vw;white-space:pre-wrap;font:12px monospace';
+      d.textContent += '錯誤：' + m + '\n';
+    }
+    window.addEventListener('error', function (e) { msFatal((e.message || '無法載入 ' + (e.target && (e.target.src || e.target.href))) + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; msFatal(r && (r.message || r.code) ? (r.code ? r.code + ' ' : '') + (r.message || '') : String(r)); });
+  </script>
   <script src="vendor/qrcode.js"></script>
+  <!-- desktop-scripts -->
+
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
@@ -25,6 +38,7 @@
       <button id="board-btn" class="tb-btn" title="切換白板"><span>☰</span> <b id="board-name"></b> ▾</button>
       <div class="tb-spacer"></div>
       <span id="sync" class="pill"></span>
+      <button id="remote-btn" class="tb-btn hidden" title="用手機或平板遙控">📱 <span class="tb-label">遙控</span></button>
       <button id="bg-btn" class="tb-btn" title="背景">🎨 <span class="tb-label">背景</span></button>
       <button id="clear-btn" class="tb-btn" title="清空白板">🧹 <span class="tb-label">清空</span></button>
       <button id="fs-btn" class="tb-btn" title="全螢幕 (F)">⛶ <span class="tb-label">全螢幕</span></button>

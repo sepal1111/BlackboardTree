@@ -120,6 +120,15 @@ export const timer = {
     return {
       destroy: () => clearInterval(t),
       settings: (c) => c.append(checkbox('時間到時播放音效', s.sound, (v) => { s.sound = v; ctx.save(); })),
+      remote: {
+        view: () => ({ duration: s.duration, remaining: s.remaining, endAt: s.endAt }),
+        act(a, { sec } = {}) {
+          if (a === 'toggle') toggle();
+          else if (a === 'add') add(+sec || 0);
+          else if (a === 'reset') set(s.duration);
+          else if (a === 'set' && +sec > 0) set(+sec);
+        },
+      },
     };
   },
 };
@@ -153,7 +162,17 @@ export const stopwatch = {
     }
     renderLaps(); render();
     const t = setInterval(render, 50);
-    return { destroy: () => clearInterval(t) };
+    return {
+      destroy: () => clearInterval(t),
+      remote: {
+        view: () => ({ startAt: s.startAt, elapsed: s.elapsed }),
+        act(a) {
+          if (a === 'toggle') startBtn.click();
+          else if (a === 'lap') { s.laps.unshift(now()); ctx.save(); renderLaps(); }
+          else if (a === 'reset') { s.startAt = null; s.elapsed = 0; s.laps = []; ctx.save(); renderLaps(); render(); }
+        },
+      },
+    };
   },
 };
 
