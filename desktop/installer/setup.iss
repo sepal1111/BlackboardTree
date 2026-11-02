@@ -15,7 +15,7 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher=黑板樹
-AppPublisherURL=https://github.com/sepal1111/MyScreen
+AppPublisherURL=https://github.com/sepal1111/BlackboardTree
 DefaultDirName={autopf}\BlackboardTree
 DefaultGroupName=黑板樹 Blackboard Tree
 ; 1.6.0 改名：開始功能表改用新名稱的資料夾（舊的在 [InstallDelete] 刪除）

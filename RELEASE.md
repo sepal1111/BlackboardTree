@@ -1,8 +1,8 @@
-# 黑板樹 1.6.0 下載與安裝說明
+# 黑板樹 1.6.1 下載與安裝說明
 
 黑板樹（Blackboard Tree，1.6.0 以前叫 MyScreen）是免費的教室投影白板：計時器、抽籤、分組、座位表、課堂加分、投票等小工具，白板存在老師自己的網路磁碟機（V:），換電腦、換教室都能接著用。老師可以用手機遙控，學生也能用手機掃 QR Code 投票。
 
-- 專案網址：<https://github.com/sepal1111/MyScreen>
+- 專案網址：<https://github.com/sepal1111/BlackboardTree>
 - 完整使用說明：[README.md](README.md)
 
 ---
@@ -11,7 +11,7 @@
 
 | 檔案 | 適合 | 說明 |
 |---|---|---|
-| **`BlackboardTree-Setup-1.6.0.exe`** | 大部分老師（建議） | 安裝程式。會建立開始功能表與桌面捷徑，之後可直接安裝新版升級 |
+| **`BlackboardTree-Setup-1.6.1.exe`** | 大部分老師（建議） | 安裝程式。會建立開始功能表與桌面捷徑，之後可直接安裝新版升級 |
 | `BlackboardTree.exe` | 不想安裝、臨時使用 | 免安裝版，單一檔案，複製到電腦上就能執行 |
 
 兩個檔案的功能完全相同，都已經內含手機遙控與學生投票需要的伺服器，**不需要另外架設伺服器**。
@@ -20,13 +20,13 @@
 
 **方法一：Releases 頁面（建議）**
 
-1. 開啟 <https://github.com/sepal1111/MyScreen/releases>
-2. 找到最新版本（**1.6.0**），展開下方的 **Assets**
-3. 點 `BlackboardTree-Setup-1.6.0.exe`（或 `BlackboardTree.exe`）下載
+1. 開啟 <https://github.com/sepal1111/BlackboardTree/releases>
+2. 找到最新版本（**1.6.1**），展開下方的 **Assets**
+3. 點 `BlackboardTree-Setup-1.6.1.exe`（或 `BlackboardTree.exe`）下載
 
 **方法二：從程式碼資料夾下載**
 
-1. 開啟 <https://github.com/sepal1111/MyScreen/tree/main/desktop/out>
+1. 開啟 <https://github.com/sepal1111/BlackboardTree/tree/main/desktop/out>
 2. 點檔案名稱，再按右上角的 **下載**（Download raw file）圖示
 
 > Edge 或 Chrome 可能提示「這個檔案不常被下載」，請按「…」→「保留」→「仍要保留」。
@@ -40,7 +40,7 @@
 
 ## 4. 安裝
 
-1. 執行 `BlackboardTree-Setup-1.6.0.exe`
+1. 執行 `BlackboardTree-Setup-1.6.1.exe`
 2. 如果出現藍色的「Windows 已保護您的電腦」：按「**其他資訊**」→「**仍要執行**」（程式沒有數位簽章，所以 Windows 會先警告）
 3. 依畫面按「下一步」。建議勾選：
    - 建立桌面捷徑
@@ -68,13 +68,13 @@
 靜默安裝（每位使用者各自安裝，不需要系統管理員）：
 
 ```
-BlackboardTree-Setup-1.6.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+BlackboardTree-Setup-1.6.1.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 以系統管理員為整台電腦安裝，並加入防火牆例外（建議）：
 
 ```
-BlackboardTree-Setup-1.6.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
+BlackboardTree-Setup-1.6.1.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
 ```
 
 - 防火牆例外允許的是程式資料夾裡的 `myscreen-relay.exe`（手機遙控與學生投票的伺服器），連接埠從 52480 開始
@@ -131,8 +131,11 @@ BlackboardTree-Setup-1.6.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="d
 
 ## 版本紀錄
 
+### 1.6.1
+- 專案網址改為 <https://github.com/sepal1111/BlackboardTree>（舊網址會自動轉到新網址），檢查更新改用新網址
+
 ### 1.6.0
-- **改名為「黑板樹 Blackboard Tree」**（原名 MyScreen）：視窗標題、開始功能表、桌面捷徑、手機遙控與投票頁面都換成新名稱，程式檔名改為 `BlackboardTree.exe`、安裝程式改為 `BlackboardTree-Setup-1.6.0.exe`
+- **改名為「黑板樹 Blackboard Tree」**（原名 MyScreen）：視窗標題、開始功能表、桌面捷徑、手機遙控與投票頁面都換成新名稱，程式檔名改為 `BlackboardTree.exe`、安裝程式改為 `BlackboardTree-Setup-1.6.1.exe`
 - 白板仍然存在 `V:\MyScreen`，舊版的白板、班級名單、設定都能直接使用
 - 程式內更新完成後，改由安裝程式重新開啟黑板樹
 

@@ -31,7 +31,8 @@
 > | `%APPDATA%\MyScreen\prefs.json`、localStorage／IndexedDB 的 `ms:`、`myscreen` | 遙控代碼、離線備份存在這裡 |
 > | `myscreen-relay.exe` | 防火牆例外綁定這個程式路徑，改名後已升級的電腦手機會連不上 |
 > | 安裝程式的 `AppId`、`applicationId: tw.edu.myscreen` | AppId 改了會變成另一套程式，無法覆蓋升級 |
-> | GitHub 網址 `sepal1111/MyScreen` | 1.5.0 的檢查更新讀這個網址；要改 repo 名稱前先確認 raw.githubusercontent.com 的轉址 |
+>
+> GitHub repo 在 1.6.1 由 `sepal1111/MyScreen` 改名為 `sepal1111/BlackboardTree`。1.5.0、1.6.0 檢查更新用的是舊網址，靠 GitHub 自動轉址到新 repo，所以**不要再建立名為 MyScreen 的 repo**（會讓轉址失效，舊版就收不到更新）。
 >
 > 安裝程式在升級時刪除舊的 `MyScreen.exe`、「MyScreen 教室白板」捷徑與開始功能表資料夾（`[InstallDelete]`），防火牆規則改名為 `Blackboard Tree Remote`（加入或解除安裝時一併刪除舊的 `MyScreen Remote`）。
 
@@ -54,8 +55,8 @@
 ### 步驟
 
 ```bash
-git clone https://github.com/sepal1111/MyScreen.git
-cd 黑板樹
+git clone https://github.com/sepal1111/BlackboardTree.git
+cd BlackboardTree
 ```
 
 ```bash
@@ -150,7 +151,7 @@ node desktop/relay/test-relay.mjs
 1. 改 `desktop/neutralino.config.json` 的 `version`（安裝程式檔名、exe 版本資訊都會跟著變）
 2. **先**更新 `RELEASE.md`：標題與檔名的版本號、「從舊版升級」會注意到的變化、「## 版本紀錄」最上面加一段 `### 1.5.0`（給老師、資訊組看，用一般老師看得懂的說法）；`DEVELOPMENT.md` 的版本表也加一列。**要在建置前寫好**：`build.ps1` 會把版本紀錄寫進 `latest.json`，「關於與更新」顯示的更新內容就是這一段
 3. 執行 `build.ps1`（會自動刪除 `out\` 裡舊版本的安裝程式，最後產生 `out\latest.json`：版本號、各版本的更新內容、兩個 exe 的大小與 SHA-256）
-4. `desktop/out/` 的安裝程式、`BlackboardTree.exe` 與 `latest.json` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新。**push 到 GitHub 的 main 之後，各校的黑板樹就會檢查到新版本**（讀 `raw.githubusercontent.com/sepal1111/MyScreen/main/desktop/out/latest.json`，GitHub 快取最多 5 分鐘），所以還沒測好的版本不要 push 到 main
+4. `desktop/out/` 的安裝程式、`BlackboardTree.exe` 與 `latest.json` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新。**push 到 GitHub 的 main 之後，各校的黑板樹就會檢查到新版本**（讀 `raw.githubusercontent.com/sepal1111/BlackboardTree/main/desktop/out/latest.json`，GitHub 快取最多 5 分鐘），所以還沒測好的版本不要 push 到 main
 5. commit 後打標籤：`git tag -a v1.1.0 -m "黑板樹 1.1.0"`，以後才查得到每個版本對應的程式碼；推送用 `git push --follow-tags`
 6. 在 GitHub 的 Releases 頁面建立新版本：選剛推上去的標籤，說明貼上 `RELEASE.md` 該版本的「版本紀錄」與下載說明，並把 `desktop/out/` 的兩個 exe 上傳到 Assets
 
@@ -163,6 +164,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.6.1 | GitHub repo 改名為 `sepal1111/BlackboardTree`，檢查更新改用新網址（舊版靠 GitHub 轉址） |
 | 1.6.0 | 改名為「黑板樹 Blackboard Tree」：視窗、捷徑、安裝程式（`BlackboardTree-Setup-*.exe`）、exe（`BlackboardTree.exe`）、手機頁面；資料夾等內部名稱保留 MyScreen（見第 1 節）；升級時刪除舊檔名與捷徑；程式內更新改由安裝程式重新開啟（`IsInAppUpdate`） |
 | 1.5.0 | ⚙ 設定新增「ℹ 關於與更新」：檢查 GitHub 上的新版本、顯示更新內容、一鍵下載並更新（安裝版靜默安裝、免安裝版直接替換），開啟時自動檢查（一天一次）；`build.ps1` 產生 `out/latest.json` |
 | 1.4.0 | 工具列文字（自動／顯示／隱藏，自動：視窗小於 1280×800 時只顯示圖示）、新增「迷你」工具大小，按鈕間距跟著工具大小縮放；移除「學校帳號登入」（SAMBA）、NAS 遙控伺服器設定與 Docker 部署、「開啟網路磁碟機程式」按鈕 |

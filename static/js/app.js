@@ -859,7 +859,7 @@ function updatePanel() {
             onchange: (e) => LS.set('ms:autoUpdate', e.target.checked) }),
           ' 開啟黑板樹時自動檢查新版本（一天一次，有新版本時會通知）')),
       h('p', { class: 'muted' }, '程式與說明：',
-        h('a', { href: '#', onclick: (e) => { e.preventDefault(); openExternal('https://github.com/sepal1111/MyScreen'); } }, 'github.com/sepal1111/MyScreen')));
+        h('a', { href: '#', onclick: (e) => { e.preventDefault(); openExternal('https://github.com/sepal1111/BlackboardTree'); } }, 'github.com/sepal1111/BlackboardTree')));
   };
 
   function statusView(r, kind) {

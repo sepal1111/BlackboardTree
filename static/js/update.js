@@ -3,8 +3,8 @@
 // 用 raw.githubusercontent.com 讀取：允許跨網域、沒有 GitHub API 每小時 60 次的限制（全校共用一個對外 IP 時也不怕）。
 // 下載後比對 latest.json 裡的大小與 SHA-256，確認檔案完整才安裝。
 
-export const UPDATE_URL = 'https://raw.githubusercontent.com/sepal1111/MyScreen/main/desktop/out/latest.json';
-export const RELEASES_PAGE = 'https://github.com/sepal1111/MyScreen/releases';
+export const UPDATE_URL = 'https://raw.githubusercontent.com/sepal1111/BlackboardTree/main/desktop/out/latest.json';
+export const RELEASES_PAGE = 'https://github.com/sepal1111/BlackboardTree/releases';
 const DAY = 24 * 3600 * 1000;
 
 const VERSION_RE = /^\d{1,5}\.\d{1,5}\.\d{1,5}$/;
