@@ -1,67 +1,121 @@
-// 班級經營類：抽籤、分組、骰子、紅綠燈、工作模式、投票、音量計
-import { h, field, select, checkbox, promptDialog, toast } from '../ui.js';
+// 班級經營類：抽籤、分組、座位表、骰子、紅綠燈、工作模式、投票、音量計
+import { h, field, select, checkbox, promptDialog, toast, setImage } from '../ui.js';
 import { shuffle, splitNames, beep } from './util.js';
+import { studentsOf, hasPhotos, linkedList, watchRoster, photoThumb, rosterDialog, rememberList } from '../roster.js';
 
-// 名單編輯區：可以從「已儲存的班級名單」載入，或另存
+// 目前的名單：連結班級名單時讀名單（含座號、照片），否則用自己輸入的名字
+function people(ctx) {
+  const l = linkedList(ctx);
+  if (l) return studentsOf(l);
+  return splitNames(ctx.state.names).map((name) => ({ name }));
+}
+const namesOf = (ctx) => people(ctx).map((p) => p.name);
+const photosOf = (ctx) => new Map(people(ctx).filter((p) => p.photo).map((p) => [p.name, p.photo]));
+// 連結了班級名單、但設定還沒載入時，先不要動到已存的資料
+const rosterReady = (ctx) => !ctx.state.listId || !!ctx.store.settings;
+
+function photoImg(ctx, ref, cls) {
+  const img = h('img', { class: cls, alt: '', draggable: 'false' });
+  setImage(img, ctx.store, ref);
+  img.onerror = () => img.remove();
+  return img;
+}
+
+// 名單設定：選擇班級名單（直接讀取匯入的名單與照片），或自己輸入
 function namesEditor(ctx, onChange) {
   const s = ctx.state;
-  const ta = h('textarea', { class: 'input', rows: 8, placeholder: '每行一個名字（也可以用逗號分隔）', value: s.names });
-  ta.addEventListener('input', () => { s.names = ta.value; onChange(); ctx.save(); });
-  const sel = h('select', { class: 'input' }, h('option', { value: '' }, '— 載入已儲存的名單 —'));
-  ctx.store.getSettings().then((st) => {
-    for (const l of st.classLists) sel.append(h('option', { value: l.id }, `${l.name}（${l.names.length} 人）`));
-  });
-  sel.addEventListener('change', async () => {
+  const box = h('div', { class: 'stack' });
+  async function render() {
     const st = await ctx.store.getSettings();
-    const l = st.classLists.find((x) => x.id === sel.value);
-    if (l) { s.names = l.names.join('\n'); ta.value = s.names; onChange(); ctx.save(); }
-  });
-  const saveBtn = h('button', { class: 'btn', onclick: async () => {
-    const names = splitNames(s.names);
-    if (!names.length) return toast('名單是空的');
-    const name = await promptDialog('名單名稱（例如：三年二班）');
-    if (!name) return;
-    const st = await ctx.store.getSettings();
-    const ex = st.classLists.find((l) => l.name === name);
-    if (ex) ex.names = names; else st.classLists.push({ id: Date.now().toString(36), name, names });
-    ctx.store.saveSettings();
-    toast(`已儲存「${name}」，其他白板與裝置也能使用`);
-  } }, '💾 儲存為班級名單');
-  return h('div', { class: 'stack' }, sel, field('名單', ta), saveBtn);
+    box.innerHTML = '';
+    const linked = st.classLists.find((l) => l.id === s.listId);
+    const opts = [['', '✏️ 自己輸入名單'], ...st.classLists.map((l) => [l.id, `👥 ${l.name}（${studentsOf(l).length} 人${hasPhotos(l) ? '，有照片' : ''}）`])];
+    box.append(field('名單來源', select(opts, linked ? linked.id : '', (v) => {
+      if (!v && linked && !splitNames(s.names).length) s.names = studentsOf(linked).map((p) => p.name).join('\n');
+      s.listId = v;
+      rememberList(v);
+      ctx.save(); onChange(); render();
+    })));
+    if (linked) {
+      const list = studentsOf(linked);
+      const strip = h('div', { class: 'roster-strip' });
+      list.slice(0, 14).forEach((p) => strip.append(h('span', { class: 'rs-item', title: p.name },
+        p.photo ? photoImg(ctx, p.photo, 'rs-photo') : h('span', { class: 'rs-photo none' }, p.name.slice(-2)))));
+      if (list.length > 14) strip.append(h('span', { class: 'muted' }, `…共 ${list.length} 人`));
+      box.append(strip, h('p', { class: 'muted' }, '直接使用班級名單：在「👥 名單」修改學生或照片後，這裡會自動更新。'));
+    } else {
+      const ta = h('textarea', { class: 'input', rows: 8, placeholder: '每行一個名字（也可以用逗號分隔）', value: s.names });
+      ta.addEventListener('input', () => { s.names = ta.value; onChange(); ctx.save(); });
+      const saveBtn = h('button', { class: 'btn', onclick: async () => {
+        const names = splitNames(s.names);
+        if (!names.length) return toast('名單是空的');
+        const name = await promptDialog('名單名稱（例如：三年二班）');
+        if (!name) return;
+        const ex = st.classLists.find((l) => l.name === name);
+        const students = names.map((n, i) => ({ no: String(i + 1).padStart(2, '0'), name: n }));
+        let l = ex;
+        if (ex) ex.students = students; else st.classLists.push(l = { id: Date.now().toString(36), name, students });
+        s.listId = l.id; rememberList(l.id);
+        ctx.store.saveSettings(); ctx.save(); onChange(); render();
+        toast(`已儲存「${name}」，其他白板與裝置也能使用`);
+      } }, '💾 儲存為班級名單');
+      box.append(field('名單', ta), saveBtn);
+    }
+    box.append(h('button', { class: 'btn', onclick: () => rosterDialog(ctx.store, { selectId: s.listId }) }, '👥 管理班級名單（匯入 Excel、照片）'));
+  }
+  // 在班級名單畫面修改後，重新整理這個設定區
+  const onSettings = () => { if (!box.isConnected) ctx.store.removeEventListener('settings', onSettings); else render(); };
+  ctx.store.addEventListener('settings', onSettings);
+  render();
+  return box;
 }
 
 export const names = {
-  type: 'names', title: '隨機抽籤', icon: '🎲', size: { w: 0.3, h: 0.3 },
-  state: () => ({ names: '', current: '', picked: [], removePicked: true }),
+  type: 'names', title: '隨機抽籤', icon: '🎲', size: { w: 0.3, h: 0.34 },
+  state: () => ({ names: '', listId: '', current: '', picked: [], removePicked: true, showPhoto: true }),
   mount(body, ctx) {
     const s = ctx.state;
+    const photo = h('div', { class: 'pick-photo' });
     const display = h('div', { class: 'pick-name' });
     const info = h('div', { class: 'pick-info' });
     const pickBtn = h('button', { class: 'btn primary big' }, '抽一位');
-    body.append(h('div', { class: 'picker' }, display, h('div', { class: 'timer-ctrl' }, pickBtn,
-      h('button', { class: 'btn', title: '重新開始', onclick: () => { s.picked = []; s.current = ''; ctx.save(); render(); } }, '↺ 重置')), info));
+    const picker = h('div', { class: 'picker' }, photo, display, h('div', { class: 'timer-ctrl' }, pickBtn,
+      h('button', { class: 'btn', title: '重新開始', onclick: () => { s.picked = []; s.current = ''; ctx.save(); render(); } }, '↺ 重置')), info);
+    body.append(picker);
     let anim = null;
     const pool = () => {
-      const all = splitNames(s.names);
+      const all = namesOf(ctx);
       return s.removePicked ? all.filter((n) => !s.picked.includes(n)) : all;
     };
+    let shownPhoto = null;
+    function showPhoto(name) {
+      const ref = s.showPhoto && name ? photosOf(ctx).get(name) : null;
+      picker.classList.toggle('with-photo', !!ref);
+      if (JSON.stringify(ref) === JSON.stringify(shownPhoto)) return;
+      shownPhoto = ref;
+      photo.innerHTML = '';
+      if (ref) photo.append(photoImg(ctx, ref, ''));
+    }
     function render() {
-      const all = splitNames(s.names);
-      display.textContent = s.current || (all.length ? '準備好了嗎？' : '請先在 ⚙ 設定輸入名單');
+      const all = namesOf(ctx);
+      display.textContent = s.current || (all.length ? '準備好了嗎？' : '請先在 ⚙ 設定選擇班級名單');
       display.classList.toggle('placeholder', !s.current);
       info.textContent = all.length ? (s.removePicked ? `剩下 ${pool().length} / ${all.length} 人` : `共 ${all.length} 人`) : '';
+      showPhoto(s.current);
     }
     pickBtn.onclick = () => {
       if (anim) return;
       let p = pool();
       if (!p.length) {
-        if (!splitNames(s.names).length) return toast('請先按右上角 ⚙ 輸入名單');
+        if (!namesOf(ctx).length) return toast('請先按右上角 ⚙ 選擇班級名單');
         s.picked = []; p = pool(); toast('所有人都抽過了，重新開始');
       }
       const winner = p[Math.floor(Math.random() * p.length)];
       let i = 0;
       const steps = 18;
       display.classList.remove('placeholder');
+      showPhoto(null);
+      ctx.push?.();
       const step = () => {
         if (i++ < steps) {
           display.textContent = p[Math.floor(Math.random() * p.length)];
@@ -78,25 +132,30 @@ export const names = {
       };
       step();
     };
+    const unwatch = watchRoster(ctx, render);
     render();
     return {
-      destroy: () => clearTimeout(anim),
+      destroy: () => { clearTimeout(anim); unwatch(); },
       remote: {
-        view: () => ({ current: s.current, left: pool().length, total: splitNames(s.names).length, picking: !!anim }),
+        view: () => ({
+          current: s.current, left: pool().length, total: namesOf(ctx).length, picking: !!anim,
+          photo: !anim && s.current ? photoThumb(ctx.store, photosOf(ctx).get(s.current), ctx.push) : '',
+        }),
         act(a) {
           if (a === 'pick') pickBtn.onclick();
           else if (a === 'reset') { s.picked = []; s.current = ''; ctx.save(); render(); }
         },
       },
-      settings: (c) => c.append(namesEditor(ctx, render),
-        checkbox('抽過的人不再重複', s.removePicked, (v) => { s.removePicked = v; ctx.save(); render(); })),
+      settings: (c) => c.append(namesEditor(ctx, () => { s.picked = s.picked.filter((n) => namesOf(ctx).includes(n)); render(); }),
+        checkbox('抽過的人不再重複', s.removePicked, (v) => { s.removePicked = v; ctx.save(); render(); }),
+        checkbox('顯示照片（班級名單有照片時）', s.showPhoto, (v) => { s.showPhoto = v; ctx.save(); render(); })),
     };
   },
 };
 
 export const groups = {
   type: 'groups', title: '分組', icon: '👥', size: { w: 0.4, h: 0.42 },
-  state: () => ({ names: '', mode: 'count', n: 4, groups: [] }),
+  state: () => ({ names: '', listId: '', mode: 'count', n: 4, groups: [], showPhoto: true }),
   mount(body, ctx) {
     const s = ctx.state;
     const grid = h('div', { class: 'groups-grid' });
@@ -105,8 +164,8 @@ export const groups = {
         h('button', { class: 'btn primary', onclick: () => make() }, '🔀 隨機分組')),
       grid));
     function make() {
-      const list = shuffle(splitNames(s.names));
-      if (!list.length) return toast('請先按右上角 ⚙ 輸入名單');
+      const list = shuffle(namesOf(ctx));
+      if (!list.length) return toast('請先按右上角 ⚙ 選擇班級名單');
       const count = s.mode === 'count' ? Math.max(1, Math.min(s.n, list.length)) : Math.max(1, Math.ceil(list.length / Math.max(1, s.n)));
       s.groups = Array.from({ length: count }, () => []);
       list.forEach((n, i) => s.groups[i % count].push(n));
@@ -114,21 +173,28 @@ export const groups = {
     }
     function render() {
       grid.innerHTML = '';
-      if (!s.groups.length) { grid.append(h('div', { class: 'muted center' }, '設定名單後按「隨機分組」')); return; }
+      if (!s.groups.length) { grid.append(h('div', { class: 'muted center' }, '選擇名單後按「隨機分組」')); return; }
+      const photos = s.showPhoto ? photosOf(ctx) : new Map();
       grid.style.setProperty('--cols', Math.ceil(Math.sqrt(s.groups.length * 1.6)));
       s.groups.forEach((g, i) => grid.append(h('div', { class: `group-card c${i % 8}` },
-        h('b', null, `第 ${i + 1} 組`), h('div', null, g.join('、')))));
+        h('b', null, `第 ${i + 1} 組`),
+        photos.size
+          ? h('div', { class: 'gm-list' }, g.map((n) => h('span', { class: 'gm' }, photos.get(n) ? photoImg(ctx, photos.get(n), 'gm-photo') : null, n)))
+          : h('div', null, g.join('、')))));
     }
+    const unwatch = watchRoster(ctx, render);
     render();
     return {
+      destroy: () => unwatch(),
       remote: {
-        view: () => ({ groups: s.groups, total: splitNames(s.names).length }),
+        view: () => ({ groups: s.groups, total: namesOf(ctx).length }),
         act(a) { if (a === 'shuffle') make(); },
       },
       settings: (c) => c.append(namesEditor(ctx, () => {}),
         h('div', { class: 'row' },
           field('分組方式', select([['count', '指定組數'], ['size', '每組人數']], s.mode, (v) => { s.mode = v; ctx.save(); })),
-          field('數量', h('input', { class: 'input', type: 'number', min: 1, max: 50, value: s.n, oninput: (e) => { s.n = Math.max(1, +e.target.value || 1); ctx.save(); } })))),
+          field('數量', h('input', { class: 'input', type: 'number', min: 1, max: 50, value: s.n, oninput: (e) => { s.n = Math.max(1, +e.target.value || 1); ctx.save(); } }))),
+        checkbox('顯示照片（班級名單有照片時）', s.showPhoto, (v) => { s.showPhoto = v; ctx.save(); render(); })),
     };
   },
 };
@@ -347,7 +413,7 @@ export const sound = {
 // 座位表：依名單排座位，點兩個座位可以交換，也能隨機排座、隨機點名
 export const seats = {
   type: 'seats', title: '座位表', icon: '🪑', size: { w: 0.5, h: 0.55 },
-  state: () => ({ names: '', rows: 5, cols: 6, seats: [], flip: false, highlight: -1 }),
+  state: () => ({ names: '', listId: '', rows: 5, cols: 6, seats: [], flip: false, highlight: -1, showPhoto: true }),
   mount(body, ctx) {
     const s = ctx.state;
     const grid = h('div', { class: 'seats-grid' });
@@ -363,7 +429,8 @@ export const seats = {
 
     // 名單改變時：保留原本的位置，刪掉不在名單的人，新的人補進空位
     function sync() {
-      const list = splitNames(s.names);
+      if (!rosterReady(ctx)) return;
+      const list = namesOf(ctx);
       const total = s.rows * s.cols;
       let arr = Array.from({ length: total }, (_, i) => s.seats[i] || '');
       const seen = new Set();
@@ -378,7 +445,7 @@ export const seats = {
       if (s.highlight >= arr.length || !arr[s.highlight]) s.highlight = -1;
     }
     function shuffleSeats() {
-      const list = splitNames(s.names);
+      const list = namesOf(ctx);
       if (!list.length) return toast('請先按右上角 ⚙ 輸入名單');
       const total = s.rows * s.cols;
       // 人數少於座位時，空位也一起打散
@@ -417,12 +484,15 @@ export const seats = {
       wrap.classList.toggle('flip', s.flip);
       const order = s.seats.map((_, i) => i);
       if (s.flip) order.reverse(); // 老師視角：講台在下方，左右也相反
-      if (!splitNames(s.names).length) {
-        grid.append(h('div', { class: 'muted center', style: { gridColumn: '1 / -1' } }, '按右上角 ⚙ 輸入名單，或載入已儲存的班級名單'));
+      if (!namesOf(ctx).length) {
+        grid.append(h('div', { class: 'muted center', style: { gridColumn: '1 / -1' } }, '按右上角 ⚙ 選擇班級名單'));
         return;
       }
+      const photos = s.showPhoto ? photosOf(ctx) : new Map();
+      grid.classList.toggle('with-photo', photos.size > 0);
       for (const i of order) {
         const n = s.seats[i];
+        const ref = n && photos.get(n);
         grid.append(h('button', {
           class: 'seat' + (n ? '' : ' empty') + (i === selected ? ' sel' : '') + (i === s.highlight ? ' hl' : ''),
           title: n ? '點一下，再點另一個座位即可交換' : '空位',
@@ -431,13 +501,14 @@ export const seats = {
             const a = selected; selected = -1;
             if (a === i) render(); else swap(a, i);
           },
-        }, n));
+        }, ref ? photoImg(ctx, ref, 'seat-photo') : null, h('span', { class: 'seat-name' }, n)));
       }
     }
+    const unwatch = watchRoster(ctx, () => { sync(); render(); });
     sync();
     render();
     const resize = (dr, dc) => {
-      const list = splitNames(s.names);
+      const list = namesOf(ctx);
       const rows = Math.max(1, Math.min(15, s.rows + dr)), cols = Math.max(1, Math.min(15, s.cols + dc));
       if (rows * cols < list.length) return toast(`座位不夠，至少要 ${list.length} 個`);
       // 依「列、行」重新對應，保留原本的位置
@@ -447,9 +518,12 @@ export const seats = {
       sync(); ctx.save(); render();
     };
     return {
-      destroy: () => clearTimeout(anim),
+      destroy: () => { clearTimeout(anim); unwatch(); },
       remote: {
-        view: () => ({ rows: s.rows, cols: s.cols, seats: s.seats, flip: s.flip, highlight: s.highlight, picking: !!anim }),
+        view: () => ({
+          rows: s.rows, cols: s.cols, seats: s.seats, flip: s.flip, highlight: s.highlight, picking: !!anim,
+          photo: !anim && s.seats[s.highlight] ? photoThumb(ctx.store, photosOf(ctx).get(s.seats[s.highlight]), ctx.push) : '',
+        }),
         act(a, args = {}) {
           if (a === 'shuffle') shuffleSeats();
           else if (a === 'pick') pick();
@@ -466,6 +540,7 @@ export const seats = {
           field('座位數', h('div', { class: 'stack' }, size,
             h('div', { class: 'row-btns' }, adj('− 排', -1, 0), adj('＋ 排', 1, 0), adj('− 行', 0, -1), adj('＋ 行', 0, 1)))),
           checkbox('老師視角（講台在下方）', s.flip, (v) => { s.flip = v; ctx.save(); render(); }),
+          checkbox('顯示照片（班級名單有照片時）', s.showPhoto, (v) => { s.showPhoto = v; ctx.save(); render(); }),
           h('p', { class: 'muted' }, '在座位表上點一個座位，再點另一個座位，兩人就會交換（也可以和空位交換）。'));
       },
     };

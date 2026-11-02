@@ -169,10 +169,15 @@ export class Store extends EventTarget {
     } catch {
       this.settings = local || { classLists: [] };
     }
+    // 舊格式名單（只有 names）補上 students
+    this.settings.classLists = (this.settings.classLists || []).map((l) => ({ ...l, students: l.students || (l.names || []).map((name) => ({ name })) }));
     return this.settings;
   }
 
   saveSettings() {
+    // names 給舊版程式讀；students 才有座號、照片
+    for (const l of this.settings.classLists) l.names = l.students.map((x) => x.name);
+    this.dispatchEvent(new Event('settings'));
     if (this.remote) LS.set(this.key('settings'), this.settings);
     clearTimeout(this.settingsTimer);
     this.settingsTimer = setTimeout(() => this.backend.putSettings(this.settings).catch(() => {}), 500);

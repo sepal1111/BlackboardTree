@@ -215,7 +215,8 @@ const RENDER = {
   names(w) {
     const v = w.view || {};
     return [
-      h('div', { class: 'name' + (v.current && !v.picking ? '' : ' ph') }, v.picking ? '抽籤中…' : (v.current || (v.total ? '準備好了嗎？' : '請先在電腦上輸入名單'))),
+      v.photo ? h('img', { class: 'stu-photo', src: v.photo, alt: '' }) : null,
+      h('div', { class: 'name' + (v.current && !v.picking ? '' : ' ph') }, v.picking ? '抽籤中…' : (v.current || (v.total ? '準備好了嗎？' : '請先在電腦上選擇班級名單'))),
       h('div', { class: 'muted', style: { textAlign: 'center' } }, v.total ? `剩下 ${v.left} / ${v.total} 人` : ''),
       h('div', { class: 'row' }, btn('🎲 抽一位', () => wcmd(w, 'pick'), 'primary big'), btn('↺ 重置', () => wcmd(w, 'reset')))];
   },
@@ -224,7 +225,7 @@ const RENDER = {
     return [
       h('div', { class: 'groups' }, (v.groups || []).length
         ? v.groups.map((g, i) => h('div', null, h('b', null, `第 ${i + 1} 組：`), g.join('、')))
-        : h('span', { class: 'muted' }, v.total ? '尚未分組' : '請先在電腦上輸入名單')),
+        : h('span', { class: 'muted' }, v.total ? '尚未分組' : '請先在電腦上選擇班級名單')),
       btn('🔀 隨機分組', () => wcmd(w, 'shuffle'), 'primary big')];
   },
   dice(w) {
@@ -274,6 +275,7 @@ const RENDER = {
       }, v.seats[i] || '')));
     const name = v.highlight >= 0 && !v.picking ? v.seats[v.highlight] : '';
     return [
+      v.photo && name ? h('img', { class: 'stu-photo', src: v.photo, alt: '' }) : null,
       name ? h('div', { class: 'name' }, name) : h('div', { class: 'muted', style: { textAlign: 'center' } }, '點一個座位，再點另一個座位即可交換'),
       ...(v.flip ? [grid, desk] : [desk, grid]),
       h('div', { class: 'row' }, btn('🎯 隨機點名', () => wcmd(w, 'pick'), 'primary'), btn('🔀 隨機排座位', () => { if (confirm('要重新隨機排座位嗎？')) wcmd(w, 'shuffle'); }))];

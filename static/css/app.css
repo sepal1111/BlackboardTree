@@ -413,3 +413,46 @@ body.dragging iframe { pointer-events: none; }
 .seat.hl { background: #ffd43b; border-color: #f08c00; transform: scale(1.06); box-shadow: 0 0 0 3px #ffe066; z-index: 1; }
 .seats-size { font-weight: 700; }
 .embed.social { background: #fff; }
+
+/* 班級名單 */
+.modal.wide:has(.roster) { width: min(1000px, 100%); }
+.roster { display: grid; grid-template-columns: 180px 1fr; gap: 16px; min-height: 420px; }
+.roster-side { display: flex; flex-direction: column; gap: 6px; border-right: 1px solid #f1f3f5; padding-right: 12px; max-height: 62vh; overflow: auto; }
+.roster-tab { text-align: left; border: 1px solid #e9ecef; background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.roster-tab small { color: var(--muted); }
+.roster-tab.on { border-color: var(--accent); background: #edf2ff; }
+.roster-tab.new { color: var(--accent); font-weight: 700; border-style: dashed; align-items: center; }
+.roster-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.roster-head { display: flex; gap: 8px; }
+.roster-name { flex: 1; font-size: 18px; font-weight: 700; }
+.roster-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.roster-tip { margin: 0; }
+.roster-empty { margin: auto; text-align: center; }
+.roster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; max-height: 46vh; overflow: auto; padding: 2px; }
+.roster-card { position: relative; display: flex; flex-direction: column; gap: 4px; border: 1px solid #e9ecef; border-radius: 10px; padding: 6px; background: #fff; }
+.roster-card.add { align-items: center; justify-content: center; color: var(--accent); font-weight: 700; border-style: dashed; min-height: 150px; }
+.roster-photo { aspect-ratio: 3 / 4; width: 100%; border: 0; border-radius: 8px; background: #f1f3f5; padding: 0; overflow: hidden; font-size: 28px; color: #adb5bd; }
+.roster-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.roster-no, .roster-nm { border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; font: inherit; min-width: 0; text-align: center; }
+.roster-no { font-size: 12px; color: var(--muted); }
+.roster-nm { font-weight: 700; }
+.roster-no:hover, .roster-nm:hover, .roster-no:focus, .roster-nm:focus { border-color: #ced4da; outline: none; }
+.roster-del { position: absolute; top: 2px; right: 2px; border: 0; background: rgba(255,255,255,.85); border-radius: 50%; width: 22px; height: 22px; padding: 0; font-size: 12px; color: var(--muted); opacity: 0; }
+.roster-card:hover .roster-del { opacity: 1; }
+.roster-strip { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.rs-photo { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: inline-grid; place-items: center; background: #e9ecef; font-size: 11px; color: #495057; }
+@media (max-width: 640px) { .roster { grid-template-columns: 1fr; } .roster-side { flex-direction: row; flex-wrap: wrap; border: 0; padding: 0; } }
+
+/* 小工具裡的學生照片 */
+.pick-photo { display: none; }
+.picker.with-photo { gap: 2cqh; }
+.picker.with-photo .pick-photo { display: block; height: 48cqh; aspect-ratio: 3 / 4; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,.15); }
+.pick-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.picker.with-photo .pick-name { font-size: min(12cqw, 16cqh); }
+.gm-list { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.gm { display: inline-flex; align-items: center; gap: 4px; }
+.gm-photo { width: 1.8em; height: 1.8em; border-radius: 50%; object-fit: cover; }
+.seat { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.seat-photo { flex: 1; min-height: 0; width: 100%; object-fit: cover; border-radius: 4px; }
+.seats-grid.with-photo .seat { padding: 2px; font-size: min(calc(70cqw / var(--cols) / 3.6), calc(30cqh / var(--rows) / 1.4)); }
+.seat-name { flex: 0 0 auto; max-width: 100%; overflow: hidden; }

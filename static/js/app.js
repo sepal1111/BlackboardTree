@@ -7,6 +7,7 @@ import { widgets, widgetList } from './widgets/index.js';
 import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
 import { RemoteHost } from './remote-host.js';
+import { rosterDialog } from './roster.js';
 
 const BG_PRESETS = {
   sky: 'linear-gradient(160deg,#a5d8ff 0%,#d0ebff 55%,#f1f8ff 100%)',
@@ -691,6 +692,7 @@ function remoteDialog() {
 
 // ------------------------------------------------------------ 綁定
 $('#board-btn').addEventListener('click', (e) => boardMenu(e.currentTarget));
+$('#roster-btn').addEventListener('click', () => S.store && rosterDialog(S.store));
 $('#bg-btn').addEventListener('click', backgroundDialog);
 $('#fs-btn').addEventListener('click', toggleFullscreen);
 $('#user-btn').addEventListener('click', (e) => userMenu(e.currentTarget));

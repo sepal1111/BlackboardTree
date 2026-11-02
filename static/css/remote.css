@@ -92,3 +92,4 @@ footer button { flex: 0 0 auto; }
 .seat-cell.vacant { background: transparent; border-style: dashed; }
 .seat-cell.sel { outline: 3px solid var(--accent); background: #dbe4ff; }
 .seat-cell.hl { background: #ffd43b; border-color: #f08c00; }
+.stu-photo { display: block; margin: 0 auto; width: 120px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
