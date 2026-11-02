@@ -1,6 +1,7 @@
 """手機遙控轉送。
 
 教室電腦（screen）連上 /ws/screen 取得 6 位數代碼；手機（remote）用代碼連上 /ws/remote。
+學生投票：教室電腦送 vote-open 取得另一組「投票代碼」，學生用它連上 /ws/vote，只能送出投票，不能遙控白板。
 伺服器只轉送訊息，不保存任何資料。
 """
 from __future__ import annotations
@@ -15,6 +16,7 @@ router = APIRouter()
 
 ROOM_KEEP_SEC = 600          # 教室電腦斷線後保留代碼的時間（重新連線可沿用）
 MAX_REMOTES = 8              # 每個白板最多同時連線的遙控裝置
+MAX_VOTERS = 200             # 每個投票最多同時連線的學生
 MAX_MSG = 256 * 1024
 
 
@@ -26,23 +28,30 @@ class Room:
         self.remotes: set[WebSocket] = set()
         self.state: dict | None = None
         self.gone_at: float | None = None
+        self.vote_code: str | None = None   # 學生投票用的代碼（沒有開放投票時為 None）
+        self.poll: dict | None = None
+        self.voters: dict[str, WebSocket] = {}
+        self.next_voter = 0
 
 
 rooms: dict[str, Room] = {}
+vote_rooms: dict[str, Room] = {}
 join_fail: dict[str, list[float]] = defaultdict(list)
 
 
 def _cleanup() -> None:
     now = time.time()
     for code, r in list(rooms.items()):
-        if r.screen is None and r.gone_at and now - r.gone_at > ROOM_KEEP_SEC and not r.remotes:
+        if r.screen is None and r.gone_at and now - r.gone_at > ROOM_KEEP_SEC and not r.remotes and not r.voters:
             rooms.pop(code, None)
+            if r.vote_code:
+                vote_rooms.pop(r.vote_code, None)
 
 
 def _new_code() -> str:
     while True:
         code = f"{secrets.randbelow(1_000_000):06d}"
-        if code not in rooms:
+        if code not in rooms and code not in vote_rooms:
             return code
 
 
@@ -69,6 +78,30 @@ async def _receive(ws: WebSocket) -> dict | None:
     except ValueError:
         return None
     return msg if isinstance(msg, dict) else None
+
+
+async def _broadcast_voters(room: Room, msg: dict) -> None:
+    for ws in list(room.voters.values()):
+        await _send(ws, msg)
+
+
+async def _close_vote(room: Room) -> None:
+    voters = list(room.voters.values())
+    room.voters.clear()
+    if room.vote_code:
+        vote_rooms.pop(room.vote_code, None)
+    room.vote_code = None
+    room.poll = None
+    for v in voters:
+        await _send(v, {"type": "closed"})
+        try:
+            await v.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _is_code(v: str) -> bool:
+    return len(v) == 6 and v.isdigit()
 
 
 def _new_room() -> Room:
@@ -98,6 +131,7 @@ async def ws_screen(ws: WebSocket):
     room.gone_at = None
     await _send(ws, {"type": "room", "code": room.code, "secret": room.secret, "remotes": len(room.remotes)})
     await _broadcast(room, {"type": "screen", "online": True})
+    await _broadcast_voters(room, {"type": "screen", "online": True})
     try:
         while True:
             msg = await _receive(ws)
@@ -123,6 +157,22 @@ async def ws_screen(ws: WebSocket):
                 room.secret = secrets.token_urlsafe(24)
                 rooms[room.code] = room
                 await _send(ws, {"type": "room", "code": room.code, "secret": room.secret, "remotes": 0})
+            elif t == "vote-open":
+                # 開放學生投票（或更新題目）；可指定沿用原本的投票代碼，讓學生斷線後自動連回
+                if not room.vote_code:
+                    want = str(msg.get("code", ""))
+                    room.vote_code = want if _is_code(want) and want not in rooms and want not in vote_rooms else _new_code()
+                    vote_rooms[room.vote_code] = room
+                room.poll = msg.get("poll") if isinstance(msg.get("poll"), dict) else None
+                await _send(ws, {"type": "vote-room", "code": room.vote_code, "voters": len(room.voters)})
+                await _broadcast_voters(room, {"type": "poll", "poll": room.poll})
+            elif t == "vote-close":
+                await _close_vote(room)
+                await _send(ws, {"type": "vote-room", "code": "", "voters": 0})
+            elif t == "vote-ack":
+                voter = room.voters.get(str(msg.get("to", "")))
+                if voter:
+                    await _send(voter, {"type": "ack", "ok": bool(msg.get("ok")), "text": str(msg.get("text", ""))[:200], "choice": msg.get("choice")})
     except WebSocketDisconnect:
         pass
     finally:
@@ -130,6 +180,7 @@ async def ws_screen(ws: WebSocket):
             room.screen = None
             room.gone_at = time.time()
             await _broadcast(room, {"type": "screen", "online": False})
+            await _broadcast_voters(room, {"type": "screen", "online": False})
 
 
 @router.websocket("/ws/remote")
@@ -179,3 +230,54 @@ async def ws_remote(ws: WebSocket, code: str = ""):
         room.remotes.discard(ws)
         if room.screen:
             await _send(room.screen, {"type": "remotes", "count": len(room.remotes)})
+
+
+@router.websocket("/ws/vote")
+async def ws_vote(ws: WebSocket, code: str = ""):
+    """學生投票：只能收到題目、送出 {type: vote, name, choice}。"""
+    await ws.accept()
+    ip = ws.client.host if ws.client else "?"
+    now = time.time()
+    join_fail[ip] = [t for t in join_fail[ip] if now - t < 300]
+    if len(join_fail[ip]) >= 20:
+        await _send(ws, {"type": "error", "message": "嘗試次數過多，請 5 分鐘後再試"})
+        await ws.close()
+        return
+    room = vote_rooms.get(code)
+    if not room:
+        join_fail[ip].append(now)
+        await _send(ws, {"type": "error", "message": "投票代碼錯誤，或老師已經結束投票"})
+        await ws.close()
+        return
+    if len(room.voters) >= MAX_VOTERS:
+        await _send(ws, {"type": "error", "message": "連線的人數太多了"})
+        await ws.close()
+        return
+    room.next_voter += 1
+    vid = str(room.next_voter)
+    room.voters[vid] = ws
+    await _send(ws, {"type": "poll", "poll": room.poll, "online": room.screen is not None})
+    if room.screen:
+        await _send(room.screen, {"type": "voters", "count": len(room.voters)})
+    try:
+        while True:
+            msg = await _receive(ws)
+            if not msg or msg.get("type") != "vote":
+                continue
+            if room.vote_code != code:  # 投票已結束
+                break
+            try:
+                choice = int(msg.get("choice"))
+            except (TypeError, ValueError):
+                continue
+            if room.screen:
+                await _send(room.screen, {"type": "vote", "from": vid, "name": str(msg.get("name", "")).strip()[:20], "choice": choice})
+            else:
+                await _send(ws, {"type": "ack", "ok": False, "text": "教室電腦目前沒有連線，請稍後再試"})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if room.voters.get(vid) is ws:
+            room.voters.pop(vid, None)
+        if room.screen:
+            await _send(room.screen, {"type": "voters", "count": len(room.voters)})

@@ -100,6 +100,45 @@ const room3 = await screen3.next('room');
 check('伺服器重啟後沿用教室電腦的代碼', room3 && room3.code === '123456');
 screen3.ws.close();
 
+// 學生投票：另一組代碼，只能投票
+const vpage = await fetch(`http://127.0.0.1:${port}/vote.html`);
+check('提供 vote.html', vpage.ok && (await vpage.text()).includes('/ws/vote'));
+screen2.send({ type: 'vote-open', poll: { id: 'w9', question: '午餐吃什麼', options: ['麵', '飯'] } });
+const vroom = await screen2.next('vote-room');
+check('開放投票取得投票代碼', vroom && /^\d{6}$/.test(vroom.code) && vroom.code !== room.code, vroom && vroom.code);
+const asRemote = client('/ws/remote?code=' + vroom.code);
+await asRemote.opened;
+check('投票代碼不能當遙控代碼', !!(await asRemote.next('error')));
+const stu = client('/ws/vote?code=' + vroom.code);
+await stu.opened;
+const p1 = await stu.next('poll');
+check('學生收到題目', p1 && p1.poll.question === '午餐吃什麼' && p1.poll.options[1] === '飯' && p1.online === true);
+const vc = await screen2.next('voters');
+check('教室電腦收到學生人數', vc && vc.count === 1);
+stu.send({ type: 'cmd', target: 'app', action: 'chrome' });
+stu.send({ type: 'vote', name: '  王小明同學的名字非常非常非常長超過二十個字  ', choice: 1 });
+const vmsg = await screen2.next('vote');
+check('學生的投票轉送到教室電腦（不轉送遙控指令）', vmsg && vmsg.choice === 1 && vmsg.name.length === 20 && vmsg.name.startsWith('王小明') && !screen2.msgs.some((m) => m.type === 'cmd'));
+screen2.send({ type: 'vote-ack', to: vmsg.from, ok: true, text: '已投給「飯」', choice: 1 });
+const ack = await stu.next('ack');
+check('投票結果回傳給學生', ack && ack.ok === true && ack.text === '已投給「飯」' && ack.choice === 1);
+screen2.send({ type: 'vote-open', poll: { id: 'w9', question: '改題目', options: ['A'] } });
+const p2 = await stu.next('poll');
+const vroom2 = await screen2.next('vote-room');
+check('更新題目：學生收到新題目、代碼不變', p2 && p2.poll.question === '改題目' && vroom2 && vroom2.code === vroom.code);
+screen2.send({ type: 'vote-close' });
+check('結束投票：學生收到通知', !!(await stu.next('closed')));
+const vroom3 = await screen2.next('vote-room');
+check('結束投票：代碼清除', vroom3 && vroom3.code === '');
+const late = client('/ws/vote?code=' + vroom.code);
+await late.opened;
+check('結束後投票代碼失效', !!(await late.next('error')));
+screen2.send({ type: 'vote-open', code: vroom.code, poll: { id: 'w9', question: '再一次', options: ['A'] } });
+const vroom4 = await screen2.next('vote-room');
+check('重新開放時可沿用原本的投票代碼', vroom4 && vroom4.code === vroom.code);
+screen2.send({ type: 'vote-close' });
+await screen2.next('vote-room');
+
 // 中斷全部並換代碼
 screen2.send({ type: 'kick' });
 const kicked = await phone.next('kicked');

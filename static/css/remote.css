@@ -47,17 +47,11 @@ main { padding: 12px; padding-bottom: 96px; display: grid; gap: 12px; grid-templ
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chips button { padding: 6px 12px; border-radius: 99px; font-size: 14px; flex: 0 0 auto; }
 
-.lights { display: flex; justify-content: space-around; background: #212529; border-radius: 14px; padding: 12px; }
-.light { width: 72px; height: 72px; border-radius: 50%; border: 0; opacity: .25; padding: 0; }
-.light.on { opacity: 1; box-shadow: 0 0 20px currentColor; }
-.light.red { background: #fa5252; color: #fa5252; } .light.yellow { background: #fcc419; color: #fcc419; } .light.green { background: #40c057; color: #40c057; }
-
 .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .modes button { display: flex; flex-direction: column; align-items: center; padding: 8px 2px; font-size: 12px; font-weight: 500; gap: 2px; }
 .modes button span { font-size: 26px; }
 .modes button.on { border-color: var(--accent); background: #edf2ff; font-weight: 700; }
 
-.dice-vals { font-size: 40px; text-align: center; letter-spacing: 6px; }
 .groups { font-size: 14px; line-height: 1.6; max-height: 220px; overflow: auto; }
 .groups b { color: var(--accent); }
 

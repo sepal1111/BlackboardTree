@@ -236,17 +236,6 @@ const RENDER = {
         : h('span', { class: 'muted' }, v.total ? '尚未分組' : '請先在電腦上選擇班級名單')),
       btn('🔀 隨機分組', () => wcmd(w, 'shuffle'), 'primary big')];
   },
-  dice(w) {
-    const faces = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-    const vals = w.view?.values || [];
-    return [h('div', { class: 'dice-vals' }, vals.map((x) => faces[x]).join(' ')),
-      h('div', { class: 'muted', style: { textAlign: 'center' } }, vals.length > 1 ? `合計 ${vals.reduce((a, b) => a + b, 0)}` : ''),
-      btn('🎲 擲骰子', () => wcmd(w, 'roll'), 'primary big')];
-  },
-  traffic(w) {
-    return [h('div', { class: 'lights' }, ['red', 'yellow', 'green'].map((c) =>
-      h('button', { class: `light ${c}${w.view?.light === c ? ' on' : ''}`, 'aria-label': { red: '紅燈', yellow: '黃燈', green: '綠燈' }[c], onclick: () => wcmd(w, 'set', { light: c }) })))];
-  },
   work(w) {
     const v = w.view || {};
     return [h('div', { class: 'modes' }, (v.modes || []).map((m) =>

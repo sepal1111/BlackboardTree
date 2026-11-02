@@ -1,4 +1,4 @@
-// 班級經營類：抽籤、分組、座位表、課堂加分、骰子、紅綠燈、工作模式、投票、音量計
+// 班級經營類：抽籤、分組、座位表、課堂加分、工作模式、投票、音量計
 import { h, field, select, checkbox, promptDialog, confirmDialog, toast, setImage } from '../ui.js';
 import { shuffle, splitNames, beep, observeSize } from './util.js';
 import { studentsOf, hasPhotos, linkedList, watchRoster, photoThumb, rosterDialog, rememberList } from '../roster.js';
@@ -19,6 +19,14 @@ function photoImg(ctx, ref, cls) {
   setImage(img, ctx.store, ref);
   img.onerror = () => img.remove();
   return img;
+}
+
+// 座位表的照片：外框量出可用空間（CSS 容器單位），照片依空間決定比例，見 app.css 的 .seat-pic
+function seatPhoto(ctx, ref) {
+  const img = photoImg(ctx, ref, 'seat-photo');
+  const pic = h('div', { class: 'seat-pic' }, img);
+  img.onerror = () => pic.remove();
+  return pic;
 }
 
 // 名單設定：選擇班級名單（直接讀取匯入的名單與照片），或自己輸入
@@ -199,70 +207,6 @@ export const groups = {
   },
 };
 
-const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
-export const dice = {
-  type: 'dice', title: '骰子', icon: '🎯', size: { w: 0.26, h: 0.26 },
-  state: () => ({ count: 2, values: [3, 5] }),
-  mount(body, ctx) {
-    const s = ctx.state;
-    const row = h('div', { class: 'dice-row' });
-    const total = h('div', { class: 'dice-total' });
-    body.append(h('div', { class: 'dice', onclick: roll, title: '點一下擲骰子' }, row, total));
-    let rolling = false;
-    function render() {
-      row.innerHTML = '';
-      s.values.slice(0, s.count).forEach((v) => row.append(h('div', { class: 'die' + (rolling ? ' rolling' : '') },
-        Array.from({ length: 9 }, (_, i) => h('i', { class: PIPS[v].includes(i) ? 'on' : '' })))));
-      total.textContent = s.count > 1 && !rolling ? `合計 ${s.values.slice(0, s.count).reduce((a, b) => a + b, 0)}` : '';
-    }
-    function roll() {
-      if (rolling) return;
-      rolling = true;
-      let n = 0;
-      const t = setInterval(() => {
-        s.values = Array.from({ length: s.count }, () => 1 + Math.floor(Math.random() * 6));
-        render();
-        if (++n > 8) { clearInterval(t); rolling = false; render(); ctx.save(); }
-      }, 70);
-    }
-    while (s.values.length < 6) s.values.push(1);
-    render();
-    return {
-      remote: {
-        view: () => ({ values: s.values.slice(0, s.count), rolling }),
-        act(a) { if (a === 'roll') roll(); },
-      },
-      settings: (c) => c.append(field('骰子數量', select([1, 2, 3, 4, 5, 6].map((n) => [n, n + ' 顆']), s.count, (v) => { s.count = +v; render(); ctx.save(); }))),
-    };
-  },
-};
-
-export const traffic = {
-  type: 'traffic', title: '紅綠燈', icon: '🚦', size: { w: 0.12, h: 0.36 },
-  state: () => ({ light: 'red' }),
-  mount(body, ctx) {
-    const s = ctx.state;
-    const wrap = h('div', { class: 'traffic' });
-    body.append(wrap);
-    function render() {
-      wrap.innerHTML = '';
-      for (const c of ['red', 'yellow', 'green']) {
-        wrap.append(h('button', { class: `lamp ${c}${s.light === c ? ' on' : ''}`, title: { red: '停', yellow: '準備', green: '開始' }[c],
-          onclick: () => { s.light = c; render(); ctx.save(); } }));
-      }
-    }
-    const unobserve = observeSize(body, () => wrap.classList.toggle('horizontal', body.clientWidth > body.clientHeight * 1.3));
-    render();
-    return {
-      destroy: () => unobserve(),
-      remote: {
-        view: () => ({ light: s.light }),
-        act(a, { light } = {}) { if (a === 'set' && ['red', 'yellow', 'green'].includes(light)) { s.light = light; render(); ctx.save(); } },
-      },
-    };
-  },
-};
-
 const MODES = [
   ['silent', '🤫', '安靜作業'], ['whisper', '🗣️', '輕聲細語'], ['partner', '🧑‍🤝‍🧑', '兩人討論'],
   ['group', '👨‍👩‍👧‍👦', '小組合作'], ['hand', '✋', '舉手發言'], ['listen', '👂', '專心聆聽'],
@@ -296,17 +240,103 @@ export const work = {
   },
 };
 
+// 學生投票：同一個名字只算一票（不分大小寫、空白），可設定是否允許改票
+// ballots：{ 名字小寫: { name, label } }，用選項文字記錄，題目改過選項也不會算錯
+export function castVote(s, rawName, choice) {
+  const name = String(rawName ?? '').trim().replace(/\s+/g, ' ').slice(0, 20);
+  if (!name) return { ok: false, text: '請先輸入你的名字' };
+  const o = Number.isInteger(choice) ? s.options[choice] : null;
+  if (!o) return { ok: false, text: '選項已經更新，請重新選擇' };
+  s.ballots ||= {};
+  const key = name.toLowerCase();
+  const prev = s.ballots[key];
+  if (prev) {
+    if (prev.label === o.label) return { ok: true, text: `已投給「${o.label}」`, choice };
+    if (s.allowChange === false) {
+      return { ok: false, text: `你已經投給「${prev.label}」，這次投票不能改票`, choice: s.options.findIndex((x) => x.label === prev.label) };
+    }
+    const old = s.options.find((x) => x.label === prev.label);
+    if (old) old.votes = Math.max(0, old.votes - 1);
+  }
+  o.votes++;
+  s.ballots[key] = { name, label: o.label };
+  return { ok: true, text: prev ? `已改投「${o.label}」` : `已投給「${o.label}」`, choice };
+}
+
 export const poll = {
   type: 'poll', title: '投票', icon: '📊', size: { w: 0.3, h: 0.36 },
-  state: () => ({ question: '你最喜歡哪一個？', options: [{ label: '選項 A', votes: 0 }, { label: '選項 B', votes: 0 }, { label: '選項 C', votes: 0 }] }),
+  state: () => ({
+    question: '你最喜歡哪一個？',
+    options: [{ label: '選項 A', votes: 0 }, { label: '選項 B', votes: 0 }, { label: '選項 C', votes: 0 }],
+    ballots: {}, allowChange: true, hideResults: true,
+  }),
   mount(body, ctx) {
     const s = ctx.state;
+    s.ballots ||= {};
     const q = h('div', { class: 'poll-q' });
     const list = h('div', { class: 'poll-list' });
-    body.append(h('div', { class: 'poll' }, q, list,
-      h('div', { class: 'poll-foot' }, h('span', { class: 'muted' }, '點選項加一票，右鍵減一票'),
-        h('button', { class: 'btn small', onclick: () => { s.options.forEach((o) => { o.votes = 0; }); render(); ctx.save(); } }, '歸零'))));
+    const live = h('div', { class: 'poll-live' });
+    const liveBtn = h('button', { class: 'btn small primary', onclick: toggleLive });
+    const hint = h('span', { class: 'muted' });
+    const wrap = h('div', { class: 'poll' },
+      h('div', { class: 'poll-main' }, h('div', { class: 'poll-core' }, q, list), live),
+      h('div', { class: 'poll-foot' }, hint, h('div', { class: 'row-btns' },
+        liveBtn,
+        h('button', { class: 'btn small', onclick: reset }, '歸零'))));
+    body.append(wrap);
+    let lastQr = '';
+
+    const payload = () => ({ question: s.question, options: s.options.map((o) => o.label), allowChange: s.allowChange !== false });
+    const ballots = () => Object.keys(s.ballots).length;
+
+    async function toggleLive() {
+      if (ctx.vote.info()) { ctx.vote.close(); return; }
+      try {
+        liveBtn.disabled = true;
+        ctx.fit({ w: 0.5, h: 0.55 }); // QR Code 要夠大，學生才掃得到
+        await ctx.vote.open(payload());
+      } catch (e) { toast(e.message); } finally { liveBtn.disabled = false; render(); }
+    }
+    async function reset() {
+      if (ballots() && !await confirmDialog(`要把票數歸零嗎？${ballots()} 位學生的投票紀錄也會清除，學生可以重新投票。`)) return;
+      s.options.forEach((o) => { o.votes = 0; });
+      s.ballots = {};
+      render(); ctx.save();
+    }
+
+    function renderLive(info) {
+      wrap.classList.toggle('is-live', !!info);
+      if (!info) { live.innerHTML = ''; lastQr = ''; return; }
+      if (info.status !== 'online' || !info.code) {
+        lastQr = '';
+        live.innerHTML = '';
+        live.append(h('div', { class: 'poll-wait' }, info.status === 'error'
+          ? (info.local ? '伺服器沒有回應，正在重試…' : '無法連線到遙控伺服器，正在重試…') : '正在開放投票…'));
+        return;
+      }
+      if (lastQr !== info.url) {
+        lastQr = info.url;
+        live.innerHTML = '';
+        const qr = h('div', { class: 'poll-qr' });
+        try {
+          const code = window.qrcode(0, 'M');
+          code.addData(info.url);
+          code.make();
+          qr.innerHTML = code.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+        } catch { qr.textContent = info.url; }
+        live.append(qr,
+          h('div', { class: 'poll-scan' }, '掃描 QR Code 投票'),
+          h('div', { class: 'poll-url' }, info.url.replace(/^https?:\/\//, '')),
+          /\/\/(localhost|127\.|\[::1\])/.test(info.url)
+            ? h('div', { class: 'poll-warn' }, '⚠ 這個網址只有這台電腦能開啟，學生的手機連不到。請用校內 IP 開啟 MyScreen，或改用桌面版') : null,
+          h('div', { class: 'poll-count' }));
+      }
+      live.querySelector('.poll-count').textContent = `已投票 ${ballots()} 人．連線 ${info.voters} 人`;
+    }
+
     function render() {
+      const info = ctx.vote.info();
+      const hide = !!info && s.hideResults;
       q.textContent = s.question;
       const total = s.options.reduce((a, o) => a + o.votes, 0);
       const max = Math.max(1, ...s.options.map((o) => o.votes));
@@ -315,31 +345,54 @@ export const poll = {
         class: `poll-opt c${i % 8}`,
         onclick: () => { o.votes++; render(); ctx.save(); },
         oncontextmenu: (e) => { e.preventDefault(); o.votes = Math.max(0, o.votes - 1); render(); ctx.save(); },
-      }, h('i', { style: { width: (o.votes / max) * 100 + '%' } }), h('span', null, o.label),
-      h('b', null, `${o.votes}${total ? `（${Math.round((o.votes / total) * 100)}%）` : ''}`))));
+      }, h('i', { style: { width: hide ? '0' : (o.votes / max) * 100 + '%' } }), h('span', null, o.label),
+      hide ? null : h('b', null, `${o.votes}${total ? `（${Math.round((o.votes / total) * 100)}%）` : ''}`))));
+      hint.textContent = hide ? '投票中，結束後顯示結果' : (info ? '學生投票中．點選項加一票' : '點選項加一票，右鍵減一票');
+      liveBtn.textContent = info ? '■ 結束投票' : '📱 學生投票';
+      liveBtn.classList.toggle('danger', !!info);
+      liveBtn.classList.toggle('primary', !info);
+      renderLive(info);
     }
+    const unwatch = ctx.vote.watch(render);
     render();
     return {
+      destroy: () => unwatch(),
+      vote(name, choice) {
+        const res = castVote(s, name, +choice);
+        if (res.ok) { render(); ctx.save(); }
+        return res;
+      },
       remote: {
         view: () => ({ question: s.question, options: s.options }),
         act(a, { i } = {}) {
           const o = s.options[i];
           if (a === 'vote' && o) o.votes++;
           else if (a === 'unvote' && o) o.votes = Math.max(0, o.votes - 1);
-          else if (a === 'reset') s.options.forEach((x) => { x.votes = 0; });
+          else if (a === 'reset') { s.options.forEach((x) => { x.votes = 0; }); s.ballots = {}; }
           else return;
           render(); ctx.save();
         },
       },
       settings: (c) => c.append(
-        field('題目', h('input', { class: 'input', value: s.question, oninput: (e) => { s.question = e.target.value; render(); ctx.save(); } })),
+        field('題目', h('input', { class: 'input', value: s.question, oninput: (e) => { s.question = e.target.value; changed(); } })),
         field('選項（每行一個）', h('textarea', { class: 'input', rows: 6, value: s.options.map((o) => o.label).join('\n'),
           oninput: (e) => {
             const labels = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean);
             s.options = labels.map((l, i) => ({ label: l, votes: s.options[i]?.label === l ? s.options[i].votes : 0 }));
-            render(); ctx.save();
-          } }))),
+            changed();
+          } })),
+        h('div', { class: 'set-sub' }, '學生投票'),
+        checkbox('投票時隱藏票數（結束投票後才顯示結果）', s.hideResults, (v) => { s.hideResults = v; render(); ctx.save(); }),
+        checkbox('允許學生改票', s.allowChange !== false, (v) => { s.allowChange = v; changed(); }),
+        h('small', { class: 'muted' }, '同一個名字只算一票。學生不需要帳號，輸入名字後點選項即可。'),
+        ballots() ? h('div', { class: 'poll-names' }, h('b', null, `已投票（${ballots()} 人）：`),
+          Object.values(s.ballots).map((b) => b.name).join('、')) : null),
     };
+    // 題目或選項改了：重畫並通知學生的頁面
+    function changed() {
+      render(); ctx.save();
+      ctx.vote.update(payload());
+    }
   },
 };
 
@@ -500,7 +553,7 @@ export const seats = {
             const a = selected; selected = -1;
             if (a === i) render(); else swap(a, i);
           },
-        }, ref ? photoImg(ctx, ref, 'seat-photo') : null, h('span', { class: 'seat-name' }, n)));
+        }, ref ? seatPhoto(ctx, ref) : null, h('span', { class: 'seat-name' }, n)));
       }
     }
     const unwatch = watchRoster(ctx, () => { sync(); render(); });

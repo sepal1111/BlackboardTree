@@ -76,6 +76,7 @@ git clone https://github.com/sepal1111/NetDrive.git NetDrive
 - 「只存在這台電腦」：資料在瀏覽器 localStorage
 - 「學校帳號登入」：任意帳號都能登入，資料存在 `./data/<帳號>/MyScreen`（測完可以刪掉 `data/`）
 - 手機遙控頁：`http://localhost:8080/remote.html`（這個伺服器也內含 relay）
+- 學生投票頁：在投票小工具按「📱 學生投票」後，用顯示的網址開啟（`/vote.html#<投票代碼>`）。改了 `server/relay.py` 要重新啟動伺服器
 
 前端是**原生 ES modules，沒有編譯步驟**，改完重新整理即可。
 
@@ -106,8 +107,9 @@ npm test
 |---|---|
 | `roster.test.mjs` | 名單匯入的欄位自動判斷、貼上文字解析、照片檔名比對（學號／姓名／座號）、學生改名時小工具狀態跟著改 |
 | `store.test.mjs` | `V:\MyScreen` 檔案格式、rev 與衝突（409）、兩台電腦同時修改、網路磁碟機斷線時的離線備份與補存、其他電腦的修改（poll）、舊格式名單 |
-| `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、指令、斷線重連 |
-| `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位 |
+| `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、指令、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
+| `ui-prefs.test.mjs` | 畫面偏好（工具列位置、圖示大小、顯示的工具）的檢查與切換 |
+| `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
 
 - `tests/helpers.mjs` 模擬瀏覽器環境（`localStorage`、`window`、`document`），並提供記憶體裡的資料夾 `MemFs`（介面同 `FsaAdapter`／`NeuAdapter`，`failing = true` 可模擬斷線）
 - 只測**不需要畫面**的邏輯；畫面操作（拖曳、對話框、小工具外觀）仍要用瀏覽器手動測
@@ -120,7 +122,7 @@ npm test
 node desktop/relay/test-relay.mjs
 ```
 
-21 項協定測試（取得代碼、指令轉送、斷線重連、中斷全部、8 台上限、父程序結束自動關閉等）。要先建置過（測的是 `desktop/resources/myscreen-relay.exe`）。
+33 項協定測試（取得代碼、指令轉送、斷線重連、中斷全部、8 台上限、學生投票、父程序結束自動關閉等）。要先建置過（測的是 `desktop/resources/myscreen-relay.exe`）。
 
 ### 版本號與發佈
 
@@ -144,6 +146,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.2.0 | ⚙ 總設定（白板、班級名單、工具列位置／圖示大小／顯示的工具）、座位表照片保持 1:1.35（空間不夠時保留上方、最多裁到 1:1）、安裝精靈移除遙控伺服器設定頁與 `/RELAY=` 參數；移除紅綠燈、骰子，時鐘與日期合併成「時鐘日期」（舊白板開啟時由 `upgradeWidget` 自動轉換）；工具列改用自訂 SVG 圖示；學生用手機掃 QR Code 投票（relay 新增 `/ws/vote`） |
 | 1.1.0 | 系統匣圖示（遙控伺服器狀態、QR Code、結束）、網路變動時自動更新 IP、前端自動化測試 |
 | 1.0.0 | 第一個安裝程式版本 |
 
@@ -155,6 +158,7 @@ node desktop/relay/test-relay.mjs
 static/                     前端（桌面版、網頁版共用）
   index.html                主畫面；<!-- desktop-scripts --> 由 build.ps1 換成 neutralino.js
   remote.html               手機遙控頁
+  vote.html                 學生投票頁（CSS、JS 都寫在檔案內，內建 relay 只要嵌入這一個檔）
   css/app.css, remote.css
   js/app.js                 主程式：儲存位置、白板清單、小工具框、放大、手機遙控（含內建 relay 控制）
   js/store.js               存檔、離線備份、跨裝置同步；LS（這台電腦的設定，桌面版存檔案）
@@ -164,6 +168,7 @@ static/                     前端（桌面版、網頁版共用）
   js/remote-host.js         教室電腦端的遙控連線（RemoteHost）
   js/remote.js              手機遙控頁的程式（各小工具的手機卡片 RENDER）
   js/ui.js                  h()、modal、toast、選擇圖片等共用 UI
+  js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具）
   js/widgets/               小工具：time.js、classroom.js、media.js、util.js、index.js（清單與順序）
   vendor/qrcode.js          QR Code
   vendor/xlsx.mini.min.js   SheetJS 0.20.3（讀 Excel，用到時才載入）
@@ -195,7 +200,7 @@ config.example.json         伺服器版設定範例（複製成 config.json，�
 ```
 MyScreen/
   boards/<id>.json     {id, name, rev, created, updatedAt, data: {background, widgets: [...]}}
-  settings.json        {data: {classLists: [...], relay?}, updatedAt}
+  settings.json        {data: {classLists: [...], relay?, ui?}, updatedAt}
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
 
@@ -206,10 +211,11 @@ MyScreen/
   - `names` 是給舊版程式讀的，存檔時自動由 `students` 產生
 - **圖片參照**：`{kind:'file', base:'data'|'root', path}`、`{kind:'data'|'url', url}`（`{kind:'smb', path}` 是舊格式，等同 root）
 - **relay**：老師自己設定的遙控伺服器網址（選填）
+- **ui**：畫面偏好 `{dock: 'bottom'|'top'|'left'|'right', icon: 's'|'m'|'l'|'xl', hidden: [小工具 type]}`（選填）。讀取時一律經過 `ui-prefs.js` 的 `normalizeUi()`：不認得的值改回預設、不存在的小工具去掉、全部隱藏時改回全部顯示
 - **這台電腦上的資料**（不在 V:）：
   - 網頁版：瀏覽器 localStorage
   - 桌面版：`%APPDATA%\MyScreen\prefs.json`（遙控代碼、上次用的班級、V: 斷線時的離線備份等）
-  - 學校預設遙控伺服器：程式資料夾的 `myscreen.json`（`{"relay": "..."}`，安裝程式寫入）
+  - 學校預設遙控伺服器：程式資料夾的 `myscreen.json`（`{"relay": "..."}`，資訊組手動放置；安裝程式不會寫入，解除安裝時會刪除）
 
 ---
 
@@ -236,7 +242,16 @@ export const example = {
 };
 ```
 
-- 手機遙控的畫面：在 `static/js/remote.js` 的 `RENDER` 加上同名函式；要讓手機能加入這個小工具，加到 `app.js` 的 `remoteState()` 裡 `addable` 清單
+- 手機遙控的畫面：在 `static/js/remote.js` 的 `RENDER` 加上同名函式；要讓手機能加入這個小工具，加到 `app.js` 的 `remoteState()` 裡 `addable` 清單（老師在設定中隱藏的工具會自動排除）
+- 工具列圖示：放一個 `static/icons/tools/<type>.svg`（正方形，例如 512×512）。`icon` 的 emoji 仍要填：手機遙控的下拉選單、小工具標題列，以及圖檔載入失敗時都會用到。設計原稿在根目錄 `icons/`（中文檔名）
+- 新的小工具會自動出現在「⚙ 設定 → 工具列 → 要顯示的工具」，不用另外處理
+- 移除小工具或改狀態格式時，在 `widgets/index.js` 的 `upgradeWidget()` 處理舊白板的資料（回傳 `null` 代表移除）。開啟白板時（`openBoard`）會先跑過一次，例如 1.2.0 把 `calendar` 轉成 `clock`、刪掉 `dice`／`traffic`
+
+### 總設定（⚙ 設定）
+
+- `app.js` 的 `settingsDialog(tab)`：分頁 `board`（白板）、`roster`（班級名單）、`dock`（工具列）。要加新分頁：在 `SETTING_TABS` 加一項，並在 `render()` 的對照表加上畫面函式
+- 白板操作（`switchBoard`、`newBoardAction`、`renameBoardAction`、`copyBoardAction`、`deleteBoardAction`）由上方白板選單與設定畫面共用
+- 工具列偏好：`setUi()` 立即套用（`applyUi()` 設定 `body[data-dock]` 與 CSS 變數 `--dock-icon`）並存進 settings.json；位置的版面在 `app.css` 的 `body[data-dock=...]` 規則
 - 需要班級名單的小工具：參考 `classroom.js` 的 `people(ctx)`、`namesEditor()`、`watchRoster()`（設定變更時自動重畫、學生改名時更新狀態）
 - 大小改變時要重排版面：用 `widgets/util.js` 的 `observeSize()`，不要直接用 ResizeObserver（會出現 ResizeObserver loop 警告）
 - 小工具內的文字大小用容器單位（`cqw`、`cqh`、`cqmin`），放大到全螢幕時會自動放大
@@ -252,9 +267,20 @@ export const example = {
   - 教室電腦收到：`room{code,secret}`、`remotes`、`cmd`、`replaced`
   - 手機送出：`cmd{target:'app'|'widget', action, args, widgetId}`
   - 手機收到：`hello`、`state`、`screen`、`notice`、`kicked`、`error`
+- 學生投票（另一組代碼，只能投票，不能遙控）：
+  ```
+  學生 vote.html ──WebSocket /ws/vote?code=<投票代碼>──► relay ◄──/ws/screen── 教室電腦 RemoteHost
+  ```
+  - 教室電腦送出：`vote-open{code?, poll}`（開放或更新題目；`code` 指定沿用上次的投票代碼，存在 `LS ms:voteCode`）、`vote-close`、`vote-ack{to, ok, text, choice}`
+  - 教室電腦收到：`vote-room{code, voters}`（`code` 為空代表已結束）、`voters{count}`、`vote{from, name, choice}`
+  - 學生送出：`vote{name, choice}`（其他訊息一律忽略）；學生收到：`poll{poll, online}`、`ack`、`screen`、`closed`、`error`
+  - relay 把名字截到 20 字、`choice` 轉成整數，每個投票最多 200 人；錯誤代碼與遙控共用「5 分鐘 20 次」的限制
+  - 前端：`RemoteHost.openPoll()／closePoll()`，`app.js` 的 `voteApi(w)` 提供給小工具（`ctx.vote.open/update/close/info/watch`），學生的票由 `onStudentVote()` 交給開放中那個投票小工具的 `inst.vote(name, choice)`，計票在 `classroom.js` 的 `castVote()`
+  - QR Code 的網址（`RemoteHost.publicBase`）：桌面版用內建 relay 回報的 IP；網頁版若用 localhost 開啟，改用 `/api/config` 的 `lanIps`（`server/app.py` 的 `lan_ips()`；伺服器只聽 127.0.0.1 時不提供），手機遙控與學生投票共用
+  - 同一時間只有一個投票小工具開放；刪除小工具、換白板、回到白板清單時自動結束投票
 - relay 有兩種實作，協定必須保持一致：
   - `server/relay.py`：NAS／伺服器版
-  - `desktop/relay/MyScreenRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，之後每 5 秒檢查網路，IP 變了就印 `IPS <ip,...>`；`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁的 5 個檔案）
+  - `desktop/relay/MyScreenRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，之後每 5 秒檢查網路，IP 變了就印 `IPS <ip,...>`；`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁與學生投票頁共 6 個檔案）
 - 桌面版使用哪個 relay（`app.js` 的 `relayBase()`）：老師設定（V: settings.json）→ 學校預設（myscreen.json）→ 建置時的 `RELAY` → **內建 relay**
 - 內建 relay：MyScreen 開啟時啟動（`startLocalRelay()`），關閉時結束（`windowClose` 或系統匣「結束」→ `quitApp()` → `stopLocalRelay()`）。收到 `IPS` 時 `onLocalIpsChanged()` 更新 QR Code 的網址
 - 系統匣（`initTray()`／`updateTray()`，Neutralino `os.setTray`）：顯示 relay 狀態、手機連線數，選單可開 QR Code、結束程式。狀態有變化時（`renderRemoteBtn()`、relay 啟動／結束）呼叫 `updateTray()` 重設整個選單。Neutralino 的系統匣沒有滑鼠停留提示文字，狀態只能放在停用的選單項目裡
@@ -284,20 +310,22 @@ export const example = {
 ### 已完成並實測
 
 - 儲存位置（V: 資料夾、伺服器、本機）、白板清單、跨裝置同步、衝突處理
-- 19 種小工具（含座位表、課堂加分），小工具放大到全螢幕
+- 16 種小工具（含座位表、課堂加分；1.2.0 移除紅綠燈、骰子，時鐘與日期合併），小工具放大到全螢幕
 - 班級名單：Excel／CSV（含 Big5）／貼上匯入、欄位自動判斷與手動對應、學號／姓名／座號比對照片
 - 手機遙控：各小工具操作、傳送網址（YouTube／影片檔／FB／IG／Threads／TikTok／Vimeo／一般網頁）
 - 內建 relay：開啟 MyScreen 時啟動、關閉時結束、重開後手機自動連回
-- 安裝程式：每位使用者安裝（不需系統管理員）、升級、解除安裝、`/RELAY=` 參數
-- 前端自動化測試：62 項（`npm test`）
+- 安裝程式：每位使用者安裝（不需系統管理員）、升級、解除安裝（1.2.0 起安裝時不設定遙控伺服器，也移除了 `/RELAY=` 參數）
+- 前端自動化測試：84 項（`npm test`）；relay 協定測試 33 項
+- 學生投票：已用瀏覽器模擬老師與兩位學生實際操作（投票、改票、改題目、結束投票），C# 與 Python 兩個 relay 都測過
+- ⚙ 總設定：白板、班級名單、工具列（位置、圖示大小、顯示的工具），已用瀏覽器實際操作過
 
 ### 尚未驗證（需要在學校環境測）
 
 - [ ] **系統匣選單**：已確認圖示有註冊到 Windows、關閉視窗時 relay 一起結束；選單內容與點選動作（顯示 QR Code、結束）還沒有實際點過
 - [ ] **網路變動時更新 IP**（`IPS`）：開發機沒有實際切換過網路
-- [ ] **真實手機**：目前只用瀏覽器模擬手機，請在教室用手機掃 QR Code 實際測一次
+- [ ] **真實手機**：目前只用瀏覽器模擬手機，請在教室用手機掃 QR Code 實際測一次（手機遙控與學生投票）
+- [ ] **全班同時投票**：只測過 2 位學生，還沒測過 30 人同時連線
 - [ ] **安裝程式加入防火牆例外**：需要系統管理員權限，請資訊組以 `/ALLUSERS` 或輸入系統管理員密碼測試
-- [ ] **安裝精靈的「手機遙控」頁面**：寫入設定已用 `/RELAY=` 測過，但畫面沒有實際看過
 - [ ] **NAS Docker 部署**（`docker-compose.yml`）：開發機沒有 Docker，沒有實際建置過（現在有內建 relay，NAS 變成選用）
 - [ ] **伺服器版連學校 SAMBA**：只測過本機模式，沒有連過真正的學校 SAMBA
 - [ ] **網頁版的資料夾選擇**（File System Access 的原生對話框）沒有實際操作過

@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4263eb">
+  <title>MyScreen 投票</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='16' width='7' height='13' rx='2' fill='%234c6ef5'/%3E%3Crect x='12.5' y='6' width='7' height='23' rx='2' fill='%23f76707'/%3E%3Crect x='22' y='11' width='7' height='18' rx='2' fill='%2337b24d'/%3E%3C/svg%3E">
+  <!-- 學生投票頁：獨立一個檔案（內建伺服器只需要嵌入這一個檔） -->
+  <style>
+    :root {
+      --accent: #4263eb; --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb;
+      --c0: #4c6ef5; --c1: #f76707; --c2: #37b24d; --c3: #e64980; --c4: #1098ad; --c5: #ae3ec9; --c6: #f59f00; --c7: #868e96;
+      font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif; color: var(--ink);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; min-height: 100%; }
+    body { min-height: 100vh; background: linear-gradient(140deg, #4263eb, #ae3ec9); display: flex; justify-content: center; align-items: flex-start; padding: max(16px, env(safe-area-inset-top)) 16px 24px; }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px 16px; font-weight: 700; touch-action: manipulation; }
+    button:active { transform: scale(.98); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-size: 18px; }
+    button:disabled { opacity: .6; }
+    .link { border: 0; background: none; padding: 4px; color: var(--accent); font-weight: 600; font-size: 14px; }
+    .card { width: min(460px, 100%); margin-top: 6vh; background: #fff; border-radius: 20px; padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.18); }
+    .logo { font-size: 20px; font-weight: 800; color: var(--accent); text-align: center; }
+    .hidden { display: none !important; }
+    .muted { color: var(--muted); font-size: 14px; text-align: center; margin: 0; }
+    .err { color: #e03131; font-size: 15px; text-align: center; min-height: 1.3em; margin: 0; }
+    input { width: 100%; font-size: 22px; text-align: center; padding: 12px; border: 2px solid #d1d5db; border-radius: 14px; }
+    input:focus { outline: none; border-color: var(--accent); }
+    #code { font-size: 34px; letter-spacing: 6px; font-variant-numeric: tabular-nums; }
+    .who { display: flex; justify-content: space-between; align-items: center; font-size: 15px; color: var(--muted); }
+    .who b { color: var(--ink); }
+    .q { font-size: 22px; font-weight: 800; line-height: 1.4; }
+    .opts { display: flex; flex-direction: column; gap: 10px; }
+    .opt { --c: var(--c0); display: flex; align-items: center; gap: 12px; text-align: left; font-size: 19px; padding: 16px; border: 2px solid #e9ecef; border-left: 8px solid var(--c); }
+    .opt .mark { margin-left: auto; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ced4da; flex: none; display: grid; place-items: center; color: #fff; font-size: 17px; }
+    .opt.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, #fff); }
+    .opt.on .mark { background: var(--c); border-color: var(--c); }
+    .opt.on .mark::after { content: "✓"; }
+    .c0 { --c: var(--c0); } .c1 { --c: var(--c1); } .c2 { --c: var(--c2); } .c3 { --c: var(--c3); }
+    .c4 { --c: var(--c4); } .c5 { --c: var(--c5); } .c6 { --c: var(--c6); } .c7 { --c: var(--c7); }
+    .status { text-align: center; font-weight: 700; min-height: 1.4em; margin: 0; }
+    .status.ok { color: #2b8a3e; } .status.bad { color: #e03131; } .status.wait { color: var(--muted); font-weight: 500; }
+    .big-icon { font-size: 54px; text-align: center; }
+  </style>
+</head>
+<body>
+  <!-- 1. 輸入投票代碼（沒有從 QR Code 進來時） -->
+  <form id="step-code" class="card hidden">
+    <div class="logo">📊 MyScreen 投票</div>
+    <p class="muted">請輸入電視上顯示的投票網址最後 6 位數字</p>
+    <input id="code" inputmode="numeric" maxlength="7" placeholder="000000" autocomplete="off">
+    <p id="code-err" class="err"></p>
+    <button class="primary" type="submit">下一步</button>
+  </form>
+
+  <!-- 2. 輸入名字 -->
+  <form id="step-name" class="card hidden">
+    <div class="logo">📊 MyScreen 投票</div>
+    <p class="muted">請輸入你的名字（或座號）</p>
+    <input id="name" maxlength="20" placeholder="例如：王小明" autocomplete="name" enterkeyhint="go">
+    <p id="name-err" class="err"></p>
+    <button class="primary" type="submit">開始投票</button>
+  </form>
+
+  <!-- 3. 投票 -->
+  <div id="step-vote" class="card hidden">
+    <div class="who"><span>投票者：<b id="who"></b></span><button id="rename" class="link" type="button">更換名字</button></div>
+    <div id="q" class="q"></div>
+    <div id="opts" class="opts"></div>
+    <p id="status" class="status"></p>
+  </div>
+
+  <!-- 4. 結束或錯誤 -->
+  <div id="step-end" class="card hidden">
+    <div id="end-icon" class="big-icon">🏁</div>
+    <div id="end-title" class="logo"></div>
+    <p id="end-text" class="muted"></p>
+    <button id="retry" class="primary" type="button">重新連線</button>
+  </div>
+
+  <script>
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    const store = {
+      get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch { /* 私密瀏覽 */ } },
+    };
+    let code = (location.hash.slice(1).match(/\d{6}/) || [''])[0];
+    let name = store.get('ms:voteName');
+    let ws = null, poll = null, mine = -1, ended = false, retry = 0, online = true;
+
+    function show(step) {
+      for (const id of ['step-code', 'step-name', 'step-vote', 'step-end']) $(id).classList.toggle('hidden', id !== step);
+      if (step === 'step-name') setTimeout(() => $('name').focus(), 50);
+      if (step === 'step-code') setTimeout(() => $('code').focus(), 50);
+    }
+    function status(text, cls = 'wait') { $('status').textContent = text; $('status').className = 'status ' + cls; }
+    function end(icon, title, text) {
+      ended = true;
+      $('end-icon').textContent = icon; $('end-title').textContent = title; $('end-text').textContent = text;
+      show('step-end');
+    }
+
+    function connect() {
+      ended = false;
+      const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/vote?code=${code}`;
+      const sock = new WebSocket(url);
+      ws = sock;
+      sock.onmessage = (e) => {
+        let m; try { m = JSON.parse(e.data); } catch { return; }
+        if (m.type === 'poll') {
+          retry = 0;
+          if (m.online === false) online = false;
+          setPoll(m.poll);
+        } else if (m.type === 'screen') {
+          online = m.online;
+          if (poll) status(online ? '' : '教室電腦暫時離線，稍後再投票');
+        } else if (m.type === 'ack') {
+          if (Number.isInteger(m.choice) && m.choice >= 0 && (m.ok || mine < 0)) mine = m.choice;
+          renderOpts();
+          status(m.text || (m.ok ? '已送出' : '投票失敗'), m.ok ? 'ok' : 'bad');
+        } else if (m.type === 'closed') {
+          end('🏁', '投票已結束', '謝謝你的參與！老師開始下一次投票時，再掃描一次 QR Code 即可。');
+        } else if (m.type === 'error') {
+          if (/代碼/.test(m.message || '') && !poll) { code = ''; history.replaceState(null, '', location.pathname); }
+          end('⚠️', '無法加入投票', m.message || '連線失敗');
+        }
+      };
+      sock.onclose = () => {
+        if (ws !== sock || ended) return;
+        status('連線中斷，正在重新連線…');
+        retry = Math.min(retry + 1, 6);
+        setTimeout(connect, 1000 * retry);
+      };
+    }
+
+    function setPoll(p) {
+      const sig = JSON.stringify(p && [p.question, p.options]);
+      if (sig !== JSON.stringify(poll && [poll.question, poll.options])) mine = -1; // 題目換了，重新選
+      poll = p;
+      if (!name) { show('step-name'); return; }
+      $('who').textContent = name;
+      $('q').textContent = poll?.question || '請等待老師出題';
+      renderOpts();
+      status(!online ? '教室電腦暫時離線，稍後再投票' : mine >= 0 ? '' : (poll?.allowChange === false ? '請點選一個答案（送出後不能修改）' : '請點選一個答案'));
+      show('step-vote');
+    }
+
+    function renderOpts() {
+      const box = $('opts');
+      box.innerHTML = '';
+      (poll?.options || []).forEach((label, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `opt c${i % 8}` + (i === mine ? ' on' : '');
+        const t = document.createElement('span');
+        t.textContent = label;
+        const mark = document.createElement('span');
+        mark.className = 'mark';
+        b.append(t, mark);
+        b.onclick = () => vote(i);
+        box.append(b);
+      });
+    }
+
+    function vote(i) {
+      if (ws?.readyState !== 1) return status('還沒連上，請稍候…');
+      if (mine === i) return status(`已投給「${poll.options[i]}」`, 'ok');
+      ws.send(JSON.stringify({ type: 'vote', name, choice: i }));
+      status('送出中…');
+    }
+
+    $('step-code').onsubmit = (e) => {
+      e.preventDefault();
+      const v = $('code').value.replace(/\D/g, '');
+      if (v.length !== 6) { $('code-err').textContent = '請輸入 6 位數字'; return; }
+      code = v;
+      history.replaceState(null, '', '#' + code);
+      connect();
+      status('連線中…');
+      if (!name) show('step-name');
+    };
+    $('step-name').onsubmit = (e) => {
+      e.preventDefault();
+      const v = $('name').value.trim().replace(/\s+/g, ' ');
+      if (!v) { $('name-err').textContent = '請輸入名字'; return; }
+      name = v;
+      store.set('ms:voteName', name);
+      mine = -1;
+      if (poll) setPoll(poll); else { show('step-vote'); $('who').textContent = name; status('連線中…'); }
+    };
+    $('rename').onclick = () => { $('name').value = name; name = ''; show('step-name'); };
+    $('retry').onclick = () => { if (code) { show(name ? 'step-vote' : 'step-name'); status('連線中…'); connect(); } else show('step-code'); };
+
+    if (code) { connect(); if (name) { $('who').textContent = name; show('step-vote'); status('連線中…'); } else show('step-name'); }
+    else show('step-code');
+  </script>
+</body>
+</html>

@@ -123,3 +123,62 @@ describe('RemoteHost：教室電腦端的遙控連線', () => {
     assert.deepEqual(FakeWs.all[0].last, { type: 'kick' });
   });
 });
+
+describe('RemoteHost：學生投票', () => {
+  function online(onVote) {
+    host = new RemoteHost('http://127.0.0.1:52480', { getState: () => ({}), onCmd: () => {}, onVote, publicBase: 'http://192.168.1.5:52480' });
+    host.start();
+    const ws = FakeWs.all[0];
+    ws.open();
+    ws.recv({ type: 'room', code: '111111', secret: 's' });
+    return ws;
+  }
+
+  test('開放投票：送出題目、取得投票代碼與學生網址', () => {
+    const ws = online();
+    let changed = 0;
+    host.addEventListener('vote', () => changed++);
+    host.openPoll({ id: 'w1', question: '午餐', options: ['麵', '飯'] });
+    assert.deepEqual(ws.last, { type: 'vote-open', code: '', poll: { id: 'w1', question: '午餐', options: ['麵', '飯'] } });
+    ws.recv({ type: 'vote-room', code: '222222', voters: 0 });
+    assert.equal(host.voteUrl, 'http://192.168.1.5:52480/vote.html#222222');
+    assert.notEqual(host.voteUrl, host.url); // 學生拿不到遙控代碼
+    ws.recv({ type: 'voters', count: 3 });
+    assert.equal(host.voters, 3);
+    assert.ok(changed >= 3);
+  });
+
+  test('學生的投票交給 onVote，結果回傳給那位學生', () => {
+    const got = [];
+    const ws = online((m) => { got.push(m); return m.choice === 9 ? { ok: false, text: '選項已經更新' } : { ok: true, text: '已投給「麵」', choice: 0 }; });
+    host.openPoll({ id: 'w1', question: 'Q', options: ['麵'] });
+    ws.recv({ type: 'vote', from: '7', name: '小明', choice: 0 });
+    assert.deepEqual(got[0], { type: 'vote', from: '7', name: '小明', choice: 0 });
+    assert.deepEqual(ws.last, { type: 'vote-ack', to: '7', ok: true, text: '已投給「麵」', choice: 0 });
+    ws.recv({ type: 'vote', from: '8', name: '小華', choice: 9 });
+    assert.deepEqual(ws.last, { type: 'vote-ack', to: '8', ok: false, text: '選項已經更新' });
+  });
+
+  test('onVote 出錯時回覆失敗，不會中斷連線', () => {
+    const ws = online(() => { throw new Error('壞掉'); });
+    ws.recv({ type: 'vote', from: '1', name: 'A', choice: 0 });
+    assert.deepEqual(ws.last, { type: 'vote-ack', to: '1', ok: false, text: '投票失敗：壞掉' });
+  });
+
+  test('結束投票；重新連線時恢復投票並沿用原本的投票代碼', async () => {
+    const ws = online();
+    host.openPoll({ id: 'w1', question: 'Q', options: ['A'] });
+    ws.recv({ type: 'vote-room', code: '333333', voters: 0 });
+    ws.close(); // 斷線，1 秒後重新連線
+    await wait(1100);
+    const ws2 = FakeWs.all.at(-1);
+    assert.notEqual(ws2, ws);
+    ws2.open();
+    ws2.recv({ type: 'room', code: '111111', secret: 's' });
+    assert.deepEqual(ws2.sent.find((m) => m.type === 'vote-open'), { type: 'vote-open', code: '333333', poll: { id: 'w1', question: 'Q', options: ['A'] } });
+    host.closePoll();
+    assert.deepEqual(ws2.last, { type: 'vote-close' });
+    assert.equal(host.poll, null);
+    assert.equal(host.voteCode, '');
+  });
+});

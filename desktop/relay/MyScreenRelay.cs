@@ -1,6 +1,7 @@
 // MyScreen 內建遙控伺服器：老師電腦開啟 MyScreen 時一起啟動，手機直接連到這台電腦
 // 協定與 server/relay.py 相同：教室電腦連 /ws/screen，手機連 /ws/remote?code=xxxxxx，伺服器只轉送訊息
-// 也提供手機遙控網頁（remote.html 等檔案編譯時嵌入）
+// 學生投票：教室電腦送 vote-open 取得另一組投票代碼，學生連 /ws/vote?code=xxxxxx，只能送出投票
+// 也提供手機遙控網頁與學生投票網頁（remote.html、vote.html 等檔案編譯時嵌入）
 // 用 Windows 內建的 .NET Framework 編譯（desktop\build.ps1），不需要另外安裝任何東西
 //
 // 參數：--port 52480（被占用時自動往後找）  --parent <MyScreen 的 PID，主程式結束時自動關閉>
@@ -125,15 +126,21 @@ namespace MyScreen
         public HashSet<WsConn> Remotes = new HashSet<WsConn>();
         public object State;
         public DateTime? GoneAt;
+        public string VoteCode;   // 學生投票代碼（沒有開放投票時為 null）
+        public object Poll;
+        public Dictionary<string, WsConn> Voters = new Dictionary<string, WsConn>();
+        public int NextVoter;
     }
 
     static class Program
     {
         const int ROOM_KEEP_SEC = 600;
         const int MAX_REMOTES = 8;
+        const int MAX_VOTERS = 200;
         const int MAX_MSG = 256 * 1024;
         static readonly object gate = new object();
         static readonly Dictionary<string, Room> rooms = new Dictionary<string, Room>();
+        static readonly Dictionary<string, Room> voteRooms = new Dictionary<string, Room>();
         static readonly Dictionary<string, List<DateTime>> joinFail = new Dictionary<string, List<DateTime>>();
         static readonly RandomNumberGenerator rng = RandomNumberGenerator.Create();
         static readonly JavaScriptSerializer json = new JavaScriptSerializer { MaxJsonLength = MAX_MSG * 4 };
@@ -282,6 +289,7 @@ namespace MyScreen
                     var ws = new WsConn { Client = c, Stream = stream, Ip = ip };
                     if (path == "/ws/screen") ScreenLoop(ws);
                     else if (path == "/ws/remote") RemoteLoop(ws, QueryValue(query, "code"));
+                    else if (path == "/ws/vote") VoteLoop(ws, QueryValue(query, "code"));
                     else ws.Close();
                     return;
                 }
@@ -325,7 +333,7 @@ namespace MyScreen
             {
                 rng.GetBytes(b);
                 var code = (BitConverter.ToUInt32(b, 0) % 1000000).ToString("D6");
-                if (!rooms.ContainsKey(code)) return code;
+                if (!rooms.ContainsKey(code) && !voteRooms.ContainsKey(code)) return code;
             }
         }
 
@@ -344,6 +352,31 @@ namespace MyScreen
             lock (gate) list = room.Remotes.ToArray();
             var text = json.Serialize(msg);
             foreach (var r in list) r.SendText(text);
+        }
+
+        static void BroadcastVoters(Room room, object msg)
+        {
+            WsConn[] list;
+            lock (gate) list = room.Voters.Values.ToArray();
+            var text = json.Serialize(msg);
+            foreach (var v in list) v.SendText(text);
+        }
+
+        static bool IsCode(string v) { return v.Length == 6 && v.All(char.IsDigit); }
+
+        // 結束學生投票：通知並中斷所有學生，投票代碼失效
+        static void CloseVote(Room room)
+        {
+            WsConn[] list;
+            lock (gate)
+            {
+                list = room.Voters.Values.ToArray();
+                room.Voters.Clear();
+                if (room.VoteCode != null) voteRooms.Remove(room.VoteCode);
+                room.VoteCode = null;
+                room.Poll = null;
+            }
+            foreach (var v in list) { Send(v, new { type = "closed" }); v.Close(); }
         }
 
         static Dictionary<string, object> Receive(WsConn ws)
@@ -365,7 +398,11 @@ namespace MyScreen
             foreach (var kv in rooms.ToList())
             {
                 var r = kv.Value;
-                if (r.Screen == null && r.GoneAt.HasValue && (now - r.GoneAt.Value).TotalSeconds > ROOM_KEEP_SEC && r.Remotes.Count == 0) rooms.Remove(kv.Key);
+                if (r.Screen == null && r.GoneAt.HasValue && (now - r.GoneAt.Value).TotalSeconds > ROOM_KEEP_SEC && r.Remotes.Count == 0 && r.Voters.Count == 0)
+                {
+                    rooms.Remove(kv.Key);
+                    if (r.VoteCode != null) voteRooms.Remove(r.VoteCode);
+                }
             }
         }
 
@@ -398,6 +435,7 @@ namespace MyScreen
             if (old != null) { Send(old, new { type = "replaced" }); old.Close(); }
             Send(ws, new { type = "room", code = room.Code, secret = room.Secret, remotes = room.Remotes.Count });
             Broadcast(room, new { type = "screen", online = true });
+            BroadcastVoters(room, new { type = "screen", online = true });
             try
             {
                 while (true)
@@ -432,6 +470,38 @@ namespace MyScreen
                         foreach (var r in list) { Send(r, new { type = "kicked" }); r.Close(); }
                         Send(ws, new { type = "room", code = room.Code, secret = room.Secret, remotes = 0 });
                     }
+                    else if (t == "vote-open")
+                    {
+                        // 開放學生投票（或更新題目）；可指定沿用原本的投票代碼，讓學生斷線後自動連回
+                        object poll; msg.TryGetValue("poll", out poll);
+                        string code; int n;
+                        lock (gate)
+                        {
+                            if (room.VoteCode == null)
+                            {
+                                var want = Str(msg, "code");
+                                room.VoteCode = IsCode(want) && !rooms.ContainsKey(want) && !voteRooms.ContainsKey(want) ? want : NewCode();
+                                voteRooms[room.VoteCode] = room;
+                            }
+                            room.Poll = poll as Dictionary<string, object>;
+                            code = room.VoteCode; n = room.Voters.Count;
+                        }
+                        Send(ws, new { type = "vote-room", code = code, voters = n });
+                        BroadcastVoters(room, new { type = "poll", poll = room.Poll });
+                    }
+                    else if (t == "vote-close")
+                    {
+                        CloseVote(room);
+                        Send(ws, new { type = "vote-room", code = "", voters = 0 });
+                    }
+                    else if (t == "vote-ack")
+                    {
+                        WsConn voter;
+                        lock (gate) room.Voters.TryGetValue(Str(msg, "to"), out voter);
+                        object ok, choice; msg.TryGetValue("ok", out ok); msg.TryGetValue("choice", out choice);
+                        var text = Str(msg, "text");
+                        if (voter != null) Send(voter, new { type = "ack", ok = ok is bool && (bool)ok, text = text.Length > 200 ? text.Substring(0, 200) : text, choice = choice });
+                    }
                 }
             }
             catch { }
@@ -439,7 +509,11 @@ namespace MyScreen
             {
                 bool gone = false;
                 lock (gate) if (room.Screen == ws) { room.Screen = null; room.GoneAt = DateTime.UtcNow; gone = true; }
-                if (gone) Broadcast(room, new { type = "screen", online = false });
+                if (gone)
+                {
+                    Broadcast(room, new { type = "screen", online = false });
+                    BroadcastVoters(room, new { type = "screen", online = false });
+                }
                 ws.Close();
             }
         }
@@ -495,6 +569,64 @@ namespace MyScreen
             {
                 lock (gate) { room.Remotes.Remove(ws); count = room.Remotes.Count; }
                 Send(room.Screen, new { type = "remotes", count = count });
+                ws.Close();
+            }
+        }
+
+        // 學生投票：只能收到題目、送出 {type: vote, name, choice}
+        static void VoteLoop(WsConn ws, string code)
+        {
+            Room room;
+            lock (gate)
+            {
+                List<DateTime> fails;
+                if (!joinFail.TryGetValue(ws.Ip, out fails)) joinFail[ws.Ip] = fails = new List<DateTime>();
+                fails.RemoveAll(t => (DateTime.UtcNow - t).TotalSeconds >= 300);
+                if (fails.Count >= 20) { room = null; code = null; }
+                else
+                {
+                    voteRooms.TryGetValue(code ?? "", out room);
+                    if (room == null) fails.Add(DateTime.UtcNow);
+                }
+            }
+            if (code == null) { Send(ws, new { type = "error", message = "嘗試次數過多，請 5 分鐘後再試" }); ws.Close(); return; }
+            if (room == null) { Send(ws, new { type = "error", message = "投票代碼錯誤，或老師已經結束投票" }); ws.Close(); return; }
+            string id = null;
+            int count;
+            lock (gate)
+            {
+                if (room.Voters.Count >= MAX_VOTERS) count = -1;
+                else { id = (++room.NextVoter).ToString(); room.Voters[id] = ws; count = room.Voters.Count; }
+            }
+            if (count < 0) { Send(ws, new { type = "error", message = "連線的人數太多了" }); ws.Close(); return; }
+            Send(ws, new { type = "poll", poll = room.Poll, online = room.Screen != null });
+            Send(room.Screen, new { type = "voters", count = count });
+            try
+            {
+                while (true)
+                {
+                    var msg = Receive(ws);
+                    if (msg == null || Str(msg, "type") != "vote") continue;
+                    if (room.VoteCode != code) break; // 投票已結束
+                    int choice;
+                    if (!int.TryParse(Str(msg, "choice"), out choice)) continue;
+                    var name = Str(msg, "name").Trim();
+                    if (name.Length > 20) name = name.Substring(0, 20);
+                    var screen = room.Screen;
+                    if (screen != null) Send(screen, new { type = "vote", from = id, name = name, choice = choice });
+                    else Send(ws, new { type = "ack", ok = false, text = "教室電腦目前沒有連線，請稍後再試" });
+                }
+            }
+            catch { }
+            finally
+            {
+                lock (gate)
+                {
+                    WsConn cur;
+                    if (room.Voters.TryGetValue(id, out cur) && cur == ws) room.Voters.Remove(id);
+                    count = room.Voters.Count;
+                }
+                Send(room.Screen, new { type = "voters", count = count });
                 ws.Close();
             }
         }

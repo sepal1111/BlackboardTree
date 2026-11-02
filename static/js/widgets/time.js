@@ -1,14 +1,14 @@
-// 時間類：時鐘、計時器、碼錶、日期
+// 時間類：時鐘日期、計時器、碼錶
 import { h, field, select, checkbox, promptDialog } from '../ui.js';
 import { beep, pad, fmtDuration, parseDuration, WEEKDAYS } from './util.js';
 
+// 時鐘日期：時間（數字／指針／不顯示）＋日期（一行／月曆／不顯示）
 export const clock = {
-  type: 'clock', title: '時鐘', icon: '🕒', size: { w: 0.24, h: 0.2 },
-  state: () => ({ mode: 'digital', seconds: true, h24: true, date: true }),
+  type: 'clock', title: '時鐘日期', icon: '🕒', size: { w: 0.24, h: 0.2 },
+  state: () => ({ mode: 'digital', seconds: true, h24: true, date: 'line', roc: true }),
   mount(body, ctx) {
     const s = ctx.state;
     const digital = h('div', { class: 'clock-digital' });
-    const dateEl = h('div', { class: 'clock-date' });
     const hands = {};
     const svg = h('div', { class: 'clock-analog' });
     svg.innerHTML = `<svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="94" class="face"/>${
@@ -18,44 +18,81 @@ export const clock = {
       return `<text x="${100 + 64 * Math.cos(a)}" y="${100 + 64 * Math.sin(a)}" class="num">${i + 1}</text>`;
     }).join('')}<line id="hh" x1="100" y1="100" x2="100" y2="52" class="hand h"/><line id="mm" x1="100" y1="100" x2="100" y2="30" class="hand m"/><line id="ss" x1="100" y1="112" x2="100" y2="24" class="hand s"/><circle cx="100" cy="100" r="5" class="pin"/></svg>`;
     ['hh', 'mm', 'ss'].forEach((k) => { hands[k] = svg.querySelector('#' + k); });
+    const timeBox = h('div', { class: 'clk-time' });
+    const dateBox = h('div');
     const wrap = h('div', { class: 'clock' });
     body.append(wrap);
+    let shown = ''; // 目前顯示的日期，換日時才重畫
 
+    // 時間和日期不能都關掉
+    const mode = () => (s.mode === 'none' && s.date === 'none' ? 'digital' : s.mode);
     function layout() {
+      const m = mode();
       wrap.innerHTML = '';
-      if (s.mode === 'analog') wrap.append(svg); else wrap.append(digital);
-      if (s.date) wrap.append(dateEl);
+      wrap.className = `clock date-${s.date}${m === 'none' ? ' no-time' : ''}`;
+      timeBox.innerHTML = '';
+      if (m !== 'none') { timeBox.append(m === 'analog' ? svg : digital); wrap.append(timeBox); }
+      dateBox.className = s.date === 'line' && m !== 'none' ? 'clock-date' : 'clk-cal';
+      if (s.date !== 'none') wrap.append(dateBox);
+      shown = '';
       tick();
+    }
+    function renderDate(d) {
+      const key = `${s.date}|${s.roc}|${mode()}|${d.toDateString()}`;
+      if (key === shown) return;
+      shown = key;
+      dateBox.innerHTML = dateHtml(d, s.date, s.roc, mode() !== 'none');
     }
     function tick() {
       const d = new Date();
-      if (s.mode === 'analog') {
+      const m = mode();
+      if (m === 'analog') {
         const sec = d.getSeconds(), min = d.getMinutes() + sec / 60, hr = (d.getHours() % 12) + min / 60;
         hands.hh.setAttribute('transform', `rotate(${hr * 30} 100 100)`);
         hands.mm.setAttribute('transform', `rotate(${min * 6} 100 100)`);
         hands.ss.setAttribute('transform', `rotate(${sec * 6} 100 100)`);
         hands.ss.style.display = s.seconds ? '' : 'none';
-      } else {
+      } else if (m === 'digital') {
         let hr = d.getHours();
         let suffix = '';
         if (!s.h24) { suffix = hr < 12 ? '上午 ' : '下午 '; hr = hr % 12 || 12; }
         digital.innerHTML = `<small>${suffix}</small>${s.h24 ? pad(hr) : hr}<span class="blink">:</span>${pad(d.getMinutes())}${s.seconds ? `<span class="sec">${pad(d.getSeconds())}</span>` : ''}`;
       }
-      dateEl.textContent = `${d.getMonth() + 1}月${d.getDate()}日 星期${WEEKDAYS[d.getDay()]}`;
+      if (s.date !== 'none') renderDate(d);
     }
     layout();
     const t = setInterval(tick, 500);
+    const set = (k) => (v) => { s[k] = v; layout(); ctx.save(); };
     return {
       destroy: () => clearInterval(t),
       settings: (c) => c.append(
-        field('樣式', select([['digital', '數字'], ['analog', '指針']], s.mode, (v) => { s.mode = v; layout(); ctx.save(); })),
-        checkbox('顯示秒數', s.seconds, (v) => { s.seconds = v; layout(); ctx.save(); }),
-        checkbox('24 小時制', s.h24, (v) => { s.h24 = v; layout(); ctx.save(); }),
-        checkbox('顯示日期', s.date, (v) => { s.date = v; layout(); ctx.save(); }),
+        field('時間', select([['digital', '數字'], ['analog', '指針'], ['none', '不顯示']], s.mode, set('mode'))),
+        checkbox('顯示秒數', s.seconds, set('seconds')),
+        checkbox('24 小時制', s.h24, set('h24')),
+        field('日期', select([['line', '一行文字'], ['month', '月曆'], ['none', '不顯示']], s.date, set('date'))),
+        checkbox('使用民國年', s.roc, set('roc')),
       ),
     };
   },
 };
+
+// 日期的 HTML：withTime 為 false 時把日期放大當主角
+export function dateHtml(d, kind, roc, withTime) {
+  const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
+  const week = `星期${WEEKDAYS[d.getDay()]}`;
+  const year = roc ? `民國 ${y - 1911} 年` : `${y} 年`;
+  if (kind === 'line' && withTime) return `${m + 1}月${day}日 ${week}`;
+  const head = withTime
+    ? `<div class="cal-line"><span>${year}</span> ${m + 1}月${day}日 ${week}</div>`
+    : `<div class="cal-head"><div class="cal-year">${year} ${m + 1} 月</div><div class="cal-day">${day}</div><div class="cal-week">${week}</div></div>`;
+  if (kind !== 'month') return head;
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  let grid = '<div class="cal-grid">' + WEEKDAYS.map((w) => `<b>${w}</b>`).join('');
+  for (let i = 0; i < first; i++) grid += '<span></span>';
+  for (let i = 1; i <= days; i++) grid += `<span class="${i === day ? 'today' : ''}">${i}</span>`;
+  return head + grid + '</div>';
+}
 
 export const timer = {
   type: 'timer', title: '計時器', icon: '⏳', size: { w: 0.28, h: 0.32 },
@@ -172,40 +209,6 @@ export const stopwatch = {
           else if (a === 'reset') { s.startAt = null; s.elapsed = 0; s.laps = []; ctx.save(); renderLaps(); render(); }
         },
       },
-    };
-  },
-};
-
-export const calendar = {
-  type: 'calendar', title: '日期', icon: '📅', size: { w: 0.22, h: 0.36 },
-  state: () => ({ roc: true, month: true }),
-  mount(body, ctx) {
-    const s = ctx.state;
-    const wrap = h('div', { class: 'cal' });
-    body.append(wrap);
-    function render() {
-      const d = new Date();
-      const y = d.getFullYear(), m = d.getMonth();
-      const first = new Date(y, m, 1).getDay();
-      const days = new Date(y, m + 1, 0).getDate();
-      let grid = '';
-      if (s.month) {
-        grid = '<div class="cal-grid">' + WEEKDAYS.map((w) => `<b>${w}</b>`).join('');
-        for (let i = 0; i < first; i++) grid += '<span></span>';
-        for (let i = 1; i <= days; i++) grid += `<span class="${i === d.getDate() ? 'today' : ''}">${i}</span>`;
-        grid += '</div>';
-      }
-      wrap.innerHTML = `<div class="cal-head"><div class="cal-year">${s.roc ? `民國 ${y - 1911} 年` : `${y} 年`} ${m + 1} 月</div>
-        <div class="cal-day">${d.getDate()}</div><div class="cal-week">星期${WEEKDAYS[d.getDay()]}</div></div>${grid}`;
-    }
-    render();
-    const t = setInterval(render, 60000);
-    return {
-      destroy: () => clearInterval(t),
-      settings: (c) => c.append(
-        checkbox('使用民國年', s.roc, (v) => { s.roc = v; render(); ctx.save(); }),
-        checkbox('顯示月曆', s.month, (v) => { s.month = v; render(); ctx.save(); }),
-      ),
     };
   },
 };

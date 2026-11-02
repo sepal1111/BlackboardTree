@@ -18,7 +18,7 @@ if (-not (Test-Path $csc)) { $csc = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30
 if (-not (Test-Path $csc)) { throw '找不到 .NET Framework 4 編譯器（csc.exe）' }
 $static = Resolve-Path ..\static
 & $csc /nologo /target:exe /optimize+ /utf8output /codepage:65001 /out:resources\myscreen-relay.exe /r:System.Web.Extensions.dll `
-  "/resource:$static\remote.html,remote.html" "/resource:$static\css\remote.css,css/remote.css" `
+  "/resource:$static\remote.html,remote.html" "/resource:$static\vote.html,vote.html" "/resource:$static\css\remote.css,css/remote.css" `
   "/resource:$static\js\remote.js,js/remote.js" "/resource:$static\js\ui.js,js/ui.js" `
   "/resource:$static\js\widgets\util.js,js/widgets/util.js" relay\MyScreenRelay.cs
 if ($LASTEXITCODE -ne 0) { throw '遙控伺服器編譯失敗' }
@@ -57,8 +57,12 @@ $version = (Get-Content neutralino.config.json -Raw -Encoding UTF8 | ConvertFrom
 if ($version -notmatch '^\d{1,5}\.\d{1,5}\.\d{1,5}$') { throw "版本號格式不正確：$version（請用 1.2.3 這種格式）" }
 # 舊版本的安裝程式不保留（out\ 有放進 git，留著會讓 repo 越來越大）
 Get-ChildItem out\MyScreen-Setup-*.exe -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "MyScreen-Setup-$version.exe" } | ForEach-Object {
-  Write-Host "  刪除舊版安裝程式：$($_.Name)"
-  Remove-Item $_.FullName -Force
+  try {
+    Remove-Item $_.FullName -Force -ErrorAction Stop
+    Write-Host "  刪除舊版安裝程式：$($_.Name)"
+  } catch {
+    Write-Host "  無法刪除 $($_.TargetObject)（可能正在執行），請關閉後手動刪除" -ForegroundColor Yellow
+  }
 }
 $iscc = @(
   (Get-Command iscc -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source),

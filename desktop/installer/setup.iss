@@ -65,48 +65,7 @@ Type: files; Name: "{app}\neutralinojs.log"
 Type: files; Name: "{app}\myscreen.json"
 
 [Code]
-// 手機遙控伺服器（學校預設）：寫在程式資料夾的 myscreen.json，MyScreen 啟動時讀取
-// 靜默安裝可用 /RELAY=http://192.168.1.10:8080 指定；老師也可以在 MyScreen 裡自己設定（會優先使用）
-var RelayPage: TInputQueryWizardPage;
-
-function ConfigPath(): String;
-begin
-  Result := ExpandConstant('{app}\myscreen.json');
-end;
-
-// 從舊的 myscreen.json 讀出 relay（升級時保留原本的設定）
-function ReadOldRelay(): String;
-var
-  S: AnsiString;
-  P, Q: Integer;
-begin
-  Result := '';
-  if not LoadStringFromFile(ExpandConstant('{autopf}\MyScreen\myscreen.json'), S) then exit;
-  P := Pos('"relay"', S);
-  if P = 0 then exit;
-  S := Copy(S, P + 7, Length(S));
-  P := Pos('"', S);
-  if P = 0 then exit;
-  S := Copy(S, P + 1, Length(S));
-  Q := Pos('"', S);
-  if Q = 0 then exit;
-  Result := Copy(S, 1, Q - 1);
-end;
-
-procedure InitializeWizard();
-var
-  V: String;
-begin
-  RelayPage := CreateInputQueryPage(wpSelectTasks,
-    '手機遙控',
-    '遙控伺服器（選填）',
-    '老師可以用手機或平板遙控教室電腦上的 MyScreen。預設由這台電腦擔任遙控伺服器，手機連上校內網路就能使用，不需要另外設定。' + #13#10 + #13#10 +
-    '如果學校另外架了遙控伺服器（例如在 NAS 上），請填入網址，例如 http://192.168.1.10:8080；否則請留空。');
-  RelayPage.Add('遙控伺服器網址：', False);
-  V := ExpandConstant('{param:RELAY|}');
-  if V = '' then V := ReadOldRelay();
-  RelayPage.Values[0] := V;
-end;
+// 手機遙控伺服器由這台電腦擔任（內建 myscreen-relay.exe），安裝時不需要任何設定
 
 // ---- Windows 防火牆：讓手機可以連到這台電腦的內建遙控伺服器
 const
@@ -146,18 +105,6 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  V: String;
 begin
-  if CurStep = ssPostInstall then
-  begin
-    if WizardIsTaskSelected('firewall') then AddFirewallRule();
-    V := Trim(RelayPage.Values[0]);
-    StringChangeEx(V, '\', '/', True);
-    StringChangeEx(V, '"', '', True);
-    if V = '' then
-      DeleteFile(ConfigPath())
-    else
-      SaveStringToFile(ConfigPath(), '{"relay": "' + V + '"}' + #13#10, False);
-  end;
+  if (CurStep = ssPostInstall) and WizardIsTaskSelected('firewall') then AddFirewallRule();
 end;

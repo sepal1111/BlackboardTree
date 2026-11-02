@@ -9,6 +9,7 @@ import json
 import mimetypes
 import re
 import secrets
+import socket
 import sys
 import threading
 import time
@@ -26,6 +27,7 @@ from relay import router as relay_router  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "static"
+mimetypes.add_type("image/svg+xml", ".svg")  # Windows 登錄檔可能沒有 .svg，圖示會變成純文字
 
 DEFAULT_CONFIG = {
     "mode": "local",
@@ -158,12 +160,35 @@ def write_json(storage, rel: str, obj) -> None:
     storage.write_bytes(rel, json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
 
+def lan_ips() -> list[str]:
+    """這台電腦在校內網路的 IPv4（手機用這個連線）；對外連線用的網卡排第一。"""
+    found: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))  # UDP 不會真的送出封包，只是讓系統選出預設網卡
+            found.append(s.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        found += [i[4][0] for i in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)]
+    except OSError:
+        pass
+    out: list[str] = []
+    for ip in found:
+        if ip not in out and not ip.startswith(("127.", "169.254.", "0.")):
+            out.append(ip)
+    return out
+
+
 # ---------------------------------------------------------------- auth
 @app.get("/api/config")
 def get_config():
     needs_password = CONFIG["mode"] == "smb" or bool(CONFIG["local"].get("users"))
+    # 只聽 127.0.0.1 時手機連不進來，就不提供校內 IP
+    local_only = str(CONFIG["host"]).startswith("127.") or CONFIG["host"] == "localhost"
     return {"mode": CONFIG["mode"], "needsPassword": needs_password,
-            "server": CONFIG["smb"].get("server") if CONFIG["mode"] == "smb" else None}
+            "server": CONFIG["smb"].get("server") if CONFIG["mode"] == "smb" else None,
+            "lanIps": [] if local_only else lan_ips()}
 
 
 @app.post("/api/login")
