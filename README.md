@@ -240,6 +240,8 @@ QNAP 可以用 Container Station 匯入同一份 `docker-compose.yml`。預設�
 
 ## 檔案結構
 
+> 要接手開發或在其他電腦繼續開發，請看 [DEVELOPMENT.md](DEVELOPMENT.md)（開發環境、建置、架構、注意事項、待辦）。
+
 ```
 static/                  前端（原生 JavaScript，不需要編譯）
   js/app.js              主程式：選擇儲存位置、白板清單、拖曳、工具列
