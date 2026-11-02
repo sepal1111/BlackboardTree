@@ -46,9 +46,10 @@ $running = Get-Process MyScreen -ErrorAction SilentlyContinue | Where-Object { $
 if ($running) { throw 'MyScreen.exe 正在執行，無法覆蓋。請先關閉 MyScreen 視窗後再執行一次。' }
 node patch-exe.mjs dist\myscreen\myscreen-win_x64.exe out\MyScreen.exe
 if ($LASTEXITCODE -ne 0) { throw '寫入圖示失敗' }
+# 免安裝版只有 MyScreen.exe 一個檔案（遙控伺服器內嵌在裡面，執行時自動解出），清掉舊版留下的檔案
 $relayRunning = Get-Process myscreen-relay -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $PWD 'out\myscreen-relay.exe') }
 if ($relayRunning) { $relayRunning | Stop-Process -Force }
-Copy-Item resources\myscreen-relay.exe out\myscreen-relay.exe -Force
+Remove-Item out\myscreen-relay.exe -Force -ErrorAction SilentlyContinue
 
 Write-Host '5. 製作安裝程式...' -ForegroundColor Cyan
 $version = (Get-Content neutralino.config.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
@@ -64,7 +65,7 @@ if ($iscc) {
   if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 編譯失敗' }
   Write-Host '完成！' -ForegroundColor Green
   Write-Host "  安裝程式：desktop\out\MyScreen-Setup-$version.exe" -ForegroundColor Green
-  Write-Host '  免安裝版：desktop\out\MyScreen.exe（旁邊的 myscreen-relay.exe 是手機遙控伺服器）' -ForegroundColor Green
+  Write-Host '  免安裝版：desktop\out\MyScreen.exe（單一檔案，已內含手機遙控伺服器）' -ForegroundColor Green
 } else {
   Write-Host '完成！免安裝版：desktop\out\MyScreen.exe' -ForegroundColor Green
   Write-Host '找不到 Inno Setup 6，所以沒有產生安裝程式。需要安裝程式的話，請安裝 Inno Setup 6（https://jrsoftware.org/isdl.php）後再執行一次。' -ForegroundColor Yellow

@@ -48,7 +48,7 @@ Name: "firewall"; Description: "允許手機連線到這台電腦（加入 Windo
 [Files]
 Source: "..\out\MyScreen.exe"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
 ; 內建手機遙控伺服器（老師電腦當伺服器時使用）
-Source: "..\out\myscreen-relay.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\resources\myscreen-relay.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"

@@ -94,6 +94,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 - 安裝到 `%LOCALAPPDATA%\Programs\MyScreen`，**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
 - 安裝新版時會自動關閉正在執行的 MyScreen；解除安裝不會刪除 `V:\MyScreen` 裡的白板
+- 這台電腦上的設定與離線備份（遙控代碼、V: 斷線時的白板備份等）存在 `%APPDATA%\MyScreen\prefs.json`
 
 資訊組大量部署時可以用靜默安裝：
 
@@ -119,7 +120,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 | 檔案 | 說明 |
 |---|---|
 | `MyScreen-Setup-<版本>.exe` | 安裝程式（找不到 Inno Setup 時不會產生） |
-| `MyScreen.exe` | 免安裝版，單一檔案，複製到電腦即可執行 |
+| `MyScreen.exe` | 免安裝版，單一檔案（已內含手機遙控伺服器），複製到電腦即可執行 |
 
 版本號碼在 `desktop/neutralino.config.json` 的 `version`；安裝程式設定在 `desktop/installer/setup.iss`。
 
@@ -189,9 +190,15 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ### 老師的電腦就是遙控伺服器（預設，不需要 NAS）
 
-桌面版內建遙控伺服器（`myscreen-relay.exe`，約 64 KB）。沒有另外設定伺服器時，按「📱 遙控」就會在背景啟動它，QR Code 會自動帶入這台電腦的校內 IP（例如 `http://192.168.0.99:52480`），手機連上校內網路掃描即可，**不需要架設 NAS**。
+桌面版內建遙控伺服器（`myscreen-relay.exe`，約 64 KB），安裝版與免安裝版都已經包含：
+
+- **安裝版**：安裝在程式資料夾（防火牆例外也是指定這個位置）
+- **免安裝版**：內嵌在 `MyScreen.exe` 裡，仍然是單一檔案；第一次執行時自動解出到旁邊，換新版時自動更新
+
+**開啟 MyScreen 時伺服器就一起啟動**，按「📱 遙控」會直接顯示 QR Code，並自動帶入這台電腦的校內 IP（例如 `http://192.168.0.99:52480`），手機連上校內網路掃描即可，**不需要架設 NAS**。
 
 - 關閉 MyScreen 時伺服器會一起關閉；MyScreen 異常結束時，伺服器也會在幾秒內自動結束
+- 重新開啟 MyScreen 時會沿用原本的代碼，已經連過的手機會自動重新連上，不用重新掃描
 - 電腦有多個網路位址（例如同時接有線、無線）時，遙控畫面可以切換 QR Code 使用的位址
 - 連接埠預設 52480，被占用時自動改用下一個
 - 用 Windows 內建的 .NET Framework 4 執行，不需要另外安裝任何東西

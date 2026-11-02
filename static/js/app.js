@@ -1,6 +1,6 @@
 // MyScreen 主程式：選擇儲存位置、白板清單、拖曳縮放、工具列、背景
 import { api } from './api.js';
-import { Store, LS, uid } from './store.js';
+import { Store, LS, uid, initLocalPrefs, flushLocalPrefs } from './store.js';
 import { FolderBackend, ServerBackend, LocalBackend, DATA_DIR } from './backends/index.js';
 import { FsaAdapter, NeuAdapter, kvGet, kvSet } from './backends/fs.js';
 import { widgets, widgetList } from './widgets/index.js';
@@ -36,14 +36,18 @@ const S = { store: null, board: null, mounted: new Map(), config: null, pollTime
 async function boot() {
   if (DESKTOP) {
     window.Neutralino.init();
+    await initLocalPrefs(); // 讀取這台電腦上的設定（遙控代碼、離線備份等），要在其他步驟之前
     window.Neutralino.events.on('windowClose', async () => {
       await S.store?.flushAll().catch(() => {});
+      await flushLocalPrefs();
       await stopLocalRelay();
       window.Neutralino.app.exit();
     });
   }
   S.config = DESKTOP ? null : await api.get('/api/config').catch(() => null);
   await loadSchoolConfig();
+  // 桌面版：開啟 MyScreen 時一起啟動內建遙控伺服器，關閉時一起關閉
+  if (DESKTOP && !S.relaySchool && !window.NL_RELAY) startLocalRelay().catch((e) => console.warn(e));
   let choice = LS.get(CHOICE_KEY, null);
   if (!choice && LS.get('ms:guest', false)) choice = { kind: 'local' }; // 舊版訪客模式
   if (!choice && DESKTOP) choice = { kind: 'neu', path: DESKTOP_ROOT };
@@ -108,6 +112,8 @@ async function connect(backend, choice) {
   const prevRelay = relayBase();
   S.relayUser = normalizeRelay((await S.store.getSettings().catch(() => ({}))).relay || '');
   if (relayBase() !== prevRelay) resetRemote();
+  if (relayBase() === LOCAL) ensureRemote().catch(() => {});
+  else if (!S.relaySchool && !window.NL_RELAY) stopLocalRelay(); // 老師改用 NAS 等其他伺服器
   renderRemoteBtn();
   if (S.store.remote) S.pollTimer = setInterval(() => S.store?.poll(S.board).catch(() => {}), 8000);
   showBoards();
@@ -632,10 +638,16 @@ async function relayExePath() {
   const exists = (p) => fs.getStats(p).then(() => true, () => false);
   const dir = String(window.NL_PATH || '.').replace(/[\\/]+$/, '');
   const beside = dir + '/myscreen-relay.exe';
-  if (await exists(beside)) return beside;
-  for (const target of [beside, (await window.Neutralino.os.getPath('temp')) + '/myscreen-relay.exe']) {
+  const size = (p) => fs.getStats(p).then((s) => s.size, () => -1);
+  const embedded = await window.Neutralino.resources.getStats('/resources/myscreen-relay.exe').then((s) => s.size, () => -1);
+  // 安裝版：安裝程式放在程式資料夾（防火牆例外也是指定這個位置）
+  // 免安裝版：從 MyScreen.exe 內嵌的資源解出來；版本不同時重新解出
+  if (await exists(beside) && (embedded < 0 || (await size(beside)) === embedded)) return beside;
+  const temp = (await window.Neutralino.os.getPath('temp')) + '/myscreen-relay.exe';
+  for (const target of [beside, temp]) {
     try { await window.Neutralino.resources.extractFile('/resources/myscreen-relay.exe', target); return target; } catch { /* 試下一個位置 */ }
   }
+  if (await exists(beside)) return beside; // 無法更新（例如正在使用），就用原本的
   throw new Error('找不到內建遙控伺服器（myscreen-relay.exe）');
 }
 

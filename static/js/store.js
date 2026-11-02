@@ -1,10 +1,49 @@
 // 白板存檔與跨裝置同步。實際讀寫交給 backend（資料夾／伺服器／本機）。
 // 遠端儲存（資料夾、伺服器）在這台電腦另外保留快取，網路磁碟機暫時斷線時仍可使用並稍後補存。
 
+// 這台電腦上的設定與離線備份
+// 網頁版存在瀏覽器的 localStorage。桌面版的 Neutralino 每次啟動網址（連接埠）都不同，
+// localStorage 會變成空的，所以改存在 %APPDATA%\MyScreen\prefs.json：啟動時讀進記憶體，修改後寫回檔案
+let mem = null;      // 桌面版：{ key: JSON 字串 }
+let prefsPath = '';
+let prefsTimer = null;
+
+export async function initLocalPrefs() {
+  if (typeof window.NL_PORT === 'undefined') return;
+  const fs = window.Neutralino.filesystem;
+  try {
+    const dir = String(await window.Neutralino.os.getPath('data')).replace(/[\\/]+$/, '') + '/MyScreen';
+    await fs.createDirectory(dir).catch(() => {});
+    prefsPath = dir + '/prefs.json';
+    try { mem = JSON.parse(await fs.readFile(prefsPath)) || {}; } catch { mem = {}; }
+  } catch { mem = null; } // 讀不到資料夾時退回 localStorage
+}
+
+export async function flushLocalPrefs() {
+  clearTimeout(prefsTimer);
+  prefsTimer = null;
+  if (!mem || !prefsPath) return;
+  try { await window.Neutralino.filesystem.writeFile(prefsPath, JSON.stringify(mem)); } catch { /* 下次再寫 */ }
+}
+
+const schedulePrefs = () => { clearTimeout(prefsTimer); prefsTimer = setTimeout(flushLocalPrefs, 800); };
+
 export const LS = {
-  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
-  del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+  get(k, d) {
+    try {
+      const v = mem ? mem[k] : localStorage.getItem(k);
+      return v ? JSON.parse(v) : d;
+    } catch { return d; }
+  },
+  set(k, v) {
+    try {
+      if (mem) { mem[k] = JSON.stringify(v); schedulePrefs(); } else localStorage.setItem(k, JSON.stringify(v));
+      return true;
+    } catch { return false; }
+  },
+  del(k) {
+    try { if (mem) { delete mem[k]; schedulePrefs(); } else localStorage.removeItem(k); } catch { /* ignore */ }
+  },
 };
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);

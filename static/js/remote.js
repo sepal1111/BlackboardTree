@@ -10,6 +10,8 @@ let offset = 0;          // 教室電腦時鐘 − 手機時鐘
 let online = false;
 let stopped = false;
 let retry = 0;
+let wasOnline = false; // 曾經連上過：教室電腦重開 MyScreen 時會自動重新連線
+let errRetry = 0;
 const cards = new Map(); // widgetId -> { el, key }
 
 // ------------------------------------------------------------ 連線
@@ -32,6 +34,7 @@ $('#join-form').addEventListener('submit', (e) => {
   if (c.length !== 6) { $('#join-err').textContent = '代碼是 6 位數字'; return; }
   history.replaceState(null, '', '#' + c);
   stopped = false;
+  wasOnline = false;
   connect(c);
 });
 
@@ -45,9 +48,13 @@ function connect(c) {
   sock.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch { return; }
-    if (m.type === 'error') { stopped = true; showJoin(m.message); }
+    if (m.type === 'error') {
+      // 教室電腦重新開啟 MyScreen 時，代碼要等幾秒才會恢復，先不要放棄
+      if (wasOnline && errRetry < 8) { errRetry++; setConn('等待教室電腦…', 'bad'); return; }
+      stopped = true; showJoin(m.message);
+    }
     else if (m.type === 'kicked') { stopped = true; showJoin('老師已中斷遙控連線，請重新掃描電視上的 QR Code'); }
-    else if (m.type === 'hello') { retry = 0; online = m.online; if (m.state) setState(m.state); updateConn(); }
+    else if (m.type === 'hello') { retry = 0; errRetry = 0; wasOnline = true; online = m.online; if (m.state) setState(m.state); updateConn(); }
     else if (m.type === 'screen') { online = m.online; updateConn(); }
     else if (m.type === 'state') { online = true; setState(m.state); updateConn(); }
     else if (m.type === 'notice') toast(m.text);

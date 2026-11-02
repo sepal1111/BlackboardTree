@@ -363,8 +363,15 @@ namespace MyScreen
             lock (gate)
             {
                 Cleanup();
-                rooms.TryGetValue(Str(hello, "code"), out room);
-                if (room == null || room.Secret != Str(hello, "secret"))
+                string wantCode = Str(hello, "code"), wantSecret = Str(hello, "secret");
+                rooms.TryGetValue(wantCode, out room);
+                if (room == null && wantCode.Length == 6 && wantCode.All(char.IsDigit) && wantSecret.Length >= 24)
+                {
+                    // 伺服器重新啟動過：沿用教室電腦原本的代碼，手機會自動重新連上
+                    room = new Room { Code = wantCode, Secret = wantSecret };
+                    rooms[room.Code] = room;
+                }
+                else if (room == null || room.Secret != wantSecret)
                 {
                     room = new Room { Code = NewCode(), Secret = NewSecret() };
                     rooms[room.Code] = room;
