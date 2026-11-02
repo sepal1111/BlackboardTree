@@ -3,9 +3,11 @@ import { LS } from './store.js';
 
 export class RemoteHost extends EventTarget {
   // base：轉送伺服器網址，例如 http://192.168.1.5:8080
-  constructor(base, { getState, onCmd }) {
+  // publicBase：給手機的網址（內建伺服器時，電腦自己連 127.0.0.1，手機要用校內 IP）
+  constructor(base, { getState, onCmd, publicBase }) {
     super();
     this.base = base.replace(/\/+$/, '');
+    this.publicBase = (publicBase || base).replace(/\/+$/, '');
     this.getState = getState;
     this.onCmd = onCmd;
     this.ws = null;
@@ -17,7 +19,7 @@ export class RemoteHost extends EventTarget {
     this.retry = 0;
   }
 
-  get url() { return `${this.base}/remote.html#${this.code}`; }
+  get url() { return `${this.publicBase}/remote.html#${this.code}`; }
 
   setStatus(s) { this.status = s; this.dispatchEvent(new Event('change')); }
 

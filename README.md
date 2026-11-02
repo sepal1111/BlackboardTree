@@ -187,9 +187,26 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - 每個白板最多 8 台裝置同時連線
 - 遙控伺服器只負責轉送指令，不保存任何資料，白板仍然存在老師的 V:
 
-### 在 NAS 安裝遙控伺服器（只需一次，全校共用）
+### 老師的電腦就是遙控伺服器（預設，不需要 NAS）
 
-手機無法直接連到教室電腦，所以需要學校 NAS 幫忙轉送指令。以 Synology 為例：
+桌面版內建遙控伺服器（`myscreen-relay.exe`，約 64 KB）。沒有另外設定伺服器時，按「📱 遙控」就會在背景啟動它，QR Code 會自動帶入這台電腦的校內 IP（例如 `http://192.168.0.99:52480`），手機連上校內網路掃描即可，**不需要架設 NAS**。
+
+- 關閉 MyScreen 時伺服器會一起關閉；MyScreen 異常結束時，伺服器也會在幾秒內自動結束
+- 電腦有多個網路位址（例如同時接有線、無線）時，遙控畫面可以切換 QR Code 使用的位址
+- 連接埠預設 52480，被占用時自動改用下一個
+- 用 Windows 內建的 .NET Framework 4 執行，不需要另外安裝任何東西
+
+**Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
+
+- 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
+- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.0.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
+
+### 在 NAS 安裝遙控伺服器（選用，全校共用）
+
+學校的手機網路連不到教室電腦（不同網段）時，可以改把遙控伺服器架在 NAS 上：
+
+以 Synology 為例：
 
 1. 在「套件中心」安裝 **Container Manager**
 2. 把整個 MyScreen 資料夾（不含 `desktop`、`NetDrive`、`.venv`）複製到 NAS，例如 `/docker/myscreen`
@@ -200,7 +217,7 @@ QNAP 可以用 Container Station 匯入同一份 `docker-compose.yml`。預設�
 
 ### 讓桌面版連到 NAS
 
-安裝版、免安裝版都**不需要重新建置**，有三種設定方式（上面的優先）：
+安裝版、免安裝版都**不需要重新建置**，有三種設定方式（上面的優先；都沒有設定時使用老師電腦的內建伺服器）：
 
 1. **老師自己設定**：按上方「📱 遙控」→ 還沒設定時會出現設定畫面，填入 NAS 網址（例如 `192.168.1.10:8080`）。設定存在老師的 `V:\MyScreen\settings.json`，換到任何一台電腦都能直接使用；之後可在遙控畫面按「⚙ 遙控伺服器設定」修改，留空即清除
 2. **學校預設（安裝時填寫）**：安裝精靈有一頁「手機遙控」可以填網址；大量部署時用 `/RELAY=` 參數：
@@ -211,8 +228,6 @@ QNAP 可以用 Container Station 匯入同一份 `docker-compose.yml`。預設�
 
    網址會寫在程式資料夾的 `myscreen.json`（`{"relay": "http://192.168.1.10:8080"}`），升級時會保留。免安裝版也可以在 `MyScreen.exe` 旁邊放一個同樣的 `myscreen.json`
 3. **建置時寫入**：`desktop/neutralino.config.json` 的 `globalVariables.RELAY`
-
-都沒有設定時，「📱 遙控」按鈕仍會顯示，按下去就是設定畫面。
 
 > **網路注意事項**：老師的手機必須能連到 NAS 的 8080 埠。若學校的無線網路（手機）和教學網路（NAS、教室電腦）是分開的網段，請資訊組開放手機網段連到 NAS 的 8080 埠。
 
@@ -228,6 +243,8 @@ static/                  前端（原生 JavaScript，不需要編譯）
   js/widgets/            各個小工具
 static/remote.html       手機遙控頁（js/remote.js）
 static/js/remote-host.js 教室電腦端的遙控連線
+desktop/relay/           內建遙控伺服器（C#，Windows 內建 .NET Framework 編譯）
+desktop/installer/       安裝程式（Inno Setup）
 desktop/                 桌面版設定與建置腳本
 server/                  伺服器版（FastAPI + smbprotocol）
 server/relay.py          手機遙控轉送（WebSocket）

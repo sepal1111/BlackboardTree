@@ -530,3 +530,8 @@ body.dragging iframe { pointer-events: none; }
 .widget.maximized .w-resize { display: none; }
 body.has-max #topbar, body.has-max #dock, body.has-max #hide-btn { visibility: hidden; }
 @keyframes max-in { from { opacity: .4; transform: scale(.96); } }
+
+.remote-ips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.remote-ips .chip { border: 1px solid #ced4da; background: #fff; border-radius: 99px; padding: 2px 10px; font-size: 12px; }
+.remote-ips .chip.on { border-color: var(--accent); background: #edf2ff; color: var(--accent); font-weight: 700; }
+.remote-tip { font-size: 12px; max-width: 320px; }

@@ -12,6 +12,17 @@ $index = [IO.File]::ReadAllText($indexPath)
 $index = $index.Replace('<!-- desktop-scripts -->', '<script src="neutralino.js"></script>')
 [IO.File]::WriteAllText($indexPath, $index, (New-Object Text.UTF8Encoding $false))
 
+Write-Host '1b. 編譯內建遙控伺服器（Windows 內建的 .NET Framework）...' -ForegroundColor Cyan
+$csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if (-not (Test-Path $csc)) { $csc = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
+if (-not (Test-Path $csc)) { throw '找不到 .NET Framework 4 編譯器（csc.exe）' }
+$static = Resolve-Path ..\static
+& $csc /nologo /target:exe /optimize+ /utf8output /codepage:65001 /out:resources\myscreen-relay.exe /r:System.Web.Extensions.dll `
+  "/resource:$static\remote.html,remote.html" "/resource:$static\css\remote.css,css/remote.css" `
+  "/resource:$static\js\remote.js,js/remote.js" "/resource:$static\js\ui.js,js/ui.js" `
+  "/resource:$static\js\widgets\util.js,js/widgets/util.js" relay\MyScreenRelay.cs
+if ($LASTEXITCODE -ne 0) { throw '遙控伺服器編譯失敗' }
+
 Write-Host '2. 準備 Neutralino 執行檔...' -ForegroundColor Cyan
 if (-not (Test-Path bin\neutralino.js)) {
   npx -y @neutralinojs/neu update
@@ -35,6 +46,9 @@ $running = Get-Process MyScreen -ErrorAction SilentlyContinue | Where-Object { $
 if ($running) { throw 'MyScreen.exe 正在執行，無法覆蓋。請先關閉 MyScreen 視窗後再執行一次。' }
 node patch-exe.mjs dist\myscreen\myscreen-win_x64.exe out\MyScreen.exe
 if ($LASTEXITCODE -ne 0) { throw '寫入圖示失敗' }
+$relayRunning = Get-Process myscreen-relay -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $PWD 'out\myscreen-relay.exe') }
+if ($relayRunning) { $relayRunning | Stop-Process -Force }
+Copy-Item resources\myscreen-relay.exe out\myscreen-relay.exe -Force
 
 Write-Host '5. 製作安裝程式...' -ForegroundColor Cyan
 $version = (Get-Content neutralino.config.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
@@ -50,7 +64,7 @@ if ($iscc) {
   if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 編譯失敗' }
   Write-Host '完成！' -ForegroundColor Green
   Write-Host "  安裝程式：desktop\out\MyScreen-Setup-$version.exe" -ForegroundColor Green
-  Write-Host '  免安裝版：desktop\out\MyScreen.exe' -ForegroundColor Green
+  Write-Host '  免安裝版：desktop\out\MyScreen.exe（旁邊的 myscreen-relay.exe 是手機遙控伺服器）' -ForegroundColor Green
 } else {
   Write-Host '完成！免安裝版：desktop\out\MyScreen.exe' -ForegroundColor Green
   Write-Host '找不到 Inno Setup 6，所以沒有產生安裝程式。需要安裝程式的話，請安裝 Inno Setup 6（https://jrsoftware.org/isdl.php）後再執行一次。' -ForegroundColor Yellow

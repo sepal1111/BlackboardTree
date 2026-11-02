@@ -18,7 +18,8 @@
     "os.*",
     "filesystem.*",
     "window.*",
-    "events.*"
+    "events.*",
+    "resources.*"
   ],
   "globalVariables": {
     "MSROOT": "V:",

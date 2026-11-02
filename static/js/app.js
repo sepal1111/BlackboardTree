@@ -38,6 +38,7 @@ async function boot() {
     window.Neutralino.init();
     window.Neutralino.events.on('windowClose', async () => {
       await S.store?.flushAll().catch(() => {});
+      await stopLocalRelay();
       window.Neutralino.app.exit();
     });
   }
@@ -619,8 +620,63 @@ async function toggleFullscreen() {
 //   1. 老師自己設定的（存在 V:\MyScreen\settings.json，換電腦也能用）
 //   2. 學校預設：安裝時填寫，存在程式資料夾的 myscreen.json
 //   3. 建置時寫入的 NL_RELAY
-//   4. 網頁版：提供這個網頁的伺服器
-const relayBase = () => (S.relayUser || S.relaySchool || window.NL_RELAY || (S.config ? location.origin : '')).replace(/\/+$/, '');
+//   4. 桌面版：都沒有設定時，用這台電腦當伺服器（內建的 myscreen-relay.exe，手機要在同一個校內網路）
+//   5. 網頁版：提供這個網頁的伺服器
+const LOCAL = 'local';
+const relayBase = () => (S.relayUser || S.relaySchool || window.NL_RELAY || (DESKTOP ? LOCAL : (S.config ? location.origin : ''))).replace(/\/+$/, '');
+
+// ---- 內建遙控伺服器（桌面版）
+// 程式資料夾裡的 myscreen-relay.exe；免安裝版沒有時，從 MyScreen.exe 內嵌的資源解出來
+async function relayExePath() {
+  const fs = window.Neutralino.filesystem;
+  const exists = (p) => fs.getStats(p).then(() => true, () => false);
+  const dir = String(window.NL_PATH || '.').replace(/[\\/]+$/, '');
+  const beside = dir + '/myscreen-relay.exe';
+  if (await exists(beside)) return beside;
+  for (const target of [beside, (await window.Neutralino.os.getPath('temp')) + '/myscreen-relay.exe']) {
+    try { await window.Neutralino.resources.extractFile('/resources/myscreen-relay.exe', target); return target; } catch { /* 試下一個位置 */ }
+  }
+  throw new Error('找不到內建遙控伺服器（myscreen-relay.exe）');
+}
+
+// 啟動內建伺服器，回傳 { port, ips }
+function startLocalRelay() {
+  if (S.localRelay) return S.localRelay;
+  S.localRelay = (async () => {
+    const exe = await relayExePath();
+    const pid = window.NL_PID ? ` --parent ${window.NL_PID}` : '';
+    const proc = await window.Neutralino.os.spawnProcess(`"${exe.replace(/\//g, '\\')}" --port 52480${pid}`);
+    return await new Promise((resolve, reject) => {
+      let buf = '';
+      const timer = setTimeout(() => reject(new Error('內建遙控伺服器沒有回應')), 8000);
+      const onEvt = (e) => {
+        const d = e.detail;
+        if (d.id !== proc.id) return;
+        if (d.action === 'stdOut') {
+          buf += d.data;
+          const m = buf.match(/LISTEN (\d+) ?([\d.,]*)/);
+          if (m) { clearTimeout(timer); resolve({ id: proc.id, port: +m[1], ips: m[2] ? m[2].split(',').filter(Boolean) : [] }); }
+        } else if (d.action === 'exit') {
+          clearTimeout(timer);
+          window.Neutralino.events.off('spawnedProcess', onEvt);
+          // 伺服器意外結束：下次開啟遙控時重新啟動
+          if (S.localRelay) { S.localRelay = null; if (S.remote?.local) resetRemote(); }
+          reject(new Error('內建遙控伺服器無法啟動' + (buf.includes('ERROR') ? '：' + buf.trim() : '')));
+        }
+      };
+      window.Neutralino.events.on('spawnedProcess', onEvt);
+    });
+  })();
+  S.localRelay.catch(() => { S.localRelay = null; });
+  return S.localRelay;
+}
+
+async function stopLocalRelay() {
+  const p = S.localRelay;
+  S.localRelay = null;
+  if (!p) return;
+  try { const info = await p; await window.Neutralino.os.updateSpawnedProcess(info.id, 'exit'); } catch { /* 已經結束 */ }
+}
 
 // 讀取安裝程式寫入的學校預設（桌面版）
 async function loadSchoolConfig() {
@@ -651,15 +707,14 @@ function resetRemote() {
 function relaySetupDialog(message = '') {
   const input = h('input', { class: 'input', placeholder: '例如：192.168.1.10:8080', value: S.relayUser || '' });
   const school = S.relaySchool || window.NL_RELAY || '';
+  const fallback = school ? `學校預設：${school}` : '這台電腦（內建遙控伺服器，不需要 NAS）';
   const dlg = modal({
     title: '📱 設定手機遙控',
     body: h('div', { class: 'stack' },
       message ? h('p', { class: 'err' }, message) : null,
-      h('p', null, '手機遙控需要學校的「遙控伺服器」轉送指令（通常架在學校 NAS 上，請向資訊組詢問網址）。'),
+      h('p', null, '預設由這台電腦擔任遙控伺服器，手機只要連上校內網路就能使用。如果學校另外架了遙控伺服器（例如在 NAS 上），可以在這裡填入網址。'),
       h('label', { class: 'field' }, h('span', null, '遙控伺服器網址'), input),
-      h('p', { class: 'muted' }, school
-        ? `留空則使用學校預設：${school}`
-        : '這個設定會存在你的個人資料夾（V:\\MyScreen），換到其他電腦也能直接使用；留空可清除設定。')),
+      h('p', { class: 'muted' }, `留空則使用${fallback}。這個設定存在你的個人資料夾（V:\\MyScreen），換到其他電腦也會套用。`)),
     actions: [
       { label: '取消' },
       { label: '儲存', primary: true, onClick: () => {
@@ -669,7 +724,6 @@ function relaySetupDialog(message = '') {
         S.relayUser = v;
         if (S.store) S.store.getSettings().then((st) => { if (v) st.relay = v; else delete st.relay; S.store.saveSettings(); });
         resetRemote();
-        if (!relayBase()) return toast('已清除遙控伺服器設定'); // 留空而且沒有學校預設：關閉手機遙控
         setTimeout(remoteDialog, 50);
       } },
     ],
@@ -748,11 +802,22 @@ async function openUrlFromRemote(url) {
   return w;
 }
 
-function ensureRemote() {
+async function ensureRemote() {
   const base = relayBase();
   if (!base) return null;
+  if (S.remote && S.remote.local !== (base === LOCAL)) resetRemote();
   if (!S.remote) {
-    S.remote = new RemoteHost(base, { getState: remoteState, onCmd: remoteCmd });
+    let opts = { getState: remoteState, onCmd: remoteCmd }, wsBase = base;
+    if (base === LOCAL) {
+      const info = await startLocalRelay();
+      wsBase = `http://127.0.0.1:${info.port}`;
+      S.localIps = info.ips;
+      const ip = info.ips.includes(LS.get('ms:remoteIp', '')) ? LS.get('ms:remoteIp', '') : info.ips[0];
+      opts.publicBase = ip ? `http://${ip}:${info.port}` : wsBase;
+    }
+    if (S.remote) return S.remote; // 等待期間已經建立
+    S.remote = new RemoteHost(wsBase, opts);
+    S.remote.local = base === LOCAL;
     S.remote.addEventListener('change', renderRemoteBtn);
     S.remote.addEventListener('joined', () => toast('📱 遙控裝置已連線'));
     S.remote.start();
@@ -769,16 +834,18 @@ function renderRemoteBtn() {
   btn.classList.toggle('active', n > 0);
 }
 
-function remoteDialog() {
-  const r = ensureRemote();
+async function remoteDialog() {
+  let r;
+  if (relayBase() === LOCAL && !S.remote) toast('正在啟動遙控伺服器…', 1500);
+  try { r = await ensureRemote(); } catch (e) { return relaySetupDialog(e.message); }
   if (!r) return relaySetupDialog();
   const box = h('div', { class: 'remote-box' });
   const render = () => {
     box.innerHTML = '';
     if (r.status !== 'online') {
       box.append(h('div', { class: 'remote-wait' }, r.status === 'error'
-        ? [h('div', null, `無法連線到遙控伺服器（${r.base}），正在重試…`),
-          h('div', { class: 'muted' }, '請確認網址正確、這台電腦連得到學校 NAS。'),
+        ? [h('div', null, `無法連線到遙控伺服器（${r.local ? '這台電腦' : r.base}），正在重試…`),
+          h('div', { class: 'muted' }, r.local ? '內建遙控伺服器沒有回應，請關閉 MyScreen 後重新開啟。' : '請確認網址正確、這台電腦連得到學校 NAS。'),
           h('button', { class: 'btn', onclick: () => { dlg.close(); relaySetupDialog(); } }, '⚙ 更改遙控伺服器')]
         : '連線中…'));
       return;
@@ -790,12 +857,21 @@ function remoteDialog() {
       q.make();
       qr.innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
     } catch { qr.textContent = r.url; }
+    // 電腦有多個網路位址時（例如同時接有線和無線），可以切換 QR Code 用的位址
+    const port = r.publicBase.split(':').pop();
+    const ips = r.local ? (S.localIps || []) : [];
+    const ipSwitch = ips.length > 1 ? h('div', { class: 'remote-ips' }, h('span', { class: 'muted' }, '手機連不上時，可改用其他網址：'),
+      ips.map((ip) => h('button', { class: 'chip' + (r.publicBase.includes('//' + ip + ':') ? ' on' : ''), onclick: () => {
+        LS.set('ms:remoteIp', ip); r.publicBase = `http://${ip}:${port}`; render();
+      } }, ip))) : null;
     box.append(
       qr,
       h('div', { class: 'remote-info' },
         h('div', { class: 'muted' }, '用手機或平板掃描 QR Code，或開啟下方網址並輸入代碼'),
         h('div', { class: 'remote-code' }, r.code.slice(0, 3) + ' ' + r.code.slice(3)),
-        h('div', { class: 'remote-url' }, `${r.base}/remote.html`),
+        h('div', { class: 'remote-url' }, `${r.publicBase}/remote.html`),
+        ipSwitch,
+        r.local ? h('div', { class: 'muted remote-tip' }, '由這台電腦擔任遙控伺服器：手機要連上校內網路。若一直連不上，可能被 Windows 防火牆擋住，請資訊組協助（安裝時勾選「允許手機連線」）。') : null,
         h('div', { class: 'remote-count' }, r.remotes ? `📱 目前有 ${r.remotes} 台裝置連線` : '尚無裝置連線'),
         h('div', { class: 'row-btns' },
           h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有遙控裝置，並更換新代碼'); } }, '中斷全部並換代碼'),
