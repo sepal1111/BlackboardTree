@@ -53,6 +53,13 @@ Remove-Item out\myscreen-relay.exe -Force -ErrorAction SilentlyContinue
 
 Write-Host '5. 製作安裝程式...' -ForegroundColor Cyan
 $version = (Get-Content neutralino.config.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
+# 版本號：主版本.次版本.修正版（只能是數字，見 DEVELOPMENT.md「版本號與發佈」）
+if ($version -notmatch '^\d{1,5}\.\d{1,5}\.\d{1,5}$') { throw "版本號格式不正確：$version（請用 1.2.3 這種格式）" }
+# 舊版本的安裝程式不保留（out\ 有放進 git，留著會讓 repo 越來越大）
+Get-ChildItem out\MyScreen-Setup-*.exe -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "MyScreen-Setup-$version.exe" } | ForEach-Object {
+  Write-Host "  刪除舊版安裝程式：$($_.Name)"
+  Remove-Item $_.FullName -Force
+}
 $iscc = @(
   (Get-Command iscc -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source),
   "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",

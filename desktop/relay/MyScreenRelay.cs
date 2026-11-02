@@ -4,7 +4,7 @@
 // 用 Windows 內建的 .NET Framework 編譯（desktop\build.ps1），不需要另外安裝任何東西
 //
 // 參數：--port 52480（被占用時自動往後找）  --parent <MyScreen 的 PID，主程式結束時自動關閉>
-// 啟動後在標準輸出印出：LISTEN <port> <ip1,ip2,...>
+// 啟動後在標準輸出印出：LISTEN <port> <ip1,ip2,...>；之後網路變動時印出：IPS <ip1,ip2,...>
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -155,8 +155,23 @@ namespace MyScreen
                 catch { listener = null; }
             }
             if (listener == null) { Console.WriteLine("ERROR 找不到可用的連接埠"); return 1; }
-            Console.WriteLine("LISTEN " + port + " " + string.Join(",", LanAddresses()));
+            var ips = string.Join(",", LanAddresses());
+            Console.WriteLine("LISTEN " + port + " " + ips);
             Console.Out.Flush();
+
+            // 網路變動（換 Wi-Fi、插拔網路線）時重新偵測 IP，印出 IPS <ip1,ip2,...> 讓 MyScreen 更新 QR Code
+            new Thread(() =>
+            {
+                while (true)
+                {
+                    Thread.Sleep(5000);
+                    string now;
+                    try { now = string.Join(",", LanAddresses()); } catch { continue; }
+                    if (now == ips) continue;
+                    ips = now;
+                    try { Console.WriteLine("IPS " + now); Console.Out.Flush(); } catch { }
+                }
+            }) { IsBackground = true }.Start();
 
             // MyScreen 結束時一起結束
             if (parent > 0)

@@ -37,12 +37,8 @@ async function boot() {
   if (DESKTOP) {
     window.Neutralino.init();
     await initLocalPrefs(); // 讀取這台電腦上的設定（遙控代碼、離線備份等），要在其他步驟之前
-    window.Neutralino.events.on('windowClose', async () => {
-      await S.store?.flushAll().catch(() => {});
-      await flushLocalPrefs();
-      await stopLocalRelay();
-      window.Neutralino.app.exit();
-    });
+    window.Neutralino.events.on('windowClose', quitApp);
+    initTray();
   }
   S.config = DESKTOP ? null : await api.get('/api/config').catch(() => null);
   await loadSchoolConfig();
@@ -659,35 +655,130 @@ function startLocalRelay() {
     const pid = window.NL_PID ? ` --parent ${window.NL_PID}` : '';
     const proc = await window.Neutralino.os.spawnProcess(`"${exe.replace(/\//g, '\\')}" --port 52480${pid}`);
     return await new Promise((resolve, reject) => {
-      let buf = '';
+      let buf = '', all = '', info = null;
+      const ipList = (s) => (s ? s.split(',').filter(Boolean) : []);
       const timer = setTimeout(() => reject(new Error('內建遙控伺服器沒有回應')), 8000);
       const onEvt = (e) => {
         const d = e.detail;
         if (d.id !== proc.id) return;
         if (d.action === 'stdOut') {
+          all += d.data;
           buf += d.data;
-          const m = buf.match(/LISTEN (\d+) ?([\d.,]*)/);
-          if (m) { clearTimeout(timer); resolve({ id: proc.id, port: +m[1], ips: m[2] ? m[2].split(',').filter(Boolean) : [] }); }
+          const lines = buf.split(/\r?\n/);
+          buf = lines.pop();
+          for (const line of lines) {
+            const m = line.match(/^LISTEN (\d+) ?([\d.,]*)/);
+            const ips = line.match(/^IPS ?([\d.,]*)/);
+            if (m && !info) {
+              clearTimeout(timer);
+              info = { id: proc.id, port: +m[1], ips: ipList(m[2]) };
+              S.relayInfo = info;
+              resolve(info);
+              updateTray();
+            } else if (ips && info) {
+              info.ips = ipList(ips[1]);
+              onLocalIpsChanged(info);
+            }
+          }
         } else if (d.action === 'exit') {
           clearTimeout(timer);
           window.Neutralino.events.off('spawnedProcess', onEvt);
           // 伺服器意外結束：下次開啟遙控時重新啟動
-          if (S.localRelay) { S.localRelay = null; if (S.remote?.local) resetRemote(); }
-          reject(new Error('內建遙控伺服器無法啟動' + (buf.includes('ERROR') ? '：' + buf.trim() : '')));
+          if (S.relayInfo === info) S.relayInfo = null;
+          if (S.localRelay && info) { S.localRelay = null; if (S.remote?.local) resetRemote(); }
+          updateTray();
+          reject(new Error('內建遙控伺服器無法啟動' + (all.includes('ERROR') ? '：' + all.trim() : '')));
         }
       };
       window.Neutralino.events.on('spawnedProcess', onEvt);
     });
   })();
-  S.localRelay.catch(() => { S.localRelay = null; });
+  S.localRelay.catch(() => { S.localRelay = null; updateTray(); });
+  updateTray();
   return S.localRelay;
 }
 
 async function stopLocalRelay() {
   const p = S.localRelay;
   S.localRelay = null;
+  S.relayInfo = null;
+  updateTray();
   if (!p) return;
   try { const info = await p; await window.Neutralino.os.updateSpawnedProcess(info.id, 'exit'); } catch { /* 已經結束 */ }
+}
+
+// 網路變動後 IP 不同了：QR Code 改用新的 IP（老師選過、而且還在的 IP 優先）
+function onLocalIpsChanged(info) {
+  S.localIps = info.ips;
+  const r = S.remote;
+  if (r?.local) {
+    const cur = (r.publicBase.match(/\/\/([\d.]+):/) || [])[1];
+    if (!info.ips.includes(cur)) {
+      const saved = LS.get('ms:remoteIp', '');
+      const ip = info.ips.includes(saved) ? saved : info.ips[0];
+      r.publicBase = ip ? `http://${ip}:${info.port}` : `http://127.0.0.1:${info.port}`;
+    }
+    r.dispatchEvent(new Event('change')); // 重畫 QR Code
+  }
+  updateTray();
+}
+
+// ---- 系統匣（桌面版右下角的圖示）：顯示遙控伺服器狀態，可開啟 QR Code 或結束程式
+let trayTimer = 0;
+function trayStatus() {
+  const base = relayBase();
+  if (base !== LOCAL) return `遙控伺服器：${base}`;
+  const info = S.relayInfo;
+  if (!info) return S.localRelay ? '遙控伺服器：啟動中…' : '遙控伺服器：未啟動';
+  const pub = S.remote?.local ? S.remote.publicBase.replace(/^https?:\/\//, '') : `${info.ips[0] || '127.0.0.1'}:${info.port}`;
+  return `遙控伺服器：執行中（${pub}）`;
+}
+function updateTray() {
+  if (!DESKTOP) return;
+  clearTimeout(trayTimer);
+  trayTimer = setTimeout(() => {
+    const r = S.remote;
+    const items = [
+      { id: 'status', text: trayStatus(), isDisabled: true },
+      ...(r?.status === 'online' ? [{ id: 'count', text: r.remotes ? `${r.remotes} 台手機／平板連線中` : '尚無手機連線', isDisabled: true }] : []),
+      { text: '-' },
+      { id: 'remote', text: '手機遙控（顯示 QR Code）' },
+      { id: 'show', text: '顯示 MyScreen' },
+      { text: '-' },
+      { id: 'quit', text: '結束 MyScreen（同時關閉遙控伺服器）' },
+    ];
+    window.Neutralino.os.setTray({ icon: '/resources/icon.png', menuItems: items }).catch(() => {});
+  }, 150);
+}
+
+async function showWindow() {
+  const w = window.Neutralino.window;
+  try {
+    await w.show();
+    if (await w.isMinimized()) await w.unminimize();
+    await w.focus();
+  } catch { /* ignore */ }
+}
+
+// 關閉視窗或從系統匣結束：存檔後關閉遙控伺服器再結束
+let quitting = false;
+async function quitApp() {
+  if (quitting) return;
+  quitting = true;
+  await S.store?.flushAll().catch(() => {});
+  await flushLocalPrefs();
+  await stopLocalRelay();
+  window.Neutralino.app.exit();
+}
+
+function initTray() {
+  window.Neutralino.events.on('trayMenuItemClicked', async (e) => {
+    const id = e.detail?.id;
+    if (id === 'show' || id === 'remote') await showWindow();
+    if (id === 'remote') remoteDialog();
+    if (id === 'quit') quitApp();
+  });
+  updateTray();
 }
 
 // 讀取安裝程式寫入的學校預設（桌面版）
@@ -844,9 +935,16 @@ function renderRemoteBtn() {
   const n = r?.status === 'online' ? r.remotes : 0;
   btn.querySelector('.tb-label').textContent = n ? `遙控中（${n}）` : '遙控';
   btn.classList.toggle('active', n > 0);
+  updateTray();
 }
 
 async function remoteDialog() {
+  if (S.remoteDlg) return; // 已經開著（例如從系統匣再點一次）
+  S.remoteDlg = true;
+  try { await openRemoteDialog(); } finally { if (S.remoteDlg === true) S.remoteDlg = null; }
+}
+
+async function openRemoteDialog() {
   let r;
   if (relayBase() === LOCAL && !S.remote) toast('正在啟動遙控伺服器…', 1500);
   try { r = await ensureRemote(); } catch (e) { return relaySetupDialog(e.message); }
@@ -874,7 +972,7 @@ async function remoteDialog() {
     const ips = r.local ? (S.localIps || []) : [];
     const ipSwitch = ips.length > 1 ? h('div', { class: 'remote-ips' }, h('span', { class: 'muted' }, '手機連不上時，可改用其他網址：'),
       ips.map((ip) => h('button', { class: 'chip' + (r.publicBase.includes('//' + ip + ':') ? ' on' : ''), onclick: () => {
-        LS.set('ms:remoteIp', ip); r.publicBase = `http://${ip}:${port}`; render();
+        LS.set('ms:remoteIp', ip); r.publicBase = `http://${ip}:${port}`; render(); updateTray();
       } }, ip))) : null;
     box.append(
       qr,
@@ -895,7 +993,8 @@ async function remoteDialog() {
   r.addEventListener('change', render);
   r.addEventListener('joined', onJoin);
   const dlg = modal({ title: '📱 手機遙控', body: box, wide: true, actions: [{ label: '完成', primary: true }],
-    onClose: () => { r.removeEventListener('change', render); r.removeEventListener('joined', onJoin); } });
+    onClose: () => { S.remoteDlg = null; r.removeEventListener('change', render); r.removeEventListener('joined', onJoin); } });
+  S.remoteDlg = dlg;
 }
 
 // ------------------------------------------------------------ 綁定

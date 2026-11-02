@@ -34,7 +34,7 @@
 |---|---|---|
 | Git | 取得原始碼 | |
 | Python 3.10 以上（目前用 3.12） | 本機測試伺服器（瀏覽器測試用） | |
-| Node.js 22 以上（目前用 24） | 桌面版建置、relay 測試 | 第一次建置要網路（下載 Neutralino、`resedit`） |
+| Node.js 22 以上（目前用 24） | 桌面版建置、前端與 relay 測試 | 第一次建置要網路（下載 Neutralino、`resedit`） |
 | Inno Setup 6 | 產生安裝程式 | 選用；沒裝只會產生免安裝版。可裝在 `%LOCALAPPDATA%\Programs\Inno Setup 6`（不需系統管理員），`build.ps1` 會自動找 |
 | .NET Framework 4（`csc.exe`） | 編譯內建遙控伺服器 | **Windows 10／11 內建**，不用安裝 |
 
@@ -94,6 +94,26 @@ powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 - 請用 **PowerShell** 執行 `build.ps1`；從 Git Bash 呼叫 `csc.exe` 時參數會被路徑轉換弄壞
 - 桌面版沒有開發者工具（`enableInspector: false`）。除錯時可暫時在 `desktop/neutralino.config.json` 改成 `true`，畫面左下角也會顯示 JS 錯誤（`index.html` 的 `msFatal`）
 
+### 前端自動化測試
+
+```bash
+npm test
+```
+
+用 Node 內建的測試工具（`node --test`），**不需要安裝任何套件**，也不用開瀏覽器，約 1 秒跑完。測試在 `tests/`，直接 import `static/js` 的模組：
+
+| 檔案 | 測什麼 |
+|---|---|
+| `roster.test.mjs` | 名單匯入的欄位自動判斷、貼上文字解析、照片檔名比對（學號／姓名／座號）、學生改名時小工具狀態跟著改 |
+| `store.test.mjs` | `V:\MyScreen` 檔案格式、rev 與衝突（409）、兩台電腦同時修改、網路磁碟機斷線時的離線備份與補存、其他電腦的修改（poll）、舊格式名單 |
+| `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、指令、斷線重連 |
+| `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位 |
+
+- `tests/helpers.mjs` 模擬瀏覽器環境（`localStorage`、`window`、`document`），並提供記憶體裡的資料夾 `MemFs`（介面同 `FsaAdapter`／`NeuAdapter`，`failing = true` 可模擬斷線）
+- 只測**不需要畫面**的邏輯；畫面操作（拖曳、對話框、小工具外觀）仍要用瀏覽器手動測
+- 新增純邏輯（解析、格式轉換、存檔規則）時請一起加測試；被測的函式要 `export`
+- 模組載入時不能碰 DOM（`document.querySelector` 等要放在函式裡），否則 Node 無法 import
+
 ### 測試內建遙控伺服器
 
 ```bash
@@ -104,9 +124,28 @@ node desktop/relay/test-relay.mjs
 
 ### 版本號與發佈
 
+版本號用三段數字 **主版本.次版本.修正版**（例如 `1.1.0`）：
+
+| 哪一段 | 什麼時候加 1 | 例子 |
+|---|---|---|
+| 主版本 | `V:\MyScreen` 資料格式改了，舊版程式讀不懂新版存的白板 | `1.4.2` → `2.0.0` |
+| 次版本 | 新功能，舊資料照樣能用 | `1.0.0` → `1.1.0`（系統匣、IP 自動更新） |
+| 修正版 | 只修錯誤 | `1.1.0` → `1.1.1` |
+
+- 老師會在不同教室的電腦間移動，主版本相同就代表白板在各台電腦都能互通
+- 只能是三段數字（不要加 `-beta` 等字尾）：`patch-exe.mjs` 只讀前三段寫進 exe，Windows 每段最大 65535。`build.ps1` 會檢查格式
+
+步驟：
+
 1. 改 `desktop/neutralino.config.json` 的 `version`（安裝程式檔名、exe 版本資訊都會跟著變）
-2. 執行 `build.ps1`
+2. 執行 `build.ps1`（會自動刪除 `out\` 裡舊版本的安裝程式）
 3. `desktop/out/` 的安裝程式與 `MyScreen.exe` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新
+4. commit 後打標籤：`git tag v1.1.0`，以後才查得到每個版本對應的程式碼
+
+| 版本 | 內容 |
+|---|---|
+| 1.1.0 | 系統匣圖示（遙控伺服器狀態、QR Code、結束）、網路變動時自動更新 IP、前端自動化測試 |
+| 1.0.0 | 第一個安裝程式版本 |
 
 ---
 
@@ -141,6 +180,8 @@ desktop/
   installer/setup.iss       Inno Setup 安裝腳本（UTF-8 BOM）
   installer/ChineseTraditional.isl, icon.ico
   out/                      建置產出（安裝程式、免安裝版，有放進 git）
+tests/                      前端自動化測試（npm test）
+package.json                只有測試指令，沒有相依套件
 Dockerfile, docker-compose.yml   NAS 上架設 relay／伺服器版
 config.example.json         伺服器版設定範例（複製成 config.json，已被 .gitignore 排除）
 ```
@@ -213,9 +254,11 @@ export const example = {
   - 手機收到：`hello`、`state`、`screen`、`notice`、`kicked`、`error`
 - relay 有兩種實作，協定必須保持一致：
   - `server/relay.py`：NAS／伺服器版
-  - `desktop/relay/MyScreenRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁的 5 個檔案）
+  - `desktop/relay/MyScreenRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，之後每 5 秒檢查網路，IP 變了就印 `IPS <ip,...>`；`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁的 5 個檔案）
 - 桌面版使用哪個 relay（`app.js` 的 `relayBase()`）：老師設定（V: settings.json）→ 學校預設（myscreen.json）→ 建置時的 `RELAY` → **內建 relay**
-- 內建 relay：MyScreen 開啟時啟動（`startLocalRelay()`），關閉時結束（`windowClose` → `stopLocalRelay()`）。安裝版在程式資料夾；免安裝版內嵌在 exe 的 resources，執行時用 `Neutralino.resources.extractFile` 解出
+- 內建 relay：MyScreen 開啟時啟動（`startLocalRelay()`），關閉時結束（`windowClose` 或系統匣「結束」→ `quitApp()` → `stopLocalRelay()`）。收到 `IPS` 時 `onLocalIpsChanged()` 更新 QR Code 的網址
+- 系統匣（`initTray()`／`updateTray()`，Neutralino `os.setTray`）：顯示 relay 狀態、手機連線數，選單可開 QR Code、結束程式。狀態有變化時（`renderRemoteBtn()`、relay 啟動／結束）呼叫 `updateTray()` 重設整個選單。Neutralino 的系統匣沒有滑鼠停留提示文字，狀態只能放在停用的選單項目裡
+- 安裝版與免安裝版的 relay 位置：安裝版在程式資料夾；免安裝版內嵌在 exe 的 resources，執行時用 `Neutralino.resources.extractFile` 解出
 - 手機要能連到教室電腦的校內 IP（學校確認手機、平板都在校內網域），且 Windows 防火牆要允許 `myscreen-relay.exe`（安裝程式的「允許手機連線」選項）
 
 ---
@@ -246,9 +289,12 @@ export const example = {
 - 手機遙控：各小工具操作、傳送網址（YouTube／影片檔／FB／IG／Threads／TikTok／Vimeo／一般網頁）
 - 內建 relay：開啟 MyScreen 時啟動、關閉時結束、重開後手機自動連回
 - 安裝程式：每位使用者安裝（不需系統管理員）、升級、解除安裝、`/RELAY=` 參數
+- 前端自動化測試：62 項（`npm test`）
 
 ### 尚未驗證（需要在學校環境測）
 
+- [ ] **系統匣選單**：已確認圖示有註冊到 Windows、關閉視窗時 relay 一起結束；選單內容與點選動作（顯示 QR Code、結束）還沒有實際點過
+- [ ] **網路變動時更新 IP**（`IPS`）：開發機沒有實際切換過網路
 - [ ] **真實手機**：目前只用瀏覽器模擬手機，請在教室用手機掃 QR Code 實際測一次
 - [ ] **安裝程式加入防火牆例外**：需要系統管理員權限，請資訊組以 `/ALLUSERS` 或輸入系統管理員密碼測試
 - [ ] **安裝精靈的「手機遙控」頁面**：寫入設定已用 `/RELAY=` 測過，但畫面沒有實際看過
@@ -260,7 +306,7 @@ export const example = {
 
 - **程式碼簽章**：exe／安裝程式沒有簽章，第一次執行 Windows SmartScreen 可能顯示「Windows 已保護您的電腦」，需按「其他資訊 → 仍要執行」。學校大量部署前可考慮簽章，或由資訊組統一部署
 - **GitHub Releases**：把安裝程式放到 Releases 方便老師下載
-- **自動化測試**：目前只有 relay 的測試；前端都是手動測試
+- **自動化測試**：已有前端邏輯（`npm test`）與 relay 的測試；還沒有的：畫面操作（可考慮 Playwright）、`server/` 的 Python 伺服器與 `server/relay.py`（`test-relay.mjs` 目前只測桌面版內建的 C# relay，可以改成也能指定網址測 Python 版，確保兩邊協定一致）
 - 開發機 `V:\MyScreen\boards\test-board.json`（「測試白板（另一台電腦建立）」）是開發時建立的測試白板，可以刪除；老師自己的白板是「我的白板」
 
 ---
