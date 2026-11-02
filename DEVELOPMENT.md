@@ -136,14 +136,22 @@ node desktop/relay/test-relay.mjs
 步驟：
 
 1. 改 `desktop/neutralino.config.json` 的 `version`（安裝程式檔名、exe 版本資訊都會跟著變）
-2. 執行 `build.ps1`（會自動刪除 `out\` 裡舊版本的安裝程式）
-3. `desktop/out/` 的安裝程式與 `MyScreen.exe` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新
-4. 更新 `RELEASE.md`：標題與檔名的版本號、「從舊版升級」會注意到的變化、最上面加一段新版本的版本紀錄（給從 GitHub 下載的老師、資訊組看，用一般老師看得懂的說法）；`DEVELOPMENT.md` 的版本表也加一列
+2. **先**更新 `RELEASE.md`：標題與檔名的版本號、「從舊版升級」會注意到的變化、「## 版本紀錄」最上面加一段 `### 1.5.0`（給老師、資訊組看，用一般老師看得懂的說法）；`DEVELOPMENT.md` 的版本表也加一列。**要在建置前寫好**：`build.ps1` 會把版本紀錄寫進 `latest.json`，「關於與更新」顯示的更新內容就是這一段
+3. 執行 `build.ps1`（會自動刪除 `out\` 裡舊版本的安裝程式，最後產生 `out\latest.json`：版本號、各版本的更新內容、兩個 exe 的大小與 SHA-256）
+4. `desktop/out/` 的安裝程式、`MyScreen.exe` 與 `latest.json` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新。**push 到 GitHub 的 main 之後，各校的 MyScreen 就會檢查到新版本**（讀 `raw.githubusercontent.com/sepal1111/MyScreen/main/desktop/out/latest.json`，GitHub 快取最多 5 分鐘），所以還沒測好的版本不要 push 到 main
 5. commit 後打標籤：`git tag -a v1.1.0 -m "MyScreen 1.1.0"`，以後才查得到每個版本對應的程式碼；推送用 `git push --follow-tags`
 6. 在 GitHub 的 Releases 頁面建立新版本：選剛推上去的標籤，說明貼上 `RELEASE.md` 該版本的「版本紀錄」與下載說明，並把 `desktop/out/` 的兩個 exe 上傳到 Assets
 
+檢查更新的運作方式（`static/js/update.js`）：
+
+- 下載的檔案和 `latest.json` 在同一個資料夾，會比對大小與 SHA-256，不符就不更新（避免 GitHub 還在更新、檔案不完整）
+- 安裝版（程式資料夾有 `unins000.exe`）：安裝程式存到 `%TEMP%`，用 PowerShell 等 MyScreen 結束後以 `/SILENT` 安裝，再重新開啟；程式資料夾不能寫入（Program Files）時加 `/ALLUSERS`，會跳出 UAC
+- 免安裝版：新的 exe 先存成 `MyScreen.exe.new`，MyScreen 結束後換掉原本的檔案並重新開啟
+- 測試：在 `%APPDATA%\MyScreen\prefs.json`（網頁版是瀏覽器的 localStorage）加上 `"ms:updateUrl": "\"http://127.0.0.1:8099/latest.json\""`，指到自己架的假版本資訊（要有 CORS 標頭），測完記得刪掉
+
 | 版本 | 內容 |
 |---|---|
+| 1.5.0 | ⚙ 設定新增「ℹ 關於與更新」：檢查 GitHub 上的新版本、顯示更新內容、一鍵下載並更新（安裝版靜默安裝、免安裝版直接替換），開啟時自動檢查（一天一次）；`build.ps1` 產生 `out/latest.json` |
 | 1.4.0 | 工具列文字（自動／顯示／隱藏，自動：視窗小於 1280×800 時只顯示圖示）、新增「迷你」工具大小，按鈕間距跟著工具大小縮放；移除「學校帳號登入」（SAMBA）、NAS 遙控伺服器設定與 Docker 部署、「開啟網路磁碟機程式」按鈕 |
 | 1.3.0 | 投票題庫（存題目、重複使用、從文字／Excel／CSV 匯入）、投票紀錄（結束投票、歸零、換題目時自動記錄，可匯出 CSV）、⚙ 設定新增「📊 投票」分頁 |
 | 1.2.0 | ⚙ 總設定（白板、班級名單、工具列位置／圖示大小／顯示的工具）、座位表照片保持 1:1.35（空間不夠時保留上方、最多裁到 1:1）、安裝精靈移除遙控伺服器設定頁與 `/RELAY=` 參數；移除紅綠燈、骰子，時鐘與日期合併成「時鐘日期」（舊白板開啟時由 `upgradeWidget` 自動轉換）；工具列改用自訂 SVG 圖示；學生用手機掃 QR Code 投票（relay 新增 `/ws/vote`） |
@@ -170,6 +178,7 @@ static/                     前端（桌面版、網頁版共用）
   js/remote.js              手機遙控頁的程式（各小工具的手機卡片 RENDER）
   js/ui.js                  h()、modal、toast、選擇圖片等共用 UI
   js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具）
+  js/update.js              檢查新版本、下載並驗證、產生更新用的 PowerShell 指令
   js/widgets/               小工具：time.js、classroom.js、media.js、util.js、index.js（清單與順序）
   vendor/qrcode.js          QR Code
   vendor/xlsx.mini.min.js   SheetJS 0.20.3（讀 Excel，用到時才載入）
@@ -180,11 +189,12 @@ desktop/
   neutralino.config.json    桌面版設定（版本、globalVariables、允許的 API）
   build.ps1                 建置腳本（UTF-8 BOM，見「注意事項」）
   patch-exe.mjs             把圖示與版本資訊寫進 exe（resedit）
+  make-latest.mjs           產生 out/latest.json（新版本資訊，「關於與更新」讀這個檔）
   relay/MyScreenRelay.cs    內建遙控伺服器（C#，Windows 內建 .NET Framework 編譯）
   relay/test-relay.mjs      relay 測試
   installer/setup.iss       Inno Setup 安裝腳本（UTF-8 BOM）
   installer/ChineseTraditional.isl, icon.ico
-  out/                      建置產出（安裝程式、免安裝版，有放進 git）
+  out/                      建置產出（安裝程式、免安裝版、latest.json，有放進 git）
 tests/                      前端自動化測試（npm test）
 package.json                只有測試指令，沒有相依套件
 config.example.json         網頁版伺服器設定範例：host、port、HTTPS 憑證（複製成 config.json，已被 .gitignore 排除）
@@ -248,7 +258,7 @@ export const example = {
 
 ### 總設定（⚙ 設定）
 
-- `app.js` 的 `settingsDialog(tab)`：分頁 `board`（白板）、`roster`（班級名單）、`dock`（工具列）。要加新分頁：在 `SETTING_TABS` 加一項，並在 `render()` 的對照表加上畫面函式
+- `app.js` 的 `settingsDialog(tab)`：分頁 `board`（白板）、`roster`（班級名單）、`dock`（工具列）、`poll`（投票）、`about`（關於與更新）。要加新分頁：在 `SETTING_TABS` 加一項，並在 `render()` 的對照表加上畫面函式
 - 白板操作（`switchBoard`、`newBoardAction`、`renameBoardAction`、`copyBoardAction`、`deleteBoardAction`）由上方白板選單與設定畫面共用
 - 工具列偏好：`setUi()` 立即套用（`applyUi()` 設定 `body[data-dock]`、`body[data-dock-labels]` 與 CSS 變數 `--dock-icon`）並存進 settings.json；位置的版面在 `app.css` 的 `body[data-dock=...]` 規則；工具列文字「自動」用 media query（寬度小於 1280 或高度小於 800 時隱藏），按鈕與工具列的內距跟著 `--dock-icon` 縮放
 - 需要班級名單的小工具：參考 `classroom.js` 的 `people(ctx)`、`namesEditor()`、`watchRoster()`（設定變更時自動重畫、學生改名時更新狀態）

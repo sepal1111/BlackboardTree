@@ -617,3 +617,18 @@ button.set-item:hover { border-color: #bac8ff; background: #f8f9ff; }
 .tool-tg:not(.on) { color: #adb5bd; }
 .tool-tg:not(.on) .ti { filter: grayscale(1); opacity: .5; }
 @media (max-width: 640px) { .settings { grid-template-columns: 1fr; } .set-side { flex-direction: row; flex-wrap: wrap; border: 0; padding: 0; } }
+
+/* ⚙ 設定 → 關於與更新 */
+.update-panel { display: flex; flex-direction: column; gap: 18px; }
+.update-new { border: 1px solid #b2f2bb; background: #ebfbee; border-radius: 12px; padding: 12px 14px; }
+.update-new > b { font-size: 16px; }
+.update-notes { margin-top: 8px; max-height: 220px; overflow: auto; }
+.update-notes .un-ver { font-weight: 700; margin-top: 6px; color: #2b8a3e; }
+.update-notes ul { margin: 4px 0 0; padding-left: 20px; }
+.update-notes li { margin: 2px 0; }
+.update-notes li.sub { margin-left: 18px; list-style: circle; }
+.update-progress { display: flex; flex-direction: column; gap: 6px; }
+.up-bar { height: 10px; border-radius: 6px; background: #e9ecef; overflow: hidden; }
+.up-bar > div { height: 100%; background: var(--accent); transition: width .2s; }
+#settings-btn.has-update { position: relative; }
+#settings-btn.has-update::after { content: ''; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #fa5252; box-shadow: 0 0 0 2px rgba(17,24,39,.85); }

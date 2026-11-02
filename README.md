@@ -20,6 +20,7 @@
   - 班級名單：查看各班人數，進入名單管理
   - 工具列：放在畫面上／下／左／右、工具大小（迷你／小／中／大／特大）、工具列文字（自動／顯示／隱藏；自動：視窗較小時只顯示圖示，適合解析度較低的筆電、投影機）、要顯示哪些工具（不常用的可以隱藏，手機遙控的「加入小工具」也會跟著隱藏）
   - 這些設定存在老師的 `V:\MyScreen\settings.json`，換電腦也會套用
+  - 關於與更新：顯示目前版本、檢查 GitHub 上的新版本與更新內容，按「下載並更新」就會自動下載、安裝並重新開啟（見下方「更新到新版」）
 - 計時器、碼錶記錄的是「絕對時間」，換台電腦打開，倒數時間一樣是對的
 - **小工具放大到全螢幕**：按小工具右上角的 ⛶（或雙擊標題列），小工具會填滿整個畫面並切換到全螢幕，內容自動放大；按 🗗 或 `Esc` 還原。手機遙控的每張卡片也有「⛶ 放大」按鈕
 - 快捷鍵：`H` 隱藏工具列，`F` 全螢幕，`Esc` 還原放大的小工具
@@ -95,17 +96,26 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 
 #### 安裝
 
-執行 `MyScreen-Setup-1.4.0.exe`，依畫面按「下一步」即可：
+執行 `MyScreen-Setup-1.5.0.exe`，依畫面按「下一步」即可：
 
 - 安裝到 `%LOCALAPPDATA%\Programs\MyScreen`，**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
 - 安裝新版時會自動關閉正在執行的 MyScreen；解除安裝不會刪除 `V:\MyScreen` 裡的白板
 - 這台電腦上的設定與離線備份（遙控代碼、V: 斷線時的白板備份等）存在 `%APPDATA%\MyScreen\prefs.json`
 
+#### 更新到新版
+
+1.5.0 起，「⚙ 設定 → ℹ 關於與更新」會檢查 GitHub 上有沒有新版本（開啟 MyScreen 時也會自動檢查，一天一次；有新版本時「⚙ 設定」按鈕會出現小紅點）：
+
+- 按「下載並更新」：下載後比對檢查碼，MyScreen 存檔並關閉，更新完成後自動重新開啟
+- 安裝版：下載新的安裝程式靜默安裝；裝在 Program Files（`/ALLUSERS`）時會要求系統管理員權限
+- 免安裝版：直接換掉原本的 `MyScreen.exe`（所在資料夾要能寫入）
+- 需要連到 `raw.githubusercontent.com`；版本資訊來自 `desktop/out/latest.json`（建置時產生）
+
 資訊組大量部署時可以用靜默安裝：
 
 ```
-MyScreen-Setup-1.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+MyScreen-Setup-1.5.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 手機遙控與學生投票由老師的電腦擔任伺服器，安裝時不需要設定。
@@ -216,7 +226,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 **Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
 
 - 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
-- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.4.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.5.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
 - 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
 
 > **網路注意事項**：手機必須能連到教室電腦（同一個校內網路）。若學校的無線網路（手機）和教學網路（教室電腦）是分開的網段，請資訊組開放手機網段連到教室電腦的 52480 埠（網頁版是 8080 埠）。

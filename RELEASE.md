@@ -1,4 +1,4 @@
-# MyScreen 1.4.0 下載與安裝說明
+# MyScreen 1.5.0 下載與安裝說明
 
 MyScreen 是免費的教室投影白板：計時器、抽籤、分組、座位表、課堂加分、投票等小工具，白板存在老師自己的網路磁碟機（V:），換電腦、換教室都能接著用。老師可以用手機遙控，學生也能用手機掃 QR Code 投票。
 
@@ -11,7 +11,7 @@ MyScreen 是免費的教室投影白板：計時器、抽籤、分組、座位�
 
 | 檔案 | 適合 | 說明 |
 |---|---|---|
-| **`MyScreen-Setup-1.4.0.exe`** | 大部分老師（建議） | 安裝程式。會建立開始功能表與桌面捷徑，之後可直接安裝新版升級 |
+| **`MyScreen-Setup-1.5.0.exe`** | 大部分老師（建議） | 安裝程式。會建立開始功能表與桌面捷徑，之後可直接安裝新版升級 |
 | `MyScreen.exe` | 不想安裝、臨時使用 | 免安裝版，單一檔案，複製到電腦上就能執行 |
 
 兩個檔案的功能完全相同，都已經內含手機遙控與學生投票需要的伺服器，**不需要另外架設伺服器**。
@@ -21,8 +21,8 @@ MyScreen 是免費的教室投影白板：計時器、抽籤、分組、座位�
 **方法一：Releases 頁面（建議）**
 
 1. 開啟 <https://github.com/sepal1111/MyScreen/releases>
-2. 找到最新版本（**1.4.0**），展開下方的 **Assets**
-3. 點 `MyScreen-Setup-1.4.0.exe`（或 `MyScreen.exe`）下載
+2. 找到最新版本（**1.5.0**），展開下方的 **Assets**
+3. 點 `MyScreen-Setup-1.5.0.exe`（或 `MyScreen.exe`）下載
 
 **方法二：從程式碼資料夾下載**
 
@@ -40,7 +40,7 @@ MyScreen 是免費的教室投影白板：計時器、抽籤、分組、座位�
 
 ## 4. 安裝
 
-1. 執行 `MyScreen-Setup-1.4.0.exe`
+1. 執行 `MyScreen-Setup-1.5.0.exe`
 2. 如果出現藍色的「Windows 已保護您的電腦」：按「**其他資訊**」→「**仍要執行**」（程式沒有數位簽章，所以 Windows 會先警告）
 3. 依畫面按「下一步」。建議勾選：
    - 建立桌面捷徑
@@ -68,13 +68,13 @@ MyScreen 是免費的教室投影白板：計時器、抽籤、分組、座位�
 靜默安裝（每位使用者各自安裝，不需要系統管理員）：
 
 ```
-MyScreen-Setup-1.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+MyScreen-Setup-1.5.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 以系統管理員為整台電腦安裝，並加入防火牆例外（建議）：
 
 ```
-MyScreen-Setup-1.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
+MyScreen-Setup-1.5.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
 ```
 
 - 防火牆例外允許的是程式資料夾裡的 `myscreen-relay.exe`（手機遙控與學生投票的伺服器），連接埠從 52480 開始
@@ -82,7 +82,14 @@ MyScreen-Setup-1.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktop
 
 ## 7. 從舊版升級
 
-直接執行新版安裝程式即可，會自動關閉正在執行的 MyScreen。**白板、班級名單、設定都不會受影響**（存在 `V:\MyScreen`）。
+**1.5.0 起可以在程式裡直接更新**：「⚙ 設定 → ℹ 關於與更新」會檢查 GitHub 上有沒有新版本，按「下載並更新」後，MyScreen 會先存檔並關閉，更新完成後自動重新開啟。開啟 MyScreen 時也會自動檢查（一天一次），有新版本時右上角「⚙ 設定」會出現小紅點。
+
+- 安裝版會下載新的安裝程式並自動安裝；資訊組以 `/ALLUSERS` 裝在 Program Files 的電腦，更新時會要求系統管理員權限
+- 免安裝版會直接換掉原本的 `MyScreen.exe`（檔案所在的資料夾要能寫入）
+- 下載的檔案會比對檢查碼，確認完整才會更新
+- 學校電腦要能連到 `raw.githubusercontent.com`；連不上時一樣可以手動下載新版安裝
+
+1.4 以前的版本請手動升級：直接執行新版安裝程式即可，會自動關閉正在執行的 MyScreen。**白板、班級名單、設定都不會受影響**（存在 `V:\MyScreen`）。
 
 升級到 1.4.0 後會注意到的變化：
 
@@ -115,6 +122,11 @@ MyScreen-Setup-1.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktop
 ---
 
 ## 版本紀錄
+
+### 1.5.0
+- **檢查更新**：「⚙ 設定」新增「ℹ 關於與更新」分頁，顯示目前版本，可以檢查 GitHub 上的新版本並看到更新內容
+- **一鍵更新**：按「下載並更新」，自動下載、檢查檔案完整後安裝，完成後重新開啟 MyScreen（安裝版、免安裝版都可以）
+- 開啟 MyScreen 時自動檢查新版本（一天一次，可以關閉），有新版本時「⚙ 設定」按鈕會出現小紅點
 
 ### 1.4.0
 - 工具列文字可選「自動／顯示／隱藏」；自動：視窗小於 1280×800 時只顯示圖示，解析度較低的筆電、投影機不會被工具列佔太多空間

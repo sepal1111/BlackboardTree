@@ -81,3 +81,7 @@ if ($iscc) {
   Write-Host '完成！免安裝版：desktop\out\MyScreen.exe' -ForegroundColor Green
   Write-Host '找不到 Inno Setup 6，所以沒有產生安裝程式。需要安裝程式的話，請安裝 Inno Setup 6（https://jrsoftware.org/isdl.php）後再執行一次。' -ForegroundColor Yellow
 }
+
+# 「⚙ 設定 → 關於與更新」會讀 GitHub 上的 out\latest.json 檢查新版本（commit、push 後老師才看得到新版）
+node make-latest.mjs $version
+if ($LASTEXITCODE -ne 0) { throw '產生 latest.json 失敗' }

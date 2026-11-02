@@ -9,6 +9,7 @@ import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from '.
 import { RemoteHost } from './remote-host.js';
 import { rosterDialog, studentsOf, hasPhotos } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
+import { UPDATE_URL, RELEASES_PAGE, checkForUpdate, downloadVerified, notesSince, shouldAutoCheck, updateScript, encodePowerShell, plainNote } from './update.js';
 import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool } from './ui-prefs.js';
 
 const TOOL_TYPES = widgetList.map((d) => d.type);
@@ -49,6 +50,8 @@ async function boot() {
   let choice = LS.get(CHOICE_KEY, null);
   if (!choice && LS.get('ms:guest', false)) choice = { kind: 'local' }; // 舊版訪客模式
   if (!choice && DESKTOP) choice = { kind: 'neu', path: DESKTOP_ROOT };
+  setTimeout(autoCheckUpdate, 5000); // 背景檢查新版本（一天一次），不影響開啟速度
+  if (DESKTOP) setTimeout(cleanupUpdateLeftovers, 8000);
   if (choice && (await autoConnect(choice))) return;
   showStart();
 }
@@ -586,6 +589,7 @@ const SETTING_TABS = [
   { id: 'roster', label: '👥 班級名單' },
   { id: 'dock', label: '🧰 工具列' },
   { id: 'poll', label: '📊 投票' },
+  { id: 'about', label: 'ℹ 關於與更新' },
 ];
 
 function settingsDialog(tab = 'board') {
@@ -682,7 +686,7 @@ function settingsDialog(tab = 'board') {
       side.append(h('button', { class: 'set-tab' + (t.id === tab ? ' on' : ''), onclick: () => { tab = t.id; render(); } }, t.label));
     }
     main.innerHTML = '';
-    ({ board: renderBoardTab, roster: renderRosterTab, dock: renderDockTab, poll: renderPollTab })[tab]();
+    ({ board: renderBoardTab, roster: renderRosterTab, dock: renderDockTab, poll: renderPollTab, about: () => main.append(updatePanel()) })[tab]();
   }
 
   // 名單在名單管理畫面修改後，這裡的人數跟著更新
@@ -783,6 +787,195 @@ async function toggleFullscreen() {
   }
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen?.().catch(() => toast('瀏覽器不允許全螢幕'));
+}
+
+// ------------------------------------------------------------ 關於與更新
+// 版本資訊：GitHub 上的 desktop/out/latest.json（見 update.js）。測試時可以用 LS 的 ms:updateUrl 指到別的網址
+const appVersion = () => window.NL_APPVERSION || S.config?.version || '';
+const updateUrl = () => LS.get('ms:updateUrl', '') || UPDATE_URL;
+const U = { result: null, error: '', checking: null, busy: false, progress: 0, step: '', kind: '' };
+
+// 安裝版（程式資料夾有解除安裝程式）、免安裝版、網頁版
+async function installKind() {
+  if (!DESKTOP) return 'web';
+  if (U.kind) return U.kind;
+  const dir = String(window.NL_PATH || '.').replace(/[\\/]+$/, '');
+  U.kind = await window.Neutralino.filesystem.getStats(dir + '/unins000.exe').then(() => 'installed', () => 'portable');
+  return U.kind;
+}
+const KIND_LABEL = { installed: '安裝版', portable: '免安裝版', web: '網頁版' };
+
+async function runUpdateCheck() {
+  if (U.checking) return U.checking;
+  U.error = '';
+  U.checking = checkForUpdate({ current: appVersion(), url: updateUrl() })
+    .then((r) => { U.result = r; LS.set('ms:updateChecked', Date.now()); markUpdateBadge(); return r; })
+    .catch((e) => { U.error = e.message; throw e; })
+    .finally(() => { U.checking = null; });
+  return U.checking;
+}
+
+// 設定按鈕上的小紅點：有新版本時提醒
+function markUpdateBadge() {
+  $('#settings-btn')?.classList.toggle('has-update', !!U.result?.newer);
+}
+
+// 開啟程式後在背景檢查（一天一次）；同一個新版本只跳一次通知
+async function autoCheckUpdate() {
+  if (!appVersion() || LS.get('ms:autoUpdate', true) === false) return;
+  if (!shouldAutoCheck(LS.get('ms:updateChecked', 0))) return;
+  const r = await runUpdateCheck().catch(() => null);
+  if (!r?.newer || LS.get('ms:updateNotified', '') === r.latest) return;
+  LS.set('ms:updateNotified', r.latest);
+  toast(h('span', null, `MyScreen 有新版本 ${r.latest}　`,
+    h('button', { class: 'linkbtn', onclick: () => openUpdate() }, '查看更新內容')), 10000);
+}
+
+function openUpdate() {
+  if (S.store && S.board) settingsDialog('about');
+  else modal({ title: 'ℹ 關於與更新', body: updatePanel(), actions: [{ label: '關閉' }] });
+}
+
+// 「關於與更新」的內容：自己重畫，不影響外面的對話框
+function updatePanel() {
+  const box = h('div', { class: 'set-main-inner update-panel' });
+  const sec = (title, ...kids) => h('div', { class: 'set-sec' }, h('h4', null, title), ...kids);
+  let alive = true;
+  const redraw = async () => {
+    if (!alive) return;
+    if (!box.isConnected && box.dataset.drawn) { alive = false; return; } // 對話框已關閉
+    box.dataset.drawn = '1';
+    const kind = await installKind();
+    const r = U.result;
+    box.replaceChildren(
+      sec('目前版本',
+        h('div', { class: 'set-item' }, h('div', { class: 'si-main' },
+          h('b', null, `MyScreen ${appVersion() || '（未知版本）'}`),
+          h('small', null, KIND_LABEL[kind] + (DESKTOP ? `・${String(window.NL_PATH || '').replace(/\//g, '\\')}` : ''))))),
+      sec('檢查更新', ...statusView(r, kind)),
+      sec('自動檢查',
+        h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: LS.get('ms:autoUpdate', true) !== false,
+            onchange: (e) => LS.set('ms:autoUpdate', e.target.checked) }),
+          ' 開啟 MyScreen 時自動檢查新版本（一天一次，有新版本時會通知）')),
+      h('p', { class: 'muted' }, '程式與說明：',
+        h('a', { href: '#', onclick: (e) => { e.preventDefault(); openExternal('https://github.com/sepal1111/MyScreen'); } }, 'github.com/sepal1111/MyScreen')));
+  };
+
+  function statusView(r, kind) {
+    const checkBtn = h('button', { class: 'btn', disabled: !!U.checking || U.busy, onclick: () => {
+      runUpdateCheck().catch(() => {}).finally(redraw);
+      redraw();
+    } }, U.checking ? '檢查中…' : '🔄 檢查更新');
+    if (U.checking) return [h('p', null, '正在檢查 GitHub 上的最新版本…'), checkBtn];
+    if (U.error) return [h('p', { class: 'err' }, U.error), checkBtn];
+    if (!r) return [h('p', { class: 'muted' }, '按「檢查更新」查看 GitHub 上有沒有新版本。'), checkBtn];
+    const when = LS.get('ms:updateChecked', 0);
+    const checked = when ? `（${fmtTime(when)} 檢查）` : '';
+    if (!r.newer) return [h('p', null, `✅ 已經是最新版本 ${r.current}${checked}`), checkBtn];
+
+    const notes = notesSince(r.manifest, r.current);
+    const parts = [
+      h('div', { class: 'update-new' },
+        h('b', null, `🎉 有新版本 ${r.latest}`), r.manifest.date ? h('small', null, `　${r.manifest.date} 發布`) : null,
+        h('div', { class: 'update-notes' }, notes.length
+          ? notes.map((n) => h('div', null,
+            h('div', { class: 'un-ver' }, n.version),
+            h('ul', null, n.notes.map((line) => h('li', { class: /^\s+[-*]/.test(line) ? 'sub' : '' }, plainNote(line))))))
+          : h('p', { class: 'muted' }, '（沒有提供更新內容）'))),
+    ];
+    if (kind === 'web') {
+      parts.push(h('p', { class: 'muted' }, '網頁版：請在伺服器的 MyScreen 資料夾執行 git pull，再重新開啟 start.bat。'));
+    } else if (U.busy) {
+      parts.push(h('div', { class: 'update-progress' },
+        h('div', { class: 'up-bar' }, h('div', { style: `width:${Math.round(U.progress * 100)}%` })),
+        h('small', null, U.step)));
+    } else {
+      const file = kind === 'installed' ? r.manifest.setup : r.manifest.portable;
+      parts.push(file
+        ? h('div', { class: 'row-btns' },
+          h('button', { class: 'btn primary', onclick: () => startUpdate(r, kind, redraw) }, `⬇ 下載並更新到 ${r.latest}`),
+          h('small', { class: 'muted' }, `${(file.size / 1048576).toFixed(1)} MB・MyScreen 會先存檔並關閉，更新完成後自動重新開啟`))
+        : h('p', { class: 'muted' }, '這個版本沒有提供自動更新的檔案，請到 GitHub 下載。'));
+    }
+    parts.push(h('div', { class: 'row-btns' }, checkBtn,
+      h('button', { class: 'linkbtn', onclick: () => openExternal(RELEASES_PAGE) }, '在 GitHub 查看')));
+    return parts;
+  }
+
+  redraw();
+  // 第一次開啟時自動檢查（之前沒檢查過，或上次檢查超過 10 分鐘）
+  const last = LS.get('ms:updateChecked', 0);
+  if (!U.checking && (!U.result || Date.now() - last > 10 * 60 * 1000)) runUpdateCheck().catch(() => {}).finally(redraw);
+  if (U.checking) U.checking.catch(() => {}).finally(redraw);
+  return box;
+}
+
+async function startUpdate(r, kind, redraw) {
+  const fs = window.Neutralino.filesystem;
+  const os = window.Neutralino.os;
+  const ok = await confirmDialog(`要更新到 ${r.latest} 嗎？下載完成後 MyScreen 會先存檔並關閉，更新完成後自動重新開啟（大約半分鐘）。白板與班級名單不受影響。`, '下載並更新');
+  if (!ok) return;
+  U.busy = true; U.progress = 0; U.step = '下載中…';
+  redraw();
+  try {
+    const dir = String(window.NL_PATH || '.').replace(/[\\/]+$/, '');
+    const appExe = (await currentExePath()) || dir.replace(/\//g, '\\') + '\\MyScreen.exe';
+    const info = kind === 'installed' ? r.manifest.setup : r.manifest.portable;
+    let lastDraw = 0;
+    const bytes = await downloadVerified(info, r.url, { onProgress: (p) => {
+      U.progress = p;
+      U.step = `下載中… ${Math.round(p * 100)}%`;
+      if (Date.now() - lastDraw > 200) { lastDraw = Date.now(); redraw(); }
+    } });
+    U.step = '檔案檢查完成，準備更新…';
+    redraw();
+    // 安裝版：安裝程式放到暫存資料夾；免安裝版：新的 exe 先存成 MyScreen.exe.new，關閉後再換掉
+    const target = kind === 'installed'
+      ? String(await os.getPath('temp')).replace(/[\\/]+$/, '') + '\\' + info.file
+      : appExe + '.new';
+    try {
+      await fs.writeBinaryFile(target, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length));
+    } catch {
+      throw new Error(kind === 'portable'
+        ? 'MyScreen.exe 所在的資料夾無法寫入，請到 GitHub 下載新版 MyScreen.exe 替換'
+        : '無法儲存安裝程式到暫存資料夾');
+    }
+    // 裝在 Program Files（資訊組用 /ALLUSERS 安裝）時一般帳號不能寫入，要用系統管理員權限更新
+    let allUsers = false;
+    if (kind === 'installed') {
+      const probe = dir + '/.ms-update-test';
+      allUsers = !(await fs.writeFile(probe, '').then(() => true, () => false));
+      if (!allUsers) await fs.remove(probe).catch(() => {});
+    }
+    const script = updateScript({ kind, pid: window.NL_PID, appExe, file: target.replace(/\//g, '\\'), allUsers });
+    await os.execCommand(`powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${encodePowerShell(script)}`, { background: true });
+    U.step = allUsers ? '正在關閉 MyScreen（接著會要求系統管理員權限）…' : '正在關閉 MyScreen，更新完成後會自動重新開啟…';
+    U.progress = 1;
+    redraw();
+    setTimeout(quitApp, 800);
+  } catch (e) {
+    U.busy = false;
+    redraw();
+    toast('更新失敗：' + e.message, 6000);
+  }
+}
+
+// 目前執行中的 exe 完整路徑（免安裝版可能被改過檔名）
+async function currentExePath() {
+  if (!window.NL_PID) return '';
+  try {
+    const out = await window.Neutralino.os.execCommand(`powershell -NoProfile -Command "(Get-Process -Id ${Number(window.NL_PID)}).Path"`);
+    const p = String(out.stdOut || '').trim();
+    return /\.exe$/i.test(p) ? p : '';
+  } catch { return ''; }
+}
+
+// 免安裝版更新後，清掉沒用到的 MyScreen.exe.new（例如更新中途失敗）
+async function cleanupUpdateLeftovers() {
+  if ((await installKind()) !== 'portable') return;
+  const exe = await currentExePath();
+  if (exe) window.Neutralino.filesystem.remove(exe + '.new').catch(() => {});
 }
 
 // ------------------------------------------------------------ 手機遙控

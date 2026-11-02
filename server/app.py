@@ -43,6 +43,14 @@ def load_config() -> dict:
 
 CONFIG = load_config()
 
+
+def app_version() -> str:
+    """版本號以桌面版的 neutralino.config.json 為準（網頁版「關於與更新」顯示、檢查新版本用）。"""
+    try:
+        return str(json.loads((ROOT / "desktop" / "neutralino.config.json").read_text(encoding="utf-8")).get("version", ""))
+    except (OSError, ValueError):
+        return ""
+
 app = FastAPI(title="MyScreen", docs_url=None, redoc_url=None)
 app.include_router(relay_router)
 
@@ -71,7 +79,7 @@ def lan_ips() -> list[str]:
 def get_config():
     # 只聽 127.0.0.1 時手機連不進來，就不提供校內 IP
     local_only = str(CONFIG["host"]).startswith("127.") or CONFIG["host"] == "localhost"
-    return {"lanIps": [] if local_only else lan_ips()}
+    return {"lanIps": [] if local_only else lan_ips(), "version": app_version()}
 
 
 # ---------------------------------------------------------------- static
