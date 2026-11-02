@@ -1,4 +1,4 @@
-// 與 MyScreen 伺服器（網頁版）溝通的薄包裝；目前只用來讀取 /api/config
+// 與黑板樹伺服器（網頁版）溝通的薄包裝；目前只用來讀取 /api/config
 export class ApiError extends Error {
   constructor(message, status, data) { super(message); this.status = status; this.data = data; }
 }

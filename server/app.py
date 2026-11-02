@@ -1,4 +1,4 @@
-"""MyScreen 教室白板 — 網頁版伺服器。
+"""黑板樹 Blackboard Tree — 網頁版伺服器。
 
 負責：提供前端網頁、手機遙控與學生投票的轉送（relay.py），以及告訴網頁這台電腦的校內 IP。
 白板不存在伺服器上：老師在網頁上選擇儲存位置（網路磁碟機或資料夾），由瀏覽器直接讀寫。
@@ -51,7 +51,7 @@ def app_version() -> str:
     except (OSError, ValueError):
         return ""
 
-app = FastAPI(title="MyScreen", docs_url=None, redoc_url=None)
+app = FastAPI(title="黑板樹", docs_url=None, redoc_url=None)
 app.include_router(relay_router)
 
 
@@ -101,7 +101,7 @@ def main():
     if CONFIG.get("ssl_certfile") and CONFIG.get("ssl_keyfile"):
         kw = {"ssl_certfile": CONFIG["ssl_certfile"], "ssl_keyfile": CONFIG["ssl_keyfile"]}
     scheme = "https" if kw else "http"
-    print(f"[MyScreen] 網址：{scheme}://localhost:{CONFIG['port']}")
+    print(f"[黑板樹] 網址：{scheme}://localhost:{CONFIG['port']}")
     uvicorn.run(app, host=CONFIG["host"], port=int(CONFIG["port"]), **kw)
 
 

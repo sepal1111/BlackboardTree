@@ -1,4 +1,4 @@
-// 把 MyScreen 圖示與版本資訊寫進 Neutralino 執行檔
+// 把黑板樹圖示與版本資訊寫進 Neutralino 執行檔
 // 用法：node patch-exe.mjs <來源 exe> <輸出 exe>
 import fs from 'node:fs';
 import * as ResEdit from 'resedit';
@@ -23,11 +23,11 @@ const vi = ResEdit.Resource.VersionInfo.fromEntries(res.entries)[0] || ResEdit.R
 vi.setFileVersion(ma, mi, pa, 0, 1033);
 vi.setProductVersion(ma, mi, pa, 0, 1033);
 vi.setStringValues({ lang: 1033, codepage: 1200 }, {
-  FileDescription: 'MyScreen 教室白板',
-  ProductName: 'MyScreen 教室白板',
-  CompanyName: 'MyScreen',
-  OriginalFilename: 'MyScreen.exe',
-  InternalName: 'MyScreen',
+  FileDescription: '黑板樹 Blackboard Tree',
+  ProductName: '黑板樹 Blackboard Tree',
+  CompanyName: '黑板樹',
+  OriginalFilename: 'BlackboardTree.exe',
+  InternalName: 'BlackboardTree',
   FileVersion: version,
   ProductVersion: version,
   LegalCopyright: '',

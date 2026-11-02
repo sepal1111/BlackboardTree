@@ -1,4 +1,4 @@
-// MyScreen 手機遙控頁：掃描電視上的 QR Code 後開啟
+// 黑板樹手機遙控頁：掃描電視上的 QR Code 後開啟
 import { h } from './ui.js';
 import { fmtDuration, pad } from './widgets/util.js';
 
@@ -10,7 +10,7 @@ let offset = 0;          // 教室電腦時鐘 − 手機時鐘
 let online = false;
 let stopped = false;
 let retry = 0;
-let wasOnline = false; // 曾經連上過：教室電腦重開 MyScreen 時會自動重新連線
+let wasOnline = false; // 曾經連上過：教室電腦重開黑板樹時會自動重新連線
 let errRetry = 0;
 const cards = new Map(); // widgetId -> { el, key }
 
@@ -49,7 +49,7 @@ function connect(c) {
     let m;
     try { m = JSON.parse(e.data); } catch { return; }
     if (m.type === 'error') {
-      // 教室電腦重新開啟 MyScreen 時，代碼要等幾秒才會恢復，先不要放棄
+      // 教室電腦重新開啟黑板樹時，代碼要等幾秒才會恢復，先不要放棄
       if (wasOnline && errRetry < 8) { errRetry++; setConn('等待教室電腦…', 'bad'); return; }
       stopped = true; showJoin(m.message);
     }

@@ -111,7 +111,7 @@ export async function downloadVerified(info, manifestUrl, { fetchFn = globalThis
 // 自動檢查：一天最多一次
 export const shouldAutoCheck = (lastCheck, now = Date.now()) => !(lastCheck > 0) || now - lastCheck >= DAY || now < lastCheck;
 
-// 等目前的 MyScreen 結束後再更新的 PowerShell 指令（用 -EncodedCommand，路徑有中文、空白也不會出錯）
+// 等目前的黑板樹結束後再更新的 PowerShell 指令（用 -EncodedCommand，路徑有中文、空白也不會出錯）
 const psq = (s) => "'" + String(s).replace(/'/g, "''") + "'";
 
 export function updateScript({ kind, pid, appExe, file, allUsers = false }) {
@@ -123,15 +123,18 @@ export function updateScript({ kind, pid, appExe, file, allUsers = false }) {
   if (kind === 'installed') {
     const args = ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOCANCEL', '/CLOSEAPPLICATIONS'];
     if (allUsers) args.push('/ALLUSERS');
-    lines.push(`$p = Start-Process -FilePath ${psq(file)} -ArgumentList ${psq(args.join(' '))} -Wait -PassThru`,
+    // 安裝完成後由安裝程式重新開啟（setup.iss 的 IsInAppUpdate），1.6.0 起程式檔名可能和原本不同，所以這裡不開
+    // 不用 Start-Process -Wait：它會連安裝程式開啟的黑板樹也一起等，要等到老師關閉程式才結束
+    lines.push(`$p = Start-Process -FilePath ${psq(file)} -ArgumentList ${psq(args.join(' '))} -PassThru`,
+      '$p.WaitForExit()',
       `Remove-Item -LiteralPath ${psq(file)} -Force`);
-  } else {
-    // 免安裝版：把下載好的 .new 換成正式檔名；檔案被鎖住時多試幾次
-    lines.push('for ($i = 0; $i -lt 20; $i++) {',
-      `  try { Move-Item -LiteralPath ${psq(file)} -Destination ${psq(appExe)} -Force -ErrorAction Stop; break } catch { Start-Sleep -Milliseconds 500 }`,
-      '}');
+    return lines.join('\n');
   }
-  lines.push(`Start-Process -FilePath ${psq(appExe)} -WorkingDirectory ${psq(appExe.replace(/[\\/][^\\/]*$/, ''))}`);
+  // 免安裝版：把下載好的 .new 換成正式檔名；檔案被鎖住時多試幾次
+  lines.push('for ($i = 0; $i -lt 20; $i++) {',
+    `  try { Move-Item -LiteralPath ${psq(file)} -Destination ${psq(appExe)} -Force -ErrorAction Stop; break } catch { Start-Sleep -Milliseconds 500 }`,
+    '}',
+    `Start-Process -FilePath ${psq(appExe)} -WorkingDirectory ${psq(appExe.replace(/[\\/][^\\/]*$/, ''))}`);
   return lines.join('\n');
 }
 

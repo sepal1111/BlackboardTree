@@ -1,10 +1,10 @@
-// MyScreen 內建遙控伺服器：老師電腦開啟 MyScreen 時一起啟動，手機直接連到這台電腦
+// 黑板樹內建遙控伺服器：老師電腦開啟黑板樹時一起啟動，手機直接連到這台電腦
 // 協定與 server/relay.py 相同：教室電腦連 /ws/screen，手機連 /ws/remote?code=xxxxxx，伺服器只轉送訊息
 // 學生投票：教室電腦送 vote-open 取得另一組投票代碼，學生連 /ws/vote?code=xxxxxx，只能送出投票
 // 也提供手機遙控網頁與學生投票網頁（remote.html、vote.html 等檔案編譯時嵌入）
 // 用 Windows 內建的 .NET Framework 編譯（desktop\build.ps1），不需要另外安裝任何東西
 //
-// 參數：--port 52480（被占用時自動往後找）  --parent <MyScreen 的 PID，主程式結束時自動關閉>
+// 參數：--port 52480（被占用時自動往後找）  --parent <黑板樹的 PID，主程式結束時自動關閉>
 // 啟動後在標準輸出印出：LISTEN <port> <ip1,ip2,...>；之後網路變動時印出：IPS <ip1,ip2,...>
 using System;
 using System.Collections.Generic;
@@ -19,11 +19,11 @@ using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
 
-[assembly: AssemblyTitle("MyScreen 手機遙控伺服器")]
-[assembly: AssemblyProduct("MyScreen 教室白板")]
+[assembly: AssemblyTitle("黑板樹手機遙控伺服器")]
+[assembly: AssemblyProduct("黑板樹 Blackboard Tree")]
 [assembly: AssemblyVersion("1.0.0.0")]
 
-namespace MyScreen
+namespace BlackboardTree
 {
     class WsConn
     {
@@ -166,7 +166,7 @@ namespace MyScreen
             Console.WriteLine("LISTEN " + port + " " + ips);
             Console.Out.Flush();
 
-            // 網路變動（換 Wi-Fi、插拔網路線）時重新偵測 IP，印出 IPS <ip1,ip2,...> 讓 MyScreen 更新 QR Code
+            // 網路變動（換 Wi-Fi、插拔網路線）時重新偵測 IP，印出 IPS <ip1,ip2,...> 讓黑板樹更新 QR Code
             new Thread(() =>
             {
                 while (true)
@@ -180,7 +180,7 @@ namespace MyScreen
                 }
             }) { IsBackground = true }.Start();
 
-            // MyScreen 結束時一起結束
+            // 黑板樹結束時一起結束
             if (parent > 0)
             {
                 new Thread(() =>

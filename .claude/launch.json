@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "myscreen", "runtimeExecutable": ".venv/Scripts/python.exe", "runtimeArgs": ["server/app.py"], "port": 8080 }
+    { "name": "blackboard-tree", "runtimeExecutable": ".venv/Scripts/python.exe", "runtimeArgs": ["server/app.py"], "port": 8080 }
   ]
 }

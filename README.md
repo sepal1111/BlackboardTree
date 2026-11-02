@@ -1,6 +1,6 @@
-# MyScreen 教室白板
+# 黑板樹 Blackboard Tree
 
-免費的教室投影白板。白板存在老師自己的**網路磁碟機（V:）**，換電腦、換教室都能接著用。
+免費的教室投影白板（1.6.0 以前叫 **MyScreen**）。白板存在老師自己的**網路磁碟機（V:）**，換電腦、換教室都能接著用。
 
 > **下載與安裝**：請看 [RELEASE.md](RELEASE.md)（要下載哪個檔案、安裝步驟、升級注意事項、版本紀錄）
 
@@ -62,7 +62,7 @@
 ## 使用流程
 
 1. 先用學校的「網路磁碟機」程式登入，把個人資料夾連到 **V:**
-2. 開啟 MyScreen → 自動讀取 `V:\MyScreen`（第一次使用時會自動建立）
+2. 開啟黑板樹 → 自動讀取 `V:\MyScreen`（第一次使用時會自動建立）
 3. 從清單選擇白板，或新增一個
 
 第一次開啟時，可以選擇白板要存在哪裡，之後會記住並自動讀取：
@@ -96,31 +96,31 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 
 #### 安裝
 
-執行 `MyScreen-Setup-1.5.0.exe`，依畫面按「下一步」即可：
+執行 `BlackboardTree-Setup-1.6.0.exe`，依畫面按「下一步」即可：
 
-- 安裝到 `%LOCALAPPDATA%\Programs\MyScreen`，**不需要系統管理員權限**（和網路磁碟機程式相同）
+- 安裝到 `%LOCALAPPDATA%\Programs\BlackboardTree`（從 1.5 以前升級的電腦沿用原本的 `%LOCALAPPDATA%\Programs\MyScreen`），**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
-- 安裝新版時會自動關閉正在執行的 MyScreen；解除安裝不會刪除 `V:\MyScreen` 裡的白板
+- 安裝新版時會自動關閉正在執行的黑板樹；解除安裝不會刪除 `V:\MyScreen` 裡的白板
 - 這台電腦上的設定與離線備份（遙控代碼、V: 斷線時的白板備份等）存在 `%APPDATA%\MyScreen\prefs.json`
 
 #### 更新到新版
 
-1.5.0 起，「⚙ 設定 → ℹ 關於與更新」會檢查 GitHub 上有沒有新版本（開啟 MyScreen 時也會自動檢查，一天一次；有新版本時「⚙ 設定」按鈕會出現小紅點）：
+1.5.0 起，「⚙ 設定 → ℹ 關於與更新」會檢查 GitHub 上有沒有新版本（開啟黑板樹時也會自動檢查，一天一次；有新版本時「⚙ 設定」按鈕會出現小紅點）：
 
-- 按「下載並更新」：下載後比對檢查碼，MyScreen 存檔並關閉，更新完成後自動重新開啟
+- 按「下載並更新」：下載後比對檢查碼，黑板樹存檔並關閉，更新完成後自動重新開啟
 - 安裝版：下載新的安裝程式靜默安裝；裝在 Program Files（`/ALLUSERS`）時會要求系統管理員權限
-- 免安裝版：直接換掉原本的 `MyScreen.exe`（所在資料夾要能寫入）
+- 免安裝版：直接換掉原本的 `BlackboardTree.exe`（所在資料夾要能寫入）
 - 需要連到 `raw.githubusercontent.com`；版本資訊來自 `desktop/out/latest.json`（建置時產生）
 
 資訊組大量部署時可以用靜默安裝：
 
 ```
-MyScreen-Setup-1.5.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+BlackboardTree-Setup-1.6.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 手機遙控與學生投票由老師的電腦擔任伺服器，安裝時不需要設定。
 
-要為電腦上所有使用者安裝（裝到 Program Files），請以系統管理員執行並加上 `/ALLUSERS`。不想安裝的話，也可以直接使用免安裝版 `MyScreen.exe`。
+要為電腦上所有使用者安裝（裝到 Program Files），請以系統管理員執行並加上 `/ALLUSERS`。不想安裝的話，也可以直接使用免安裝版 `BlackboardTree.exe`。
 
 #### 建置
 
@@ -135,8 +135,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 | 檔案 | 說明 |
 |---|---|
-| `MyScreen-Setup-<版本>.exe` | 安裝程式（找不到 Inno Setup 時不會產生） |
-| `MyScreen.exe` | 免安裝版，單一檔案（已內含手機遙控伺服器），複製到電腦即可執行 |
+| `BlackboardTree-Setup-<版本>.exe` | 安裝程式（找不到 Inno Setup 時不會產生） |
+| `BlackboardTree.exe` | 免安裝版，單一檔案（已內含手機遙控伺服器），複製到電腦即可執行 |
 
 版本號碼在 `desktop/neutralino.config.json` 的 `version`；安裝程式設定在 `desktop/installer/setup.iss`。
 
@@ -146,7 +146,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 有兩種放法：
 
-- **用 MyScreen 伺服器開啟（可以手機遙控、學生投票）**：在一台電腦上執行 `start.bat`（Linux 執行 `sh start.sh`，第一次會自動安裝相依套件，需要 Python 3.10 以上），再開啟 `http://localhost:8080`。伺服器只提供網頁與手機遙控的轉送，**白板不會存在伺服器上**
+- **用黑板樹伺服器開啟（可以手機遙控、學生投票）**：在一台電腦上執行 `start.bat`（Linux 執行 `sh start.sh`，第一次會自動安裝相依套件，需要 Python 3.10 以上），再開啟 `http://localhost:8080`。伺服器只提供網頁與手機遙控的轉送，**白板不會存在伺服器上**
 - **只放網頁**：把 `static/` 資料夾放到任何網頁伺服器上即可，但沒有手機遙控與學生投票
 
 > 瀏覽器只允許 `https://` 或 `localhost` 網址存取資料夾。若用 `http://192.168.x.x` 開啟，將無法使用資料夾模式（麥克風、鏡頭也無法使用），需要開啟 HTTPS。
@@ -186,7 +186,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ## 📱 手機／平板遙控
 
-老師在教室電腦（接大電視）開啟 MyScreen 後，可以用手機或平板遙控：
+老師在教室電腦（接大電視）開啟黑板樹後，可以用手機或平板遙控：
 
 1. 按上方的「📱 遙控」，電視上會顯示 QR Code 和 6 位數代碼
 2. 手機掃描 QR Code（或開啟網址後輸入代碼），不需要安裝 App
@@ -208,16 +208,16 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 桌面版內建遙控伺服器（`myscreen-relay.exe`，約 64 KB），安裝版與免安裝版都已經包含：
 
 - **安裝版**：安裝在程式資料夾（防火牆例外也是指定這個位置）
-- **免安裝版**：內嵌在 `MyScreen.exe` 裡，仍然是單一檔案；第一次執行時自動解出到旁邊，換新版時自動更新
+- **免安裝版**：內嵌在 `BlackboardTree.exe` 裡，仍然是單一檔案；第一次執行時自動解出到旁邊，換新版時自動更新
 
-**開啟 MyScreen 時伺服器就一起啟動**，按「📱 遙控」會直接顯示 QR Code，並自動帶入這台電腦的校內 IP（例如 `http://192.168.0.99:52480`），手機連上校內網路掃描即可，**不需要另外架設伺服器**。
+**開啟黑板樹時伺服器就一起啟動**，按「📱 遙控」會直接顯示 QR Code，並自動帶入這台電腦的校內 IP（例如 `http://192.168.0.99:52480`），手機連上校內網路掃描即可，**不需要另外架設伺服器**。
 
-- **右下角系統匣**有 MyScreen 圖示（Windows 11 可能收在「^」裡，可拖到工作列上常駐顯示），按一下可以看到：
+- **右下角系統匣**有黑板樹圖示（Windows 11 可能收在「^」裡，可拖到工作列上常駐顯示），按一下可以看到：
   - 遙控伺服器狀態與網址（例如「執行中（192.168.0.99:52480）」）、目前有幾台手機連線
-  - 「手機遙控（顯示 QR Code）」：把 MyScreen 叫到前面並顯示 QR Code
-  - 「結束 MyScreen」：存檔後關閉程式與遙控伺服器
-- 關閉 MyScreen 時伺服器會一起關閉；MyScreen 異常結束時，伺服器也會在幾秒內自動結束
-- 重新開啟 MyScreen 時會沿用原本的代碼，已經連過的手機會自動重新連上，不用重新掃描
+  - 「手機遙控（顯示 QR Code）」：把黑板樹叫到前面並顯示 QR Code
+  - 「結束黑板樹」：存檔後關閉程式與遙控伺服器
+- 關閉黑板樹時伺服器會一起關閉；黑板樹異常結束時，伺服器也會在幾秒內自動結束
+- 重新開啟黑板樹時會沿用原本的代碼，已經連過的手機會自動重新連上，不用重新掃描
 - 電腦有多個網路位址（例如同時接有線、無線）時，遙控畫面可以切換 QR Code 使用的位址
 - 網路變動（換 Wi-Fi、插拔網路線）後會在幾秒內重新偵測 IP，QR Code 自動改用新的網址
 - 連接埠預設 52480，被占用時自動改用下一個
@@ -226,7 +226,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 **Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
 
 - 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
-- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.5.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 大量部署建議以系統管理員執行：`BlackboardTree-Setup-1.6.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
 - 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
 
 > **網路注意事項**：手機必須能連到教室電腦（同一個校內網路）。若學校的無線網路（手機）和教學網路（教室電腦）是分開的網段，請資訊組開放手機網段連到教室電腦的 52480 埠（網頁版是 8080 埠）。

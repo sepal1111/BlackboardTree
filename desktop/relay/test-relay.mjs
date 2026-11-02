@@ -23,7 +23,7 @@ proc2.kill();
 
 // 手機遙控網頁
 const page = await fetch(`http://127.0.0.1:${port}/remote.html`);
-check('提供 remote.html', page.ok && (await page.text()).includes('MyScreen'));
+check('提供 remote.html', page.ok && (await page.text()).includes('黑板樹'));
 const js = await fetch(`http://127.0.0.1:${port}/js/widgets/util.js`);
 check('提供手機頁的 JS', js.ok);
 check('不存在的檔案回 404', (await fetch(`http://127.0.0.1:${port}/../server/app.py`)).status === 404);
@@ -157,7 +157,7 @@ const ninth = many[8].msgs.find((m) => m.type === 'error');
 check('超過 8 台裝置被拒絕', ninth && ninth.message.includes('太多'));
 proc.kill();
 
-// 父程序結束後伺服器要自動關閉（MyScreen 當掉時）
+// 父程序結束後伺服器要自動關閉（黑板樹當掉時）
 const parent = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 1000)']);
 const orphan = spawn(exe, ['--port', String(port + 5), '--parent', String(parent.pid)]);
 await firstLine(orphan);

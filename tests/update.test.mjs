@@ -14,8 +14,8 @@ const manifest = (over = {}) => ({
     { version: '1.4.0', date: '2026-11-01', notes: ['- 工具列文字'] },
     { version: '1.3.0', notes: ['- 投票題庫'] },
   ],
-  setup: { file: 'MyScreen-Setup-1.5.0.exe', size: 10, sha256: SHA },
-  portable: { file: 'MyScreen.exe', size: 20, sha256: SHA },
+  setup: { file: 'BlackboardTree-Setup-1.6.0.exe', size: 10, sha256: SHA },
+  portable: { file: 'BlackboardTree.exe', size: 20, sha256: SHA },
   ...over,
 });
 const jsonRes = (obj, status = 200) => ({ ok: status < 400, status, json: async () => obj });
@@ -39,7 +39,7 @@ describe('latest.json 格式檢查', () => {
   test('正確的內容', () => {
     const m = normalizeManifest(manifest());
     assert.equal(m.version, '1.5.0');
-    assert.equal(m.setup.file, 'MyScreen-Setup-1.5.0.exe');
+    assert.equal(m.setup.file, 'BlackboardTree-Setup-1.6.0.exe');
     assert.equal(m.history.length, 3);
   });
   test('更新內容保留子項目的縮排，去掉空白行', () => {
@@ -53,7 +53,7 @@ describe('latest.json 格式檢查', () => {
   test('檔名含路徑、檢查碼或大小錯誤的下載檔不採用', () => {
     const m = normalizeManifest(manifest({
       setup: { file: '../evil.exe', size: 10, sha256: SHA },
-      portable: { file: 'MyScreen.exe', size: 0, sha256: SHA },
+      portable: { file: 'BlackboardTree.exe', size: 0, sha256: SHA },
     }));
     assert.equal(m.setup, null);
     assert.equal(m.portable, null);
@@ -88,28 +88,28 @@ describe('檢查更新', () => {
 });
 
 describe('下載並驗證', () => {
-  const data = new TextEncoder().encode('MyScreen new version');
+  const data = new TextEncoder().encode('Blackboard Tree new version');
   const streamRes = (bytes) => ({
     ok: true, status: 200,
     body: { getReader() { let sent = false; return { read: async () => (sent ? { done: true } : (sent = true, { done: false, value: bytes })) }; } },
   });
   test('大小與 SHA-256 相符時回傳檔案內容，網址和 latest.json 同資料夾', async () => {
-    const info = { file: 'MyScreen.exe', size: data.length, sha256: await sha256Hex(data) };
+    const info = { file: 'BlackboardTree.exe', size: data.length, sha256: await sha256Hex(data) };
     let asked = '';
     const progress = [];
     const out = await downloadVerified(info, 'https://raw.example/u/r/main/desktop/out/latest.json', {
       fetchFn: async (u) => { asked = u; return streamRes(data); }, onProgress: (p) => progress.push(p),
     });
     assert.deepEqual([...out], [...data]);
-    assert.match(asked, /^https:\/\/raw\.example\/u\/r\/main\/desktop\/out\/MyScreen\.exe\?v=/);
+    assert.match(asked, /^https:\/\/raw\.example\/u\/r\/main\/desktop\/out\/BlackboardTree\.exe\?v=/);
     assert.equal(progress.at(-1), 1);
   });
   test('檢查碼不符時拒絕（檔案損壞或 GitHub 還沒更新完）', async () => {
-    const info = { file: 'MyScreen.exe', size: data.length, sha256: SHA };
+    const info = { file: 'BlackboardTree.exe', size: data.length, sha256: SHA };
     await assert.rejects(downloadVerified(info, 'https://x/latest.json', { fetchFn: async () => streamRes(data) }), /檢查碼不符/);
   });
   test('大小不符時拒絕', async () => {
-    const info = { file: 'MyScreen.exe', size: data.length + 5, sha256: await sha256Hex(data) };
+    const info = { file: 'BlackboardTree.exe', size: data.length + 5, sha256: await sha256Hex(data) };
     await assert.rejects(downloadVerified(info, 'https://x/latest.json', { fetchFn: async () => streamRes(data) }), /不完整/);
   });
 });
@@ -123,20 +123,22 @@ test('自動檢查一天最多一次', () => {
 });
 
 describe('更新用的 PowerShell 指令', () => {
-  test('安裝版：等程式結束、靜默安裝、再開啟；路徑中的單引號要跳脫', () => {
-    const s = updateScript({ kind: 'installed', pid: 123, appExe: "C:\\Users\\王's\\MyScreen\\MyScreen.exe", file: 'C:\\Temp\\MyScreen-Setup-1.5.0.exe' });
+  test('安裝版：等程式結束後靜默安裝；重新開啟交給安裝程式，路徑中的單引號要跳脫', () => {
+    const s = updateScript({ kind: 'installed', pid: 123, appExe: 'C:\\a\\MyScreen.exe', file: "C:\\Users\\王's\\Temp\\BlackboardTree-Setup-1.6.0.exe" });
     assert.match(s, /Wait-Process -Id 123/);
     assert.match(s, /\/SILENT/);
-    assert.doesNotMatch(s, /ALLUSERS/);
-    assert.match(s, /'C:\\Users\\王''s\\MyScreen\\MyScreen\.exe'/);
-    assert.ok(s.indexOf('-Wait') < s.lastIndexOf('Start-Process'), '安裝完才重新開啟');
+    assert.doesNotMatch(s, /VERYSILENT|ALLUSERS/);
+    assert.match(s, /'C:\\Users\\王''s\\Temp\\BlackboardTree-Setup-1\.6\.0\.exe'/);
+    assert.equal(s.match(/Start-Process/g).length, 1, '只啟動安裝程式，不另外開啟舊檔名的程式');
+    assert.doesNotMatch(s, /-Wait\b/, '-Wait 會連安裝程式開啟的黑板樹一起等');
+    assert.ok(s.indexOf('WaitForExit') < s.indexOf('Remove-Item'), '安裝完才刪除安裝程式');
   });
   test('裝在 Program Files 時加 /ALLUSERS', () => {
     assert.match(updateScript({ kind: 'installed', pid: 1, appExe: 'C:\\a.exe', file: 'C:\\s.exe', allUsers: true }), /\/ALLUSERS/);
   });
   test('免安裝版：把 .new 換成原本的檔名', () => {
-    const s = updateScript({ kind: 'portable', pid: 1, appExe: 'D:\\工具\\MyScreen.exe', file: 'D:\\工具\\MyScreen.exe.new' });
-    assert.match(s, /Move-Item -LiteralPath 'D:\\工具\\MyScreen\.exe\.new' -Destination 'D:\\工具\\MyScreen\.exe'/);
+    const s = updateScript({ kind: 'portable', pid: 1, appExe: 'D:\\工具\\BlackboardTree.exe', file: 'D:\\工具\\BlackboardTree.exe.new' });
+    assert.match(s, /Move-Item -LiteralPath 'D:\\工具\\BlackboardTree\.exe\.new' -Destination 'D:\\工具\\BlackboardTree\.exe'/);
     assert.match(s, /-WorkingDirectory 'D:\\工具'/);
   });
   test('EncodedCommand 是 UTF-16LE Base64（中文也正確）', () => {

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#4263eb">
-  <title>MyScreen 投票</title>
+  <title>黑板樹投票</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='16' width='7' height='13' rx='2' fill='%234c6ef5'/%3E%3Crect x='12.5' y='6' width='7' height='23' rx='2' fill='%23f76707'/%3E%3Crect x='22' y='11' width='7' height='18' rx='2' fill='%2337b24d'/%3E%3C/svg%3E">
   <!-- 學生投票頁：獨立一個檔案（內建伺服器只需要嵌入這一個檔） -->
   <style>
@@ -49,7 +49,7 @@
 <body>
   <!-- 1. 輸入投票代碼（沒有從 QR Code 進來時） -->
   <form id="step-code" class="card hidden">
-    <div class="logo">📊 MyScreen 投票</div>
+    <div class="logo">📊 黑板樹投票</div>
     <p class="muted">請輸入電視上顯示的投票網址最後 6 位數字</p>
     <input id="code" inputmode="numeric" maxlength="7" placeholder="000000" autocomplete="off">
     <p id="code-err" class="err"></p>
@@ -58,7 +58,7 @@
 
   <!-- 2. 輸入名字 -->
   <form id="step-name" class="card hidden">
-    <div class="logo">📊 MyScreen 投票</div>
+    <div class="logo">📊 黑板樹投票</div>
     <p class="muted">請輸入你的名字（或座號）</p>
     <input id="name" maxlength="20" placeholder="例如：王小明" autocomplete="name" enterkeyhint="go">
     <p id="name-err" class="err"></p>

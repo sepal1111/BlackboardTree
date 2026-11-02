@@ -363,7 +363,7 @@ export const poll = {
           h('div', { class: 'poll-scan' }, '掃描 QR Code 投票'),
           h('div', { class: 'poll-url' }, info.url.replace(/^https?:\/\//, '')),
           /\/\/(localhost|127\.|\[::1\])/.test(info.url)
-            ? h('div', { class: 'poll-warn' }, '⚠ 這個網址只有這台電腦能開啟，學生的手機連不到。請用校內 IP 開啟 MyScreen，或改用桌面版') : null,
+            ? h('div', { class: 'poll-warn' }, '⚠ 這個網址只有這台電腦能開啟，學生的手機連不到。請用校內 IP 開啟黑板樹，或改用桌面版') : null,
           h('div', { class: 'poll-count' }));
       }
       live.querySelector('.poll-count').textContent = `已投票 ${ballots()} 人．連線 ${info.voters} 人`;

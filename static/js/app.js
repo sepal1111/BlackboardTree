@@ -1,4 +1,4 @@
-// MyScreen 主程式：選擇儲存位置、白板清單、拖曳縮放、工具列、背景
+// 黑板樹主程式：選擇儲存位置、白板清單、拖曳縮放、工具列、背景
 import { api } from './api.js';
 import { Store, LS, uid, initLocalPrefs, flushLocalPrefs } from './store.js';
 import { FolderBackend, LocalBackend, DATA_DIR } from './backends/index.js';
@@ -45,7 +45,7 @@ async function boot() {
     initTray();
   }
   S.config = DESKTOP ? null : await api.get('/api/config').catch(() => null);
-  // 桌面版：開啟 MyScreen 時一起啟動內建遙控伺服器，關閉時一起關閉
+  // 桌面版：開啟黑板樹時一起啟動內建遙控伺服器，關閉時一起關閉
   if (DESKTOP) startLocalRelay().catch((e) => console.warn(e));
   let choice = LS.get(CHOICE_KEY, null);
   if (!choice && LS.get('ms:guest', false)) choice = { kind: 'local' }; // 舊版訪客模式
@@ -187,8 +187,8 @@ function showStart(message) {
     options.push(h('div', { class: 'opt' },
       h('div', { class: 'opt-title' }, '📁 網路磁碟機或資料夾'),
       h('div', { class: 'opt-status' }, window.isSecureContext
-        ? '這個瀏覽器不支援資料夾存取，請改用 Edge 或 Chrome，或安裝 MyScreen 桌面版。'
-        : '網址必須是 https:// 或 localhost 才能存取資料夾；也可以改用 MyScreen 桌面版。')));
+        ? '這個瀏覽器不支援資料夾存取，請改用 Edge 或 Chrome，或安裝黑板樹桌面版。'
+        : '網址必須是 https:// 或 localhost 才能存取資料夾；也可以改用黑板樹桌面版。')));
   }
 
   options.push(h('div', { class: 'opt' },
@@ -198,7 +198,7 @@ function showStart(message) {
       h('button', { class: 'btn', onclick: () => connect(new LocalBackend(), { kind: 'local' }) }, '使用'))));
 
   screen(h('div', { class: 'login-card wide' },
-    h('div', { class: 'logo' }, h('span', null, '▣'), ' MyScreen'),
+    h('div', { class: 'logo' }, h('span', null, '🌳'), ' 黑板樹'),
     h('p', { class: 'muted' }, '請選擇白板要儲存在哪裡。選過一次後，下次開啟會自動讀取。'),
     options, err));
 }
@@ -416,7 +416,7 @@ function voteApi(w) {
     async open(poll) {
       if (relayBase() === LOCAL && !S.remote) toast('正在啟動伺服器…', 1500);
       const r = await ensureRemote();
-      if (!r) throw new Error('網頁版要用 MyScreen 伺服器（start.bat）開啟，才能讓學生投票');
+      if (!r) throw new Error('網頁版要用黑板樹伺服器（start.bat）開啟，才能讓學生投票');
       if (r.poll && r.poll.id !== w.id) toast('已結束另一個投票，改為開放這一題');
       r.openPoll({ id: w.id, ...poll });
     },
@@ -827,7 +827,7 @@ async function autoCheckUpdate() {
   const r = await runUpdateCheck().catch(() => null);
   if (!r?.newer || LS.get('ms:updateNotified', '') === r.latest) return;
   LS.set('ms:updateNotified', r.latest);
-  toast(h('span', null, `MyScreen 有新版本 ${r.latest}　`,
+  toast(h('span', null, `黑板樹有新版本 ${r.latest}　`,
     h('button', { class: 'linkbtn', onclick: () => openUpdate() }, '查看更新內容')), 10000);
 }
 
@@ -850,14 +850,14 @@ function updatePanel() {
     box.replaceChildren(
       sec('目前版本',
         h('div', { class: 'set-item' }, h('div', { class: 'si-main' },
-          h('b', null, `MyScreen ${appVersion() || '（未知版本）'}`),
+          h('b', null, `黑板樹 ${appVersion() || '（未知版本）'}`),
           h('small', null, KIND_LABEL[kind] + (DESKTOP ? `・${String(window.NL_PATH || '').replace(/\//g, '\\')}` : ''))))),
       sec('檢查更新', ...statusView(r, kind)),
       sec('自動檢查',
         h('label', { class: 'check' },
           h('input', { type: 'checkbox', checked: LS.get('ms:autoUpdate', true) !== false,
             onchange: (e) => LS.set('ms:autoUpdate', e.target.checked) }),
-          ' 開啟 MyScreen 時自動檢查新版本（一天一次，有新版本時會通知）')),
+          ' 開啟黑板樹時自動檢查新版本（一天一次，有新版本時會通知）')),
       h('p', { class: 'muted' }, '程式與說明：',
         h('a', { href: '#', onclick: (e) => { e.preventDefault(); openExternal('https://github.com/sepal1111/MyScreen'); } }, 'github.com/sepal1111/MyScreen')));
   };
@@ -885,7 +885,7 @@ function updatePanel() {
           : h('p', { class: 'muted' }, '（沒有提供更新內容）'))),
     ];
     if (kind === 'web') {
-      parts.push(h('p', { class: 'muted' }, '網頁版：請在伺服器的 MyScreen 資料夾執行 git pull，再重新開啟 start.bat。'));
+      parts.push(h('p', { class: 'muted' }, '網頁版：請在伺服器上的程式資料夾執行 git pull，再重新開啟 start.bat。'));
     } else if (U.busy) {
       parts.push(h('div', { class: 'update-progress' },
         h('div', { class: 'up-bar' }, h('div', { style: `width:${Math.round(U.progress * 100)}%` })),
@@ -895,7 +895,7 @@ function updatePanel() {
       parts.push(file
         ? h('div', { class: 'row-btns' },
           h('button', { class: 'btn primary', onclick: () => startUpdate(r, kind, redraw) }, `⬇ 下載並更新到 ${r.latest}`),
-          h('small', { class: 'muted' }, `${(file.size / 1048576).toFixed(1)} MB・MyScreen 會先存檔並關閉，更新完成後自動重新開啟`))
+          h('small', { class: 'muted' }, `${(file.size / 1048576).toFixed(1)} MB・黑板樹會先存檔並關閉，更新完成後自動重新開啟`))
         : h('p', { class: 'muted' }, '這個版本沒有提供自動更新的檔案，請到 GitHub 下載。'));
     }
     parts.push(h('div', { class: 'row-btns' }, checkBtn,
@@ -914,13 +914,13 @@ function updatePanel() {
 async function startUpdate(r, kind, redraw) {
   const fs = window.Neutralino.filesystem;
   const os = window.Neutralino.os;
-  const ok = await confirmDialog(`要更新到 ${r.latest} 嗎？下載完成後 MyScreen 會先存檔並關閉，更新完成後自動重新開啟（大約半分鐘）。白板與班級名單不受影響。`, '下載並更新');
+  const ok = await confirmDialog(`要更新到 ${r.latest} 嗎？下載完成後黑板樹會先存檔並關閉，更新完成後自動重新開啟（大約半分鐘）。白板與班級名單不受影響。`, '下載並更新');
   if (!ok) return;
   U.busy = true; U.progress = 0; U.step = '下載中…';
   redraw();
   try {
     const dir = String(window.NL_PATH || '.').replace(/[\\/]+$/, '');
-    const appExe = (await currentExePath()) || dir.replace(/\//g, '\\') + '\\MyScreen.exe';
+    const appExe = (await currentExePath()) || dir.replace(/\//g, '\\') + '\\BlackboardTree.exe';
     const info = kind === 'installed' ? r.manifest.setup : r.manifest.portable;
     let lastDraw = 0;
     const bytes = await downloadVerified(info, r.url, { onProgress: (p) => {
@@ -930,7 +930,7 @@ async function startUpdate(r, kind, redraw) {
     } });
     U.step = '檔案檢查完成，準備更新…';
     redraw();
-    // 安裝版：安裝程式放到暫存資料夾；免安裝版：新的 exe 先存成 MyScreen.exe.new，關閉後再換掉
+    // 安裝版：安裝程式放到暫存資料夾；免安裝版：新的 exe 先存成 BlackboardTree.exe.new，關閉後再換掉
     const target = kind === 'installed'
       ? String(await os.getPath('temp')).replace(/[\\/]+$/, '') + '\\' + info.file
       : appExe + '.new';
@@ -938,7 +938,7 @@ async function startUpdate(r, kind, redraw) {
       await fs.writeBinaryFile(target, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length));
     } catch {
       throw new Error(kind === 'portable'
-        ? 'MyScreen.exe 所在的資料夾無法寫入，請到 GitHub 下載新版 MyScreen.exe 替換'
+        ? 'BlackboardTree.exe 所在的資料夾無法寫入，請到 GitHub 下載新版 BlackboardTree.exe 替換'
         : '無法儲存安裝程式到暫存資料夾');
     }
     // 裝在 Program Files（資訊組用 /ALLUSERS 安裝）時一般帳號不能寫入，要用系統管理員權限更新
@@ -950,7 +950,7 @@ async function startUpdate(r, kind, redraw) {
     }
     const script = updateScript({ kind, pid: window.NL_PID, appExe, file: target.replace(/\//g, '\\'), allUsers });
     await os.execCommand(`powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${encodePowerShell(script)}`, { background: true });
-    U.step = allUsers ? '正在關閉 MyScreen（接著會要求系統管理員權限）…' : '正在關閉 MyScreen，更新完成後會自動重新開啟…';
+    U.step = allUsers ? '正在關閉黑板樹（接著會要求系統管理員權限）…' : '正在關閉黑板樹，更新完成後會自動重新開啟…';
     U.progress = 1;
     redraw();
     setTimeout(quitApp, 800);
@@ -971,7 +971,7 @@ async function currentExePath() {
   } catch { return ''; }
 }
 
-// 免安裝版更新後，清掉沒用到的 MyScreen.exe.new（例如更新中途失敗）
+// 免安裝版更新後，清掉沒用到的 BlackboardTree.exe.new（例如更新中途失敗）
 async function cleanupUpdateLeftovers() {
   if ((await installKind()) !== 'portable') return;
   const exe = await currentExePath();
@@ -981,12 +981,12 @@ async function cleanupUpdateLeftovers() {
 // ------------------------------------------------------------ 手機遙控
 // 轉送伺服器（手機、學生與教室電腦之間的中繼）：
 //   桌面版：這台電腦（內建的 myscreen-relay.exe，手機要在同一個校內網路）
-//   網頁版：提供這個網頁的 MyScreen 伺服器（server/app.py）；只放在一般網頁伺服器上時沒有遙控
+//   網頁版：提供這個網頁的黑板樹伺服器（server/app.py）；只放在一般網頁伺服器上時沒有遙控
 const LOCAL = 'local';
 const relayBase = () => (DESKTOP ? LOCAL : (S.config ? location.origin : ''));
 
 // ---- 內建遙控伺服器（桌面版）
-// 程式資料夾裡的 myscreen-relay.exe；免安裝版沒有時，從 MyScreen.exe 內嵌的資源解出來
+// 程式資料夾裡的 myscreen-relay.exe；免安裝版沒有時，從 BlackboardTree.exe 內嵌的資源解出來
 async function relayExePath() {
   const fs = window.Neutralino.filesystem;
   const exists = (p) => fs.getStats(p).then(() => true, () => false);
@@ -995,7 +995,7 @@ async function relayExePath() {
   const size = (p) => fs.getStats(p).then((s) => s.size, () => -1);
   const embedded = await window.Neutralino.resources.getStats('/resources/myscreen-relay.exe').then((s) => s.size, () => -1);
   // 安裝版：安裝程式放在程式資料夾（防火牆例外也是指定這個位置）
-  // 免安裝版：從 MyScreen.exe 內嵌的資源解出來；版本不同時重新解出
+  // 免安裝版：從 BlackboardTree.exe 內嵌的資源解出來；版本不同時重新解出
   if (await exists(beside) && (embedded < 0 || (await size(beside)) === embedded)) return beside;
   const temp = (await window.Neutralino.os.getPath('temp')) + '/myscreen-relay.exe';
   for (const target of [beside, temp]) {
@@ -1099,9 +1099,9 @@ function updateTray() {
       ...(r?.status === 'online' ? [{ id: 'count', text: r.remotes ? `${r.remotes} 台手機／平板連線中` : '尚無手機連線', isDisabled: true }] : []),
       { text: '-' },
       { id: 'remote', text: '手機遙控（顯示 QR Code）' },
-      { id: 'show', text: '顯示 MyScreen' },
+      { id: 'show', text: '顯示黑板樹' },
       { text: '-' },
-      { id: 'quit', text: '結束 MyScreen（同時關閉遙控伺服器）' },
+      { id: 'quit', text: '結束黑板樹（同時關閉遙控伺服器）' },
     ];
     window.Neutralino.os.setTray({ icon: '/resources/icon.png', menuItems: items }).catch(() => {});
   }, 150);
@@ -1274,14 +1274,14 @@ async function openRemoteDialog() {
   let r;
   if (relayBase() === LOCAL && !S.remote) toast('正在啟動遙控伺服器…', 1500);
   try { r = await ensureRemote(); } catch (e) { return toast('無法啟動遙控伺服器：' + e.message, 5000); }
-  if (!r) return toast('網頁版要用 MyScreen 伺服器（start.bat）開啟，才能使用手機遙控', 5000);
+  if (!r) return toast('網頁版要用黑板樹伺服器（start.bat）開啟，才能使用手機遙控', 5000);
   const box = h('div', { class: 'remote-box' });
   const render = () => {
     box.innerHTML = '';
     if (r.status !== 'online') {
       box.append(h('div', { class: 'remote-wait' }, r.status === 'error'
         ? [h('div', null, `無法連線到遙控伺服器（${r.local ? '這台電腦' : r.base}），正在重試…`),
-          h('div', { class: 'muted' }, r.local ? '內建遙控伺服器沒有回應，請關閉 MyScreen 後重新開啟。' : '請確認 MyScreen 伺服器（start.bat）仍在執行。')]
+          h('div', { class: 'muted' }, r.local ? '內建遙控伺服器沒有回應，請關閉黑板樹後重新開啟。' : '請確認黑板樹伺服器（start.bat）仍在執行。')]
         : '連線中…'));
       return;
     }

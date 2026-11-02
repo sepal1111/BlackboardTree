@@ -12,7 +12,7 @@ desktop/.tmp/
 # 學校網路磁碟機程式（獨立 repo）
 NetDrive/
 desktop/node_modules/
-# 免安裝版執行時產生的檔案（遙控伺服器已內嵌在 MyScreen.exe）
+# 免安裝版執行時產生的檔案（遙控伺服器已內嵌在 BlackboardTree.exe）
 desktop/out/.tmp/
 desktop/out/myscreen-relay.exe
 desktop/out/neutralinojs.log

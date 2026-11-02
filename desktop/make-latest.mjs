@@ -1,4 +1,4 @@
-// 產生 desktop/out/latest.json：已安裝的 MyScreen 會讀 GitHub 上的這個檔案來檢查新版本（static/js/update.js）
+// 產生 desktop/out/latest.json：已安裝的黑板樹會讀 GitHub 上的這個檔案來檢查新版本（static/js/update.js）
 // 由 build.ps1 呼叫：node make-latest.mjs <版本>
 // 更新內容取自 RELEASE.md 的「## 版本紀錄」（每個版本一段「### 1.5.0」）
 import { createHash } from 'node:crypto';
@@ -46,9 +46,9 @@ const latest = {
   date: mine?.date || today,
   notes: mine?.notes || [],
   history,
-  setup: fileInfo(`MyScreen-Setup-${version}.exe`),
-  portable: fileInfo('MyScreen.exe'),
+  setup: fileInfo(`BlackboardTree-Setup-${version}.exe`),
+  portable: fileInfo('BlackboardTree.exe'),
 };
-if (!latest.portable) { console.error('找不到 out/MyScreen.exe'); process.exit(1); }
+if (!latest.portable) { console.error('找不到 out/BlackboardTree.exe'); process.exit(1); }
 writeFileSync(here('./out/latest.json'), JSON.stringify(latest, null, 2) + '\n');
 console.log(`  版本資訊：desktop\\out\\latest.json（${version}${latest.setup ? '' : '，沒有安裝程式'}）`);

@@ -1,4 +1,4 @@
-# MyScreen 開發交接文件
+# 黑板樹開發交接文件
 
 給接手開發的人（或換一台電腦繼續開發時）看的說明。使用方式請看 [README.md](README.md)。
 
@@ -18,10 +18,22 @@
 
 | 方式 | 說明 | 儲存 |
 |---|---|---|
-| 桌面版（主要） | `desktop/` 打包成 `MyScreen.exe` 與安裝程式 | 直接讀寫 `V:\MyScreen`，或老師選的其他資料夾 |
+| 桌面版（主要） | `desktop/` 打包成 `BlackboardTree.exe` 與安裝程式 | 直接讀寫 `V:\MyScreen`，或老師選的其他資料夾 |
 | 網頁版 | `server/app.py`（FastAPI，提供網頁與 relay）或只放 `static/` | 瀏覽器 File System Access API 選資料夾 |
 
 兩種方式讀寫**同一種資料格式**，可以混用。白板一律由老師選擇儲存位置（資料夾，或只存在這台電腦）；**伺服器不存白板**。
+
+> **名稱**：1.6.0 由 MyScreen 改名為「黑板樹 Blackboard Tree」。為了讓舊版順利升級，下列內部名稱**刻意保留** MyScreen，不要改：
+>
+> | 保留的名稱 | 原因 |
+> |---|---|
+> | 資料夾 `V:\MyScreen`（`DATA_DIR`） | 改了老師會找不到原本的白板 |
+> | `%APPDATA%\MyScreen\prefs.json`、localStorage／IndexedDB 的 `ms:`、`myscreen` | 遙控代碼、離線備份存在這裡 |
+> | `myscreen-relay.exe` | 防火牆例外綁定這個程式路徑，改名後已升級的電腦手機會連不上 |
+> | 安裝程式的 `AppId`、`applicationId: tw.edu.myscreen` | AppId 改了會變成另一套程式，無法覆蓋升級 |
+> | GitHub 網址 `sepal1111/MyScreen` | 1.5.0 的檢查更新讀這個網址；要改 repo 名稱前先確認 raw.githubusercontent.com 的轉址 |
+>
+> 安裝程式在升級時刪除舊的 `MyScreen.exe`、「MyScreen 教室白板」捷徑與開始功能表資料夾（`[InstallDelete]`），防火牆規則改名為 `Blackboard Tree Remote`（加入或解除安裝時一併刪除舊的 `MyScreen Remote`）。
 
 > 1.4.0 移除了「學校帳號登入」（伺服器用 SAMBA 帳號代存白板）、NAS 遙控伺服器設定（老師設定、`myscreen.json` 學校預設、建置時的 `RELAY`、Docker 部署），以及「開啟網路磁碟機程式」按鈕。需要參考舊程式時看 `v1.3.0` 標籤。
 
@@ -43,7 +55,7 @@
 
 ```bash
 git clone https://github.com/sepal1111/MyScreen.git
-cd MyScreen
+cd 黑板樹
 ```
 
 ```bash
@@ -75,7 +87,7 @@ py -3 -m venv .venv
 
 前端是**原生 ES modules，沒有編譯步驟**，改完重新整理即可。
 
-> Claude Code 使用者：`.claude/launch.json` 已設定好名為 `myscreen` 的預覽伺服器。
+> Claude Code 使用者：`.claude/launch.json` 已設定好名為 `blackboard-tree` 的預覽伺服器。
 
 ### 桌面版：建置後執行
 
@@ -83,10 +95,10 @@ py -3 -m venv .venv
 powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 ```
 
-產出 `desktop\out\MyScreen.exe`（免安裝版）與 `desktop\out\MyScreen-Setup-<版本>.exe`（安裝程式）。沒有熱重載，改程式後要重新建置。
+產出 `desktop\out\BlackboardTree.exe`（免安裝版）與 `desktop\out\BlackboardTree-Setup-<版本>.exe`（安裝程式）。沒有熱重載，改程式後要重新建置。
 
 **注意**：
-- 建置前要先**關閉正在執行的 MyScreen**（exe 會被鎖住，`build.ps1` 會提示）
+- 建置前要先**關閉正在執行的黑板樹**（exe 會被鎖住，`build.ps1` 會提示）
 - 請用 **PowerShell** 執行 `build.ps1`；從 Git Bash 呼叫 `csc.exe` 時參數會被路徑轉換弄壞
 - 桌面版沒有開發者工具（`enableInspector: false`）。除錯時可暫時在 `desktop/neutralino.config.json` 改成 `true`，畫面左下角也會顯示 JS 錯誤（`index.html` 的 `msFatal`）
 
@@ -138,19 +150,20 @@ node desktop/relay/test-relay.mjs
 1. 改 `desktop/neutralino.config.json` 的 `version`（安裝程式檔名、exe 版本資訊都會跟著變）
 2. **先**更新 `RELEASE.md`：標題與檔名的版本號、「從舊版升級」會注意到的變化、「## 版本紀錄」最上面加一段 `### 1.5.0`（給老師、資訊組看，用一般老師看得懂的說法）；`DEVELOPMENT.md` 的版本表也加一列。**要在建置前寫好**：`build.ps1` 會把版本紀錄寫進 `latest.json`，「關於與更新」顯示的更新內容就是這一段
 3. 執行 `build.ps1`（會自動刪除 `out\` 裡舊版本的安裝程式，最後產生 `out\latest.json`：版本號、各版本的更新內容、兩個 exe 的大小與 SHA-256）
-4. `desktop/out/` 的安裝程式、`MyScreen.exe` 與 `latest.json` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新。**push 到 GitHub 的 main 之後，各校的 MyScreen 就會檢查到新版本**（讀 `raw.githubusercontent.com/sepal1111/MyScreen/main/desktop/out/latest.json`，GitHub 快取最多 5 分鐘），所以還沒測好的版本不要 push 到 main
-5. commit 後打標籤：`git tag -a v1.1.0 -m "MyScreen 1.1.0"`，以後才查得到每個版本對應的程式碼；推送用 `git push --follow-tags`
+4. `desktop/out/` 的安裝程式、`BlackboardTree.exe` 與 `latest.json` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新。**push 到 GitHub 的 main 之後，各校的黑板樹就會檢查到新版本**（讀 `raw.githubusercontent.com/sepal1111/MyScreen/main/desktop/out/latest.json`，GitHub 快取最多 5 分鐘），所以還沒測好的版本不要 push 到 main
+5. commit 後打標籤：`git tag -a v1.1.0 -m "黑板樹 1.1.0"`，以後才查得到每個版本對應的程式碼；推送用 `git push --follow-tags`
 6. 在 GitHub 的 Releases 頁面建立新版本：選剛推上去的標籤，說明貼上 `RELEASE.md` 該版本的「版本紀錄」與下載說明，並把 `desktop/out/` 的兩個 exe 上傳到 Assets
 
 檢查更新的運作方式（`static/js/update.js`）：
 
 - 下載的檔案和 `latest.json` 在同一個資料夾，會比對大小與 SHA-256，不符就不更新（避免 GitHub 還在更新、檔案不完整）
-- 安裝版（程式資料夾有 `unins000.exe`）：安裝程式存到 `%TEMP%`，用 PowerShell 等 MyScreen 結束後以 `/SILENT` 安裝，再重新開啟；程式資料夾不能寫入（Program Files）時加 `/ALLUSERS`，會跳出 UAC
-- 免安裝版：新的 exe 先存成 `MyScreen.exe.new`，MyScreen 結束後換掉原本的檔案並重新開啟
+- 安裝版（程式資料夾有 `unins000.exe`）：安裝程式存到 `%TEMP%`，用 PowerShell 等黑板樹結束後以 `/SILENT` 安裝，裝好後由安裝程式重新開啟（`setup.iss` 的 `IsInAppUpdate`：`/SILENT` 而不是 `/VERYSILENT` 時才開，資訊組大量部署不會開啟）；程式資料夾不能寫入（Program Files）時加 `/ALLUSERS`，會跳出 UAC
+- 免安裝版：新的 exe 先存成 `BlackboardTree.exe.new`，黑板樹結束後換掉原本的檔案並重新開啟
 - 測試：在 `%APPDATA%\MyScreen\prefs.json`（網頁版是瀏覽器的 localStorage）加上 `"ms:updateUrl": "\"http://127.0.0.1:8099/latest.json\""`，指到自己架的假版本資訊（要有 CORS 標頭），測完記得刪掉
 
 | 版本 | 內容 |
 |---|---|
+| 1.6.0 | 改名為「黑板樹 Blackboard Tree」：視窗、捷徑、安裝程式（`BlackboardTree-Setup-*.exe`）、exe（`BlackboardTree.exe`）、手機頁面；資料夾等內部名稱保留 MyScreen（見第 1 節）；升級時刪除舊檔名與捷徑；程式內更新改由安裝程式重新開啟（`IsInAppUpdate`） |
 | 1.5.0 | ⚙ 設定新增「ℹ 關於與更新」：檢查 GitHub 上的新版本、顯示更新內容、一鍵下載並更新（安裝版靜默安裝、免安裝版直接替換），開啟時自動檢查（一天一次）；`build.ps1` 產生 `out/latest.json` |
 | 1.4.0 | 工具列文字（自動／顯示／隱藏，自動：視窗小於 1280×800 時只顯示圖示）、新增「迷你」工具大小，按鈕間距跟著工具大小縮放；移除「學校帳號登入」（SAMBA）、NAS 遙控伺服器設定與 Docker 部署、「開啟網路磁碟機程式」按鈕 |
 | 1.3.0 | 投票題庫（存題目、重複使用、從文字／Excel／CSV 匯入）、投票紀錄（結束投票、歸零、換題目時自動記錄，可匯出 CSV）、⚙ 設定新增「📊 投票」分頁 |
@@ -190,7 +203,7 @@ desktop/
   build.ps1                 建置腳本（UTF-8 BOM，見「注意事項」）
   patch-exe.mjs             把圖示與版本資訊寫進 exe（resedit）
   make-latest.mjs           產生 out/latest.json（新版本資訊，「關於與更新」讀這個檔）
-  relay/MyScreenRelay.cs    內建遙控伺服器（C#，Windows 內建 .NET Framework 編譯）
+  relay/BlackboardTreeRelay.cs 內建遙控伺服器（C#，Windows 內建 .NET Framework 編譯）
   relay/test-relay.mjs      relay 測試
   installer/setup.iss       Inno Setup 安裝腳本（UTF-8 BOM）
   installer/ChineseTraditional.isl, icon.ico
@@ -291,9 +304,9 @@ export const example = {
   - 同一時間只有一個投票小工具開放；刪除小工具、換白板、回到白板清單時自動結束投票
 - relay 有兩種實作，協定必須保持一致：
   - `server/relay.py`：網頁版（`server/app.py`）
-  - `desktop/relay/MyScreenRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，之後每 5 秒檢查網路，IP 變了就印 `IPS <ip,...>`；`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁與學生投票頁共 6 個檔案）
+  - `desktop/relay/BlackboardTreeRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，之後每 5 秒檢查網路，IP 變了就印 `IPS <ip,...>`；`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁與學生投票頁共 6 個檔案）
 - 使用哪個 relay（`app.js` 的 `relayBase()`）：桌面版一律用**內建 relay**；網頁版用提供網頁的 `server/app.py`（只放 `static/` 時沒有遙控）
-- 內建 relay：MyScreen 開啟時啟動（`startLocalRelay()`），關閉時結束（`windowClose` 或系統匣「結束」→ `quitApp()` → `stopLocalRelay()`）。收到 `IPS` 時 `onLocalIpsChanged()` 更新 QR Code 的網址
+- 內建 relay：黑板樹開啟時啟動（`startLocalRelay()`），關閉時結束（`windowClose` 或系統匣「結束」→ `quitApp()` → `stopLocalRelay()`）。收到 `IPS` 時 `onLocalIpsChanged()` 更新 QR Code 的網址
 - 系統匣（`initTray()`／`updateTray()`，Neutralino `os.setTray`）：顯示 relay 狀態、手機連線數，選單可開 QR Code、結束程式。狀態有變化時（`renderRemoteBtn()`、relay 啟動／結束）呼叫 `updateTray()` 重設整個選單。Neutralino 的系統匣沒有滑鼠停留提示文字，狀態只能放在停用的選單項目裡
 - 安裝版與免安裝版的 relay 位置：安裝版在程式資料夾；免安裝版內嵌在 exe 的 resources，執行時用 `Neutralino.resources.extractFile` 解出
 - 手機要能連到教室電腦的校內 IP（學校確認手機、平板都在校內網域），且 Windows 防火牆要允許 `myscreen-relay.exe`（安裝程式的「允許手機連線」選項）
@@ -307,7 +320,7 @@ export const example = {
 | Neutralino 每次啟動連接埠都不同 | localStorage 的來源跟著變，**每次啟動都是空的**。所以桌面版的 `LS`（`store.js`）改存 `%APPDATA%\MyScreen\prefs.json`。新增需要跨次保存的資料請用 `LS`，不要直接用 `localStorage` |
 | `globalVariables` 不會跳脫反斜線 | `neutralino.config.json` 的路徑請用 `/`，程式裡再轉換；用 `\` 會產生錯誤的 JSON、畫面全白 |
 | 檔案編碼 | `build.ps1`、`setup.iss` 要 **UTF-8 with BOM**（PowerShell 5.1、Inno Setup 才讀得懂中文）；`neutralino.config.json` **不能有 BOM**（neu build 會失敗）。用 PowerShell 5.1 的 `Set-Content -Encoding utf8` 會自動加 BOM，要小心 |
-| 執行中的 exe 會被鎖住 | 建置、安裝前先關閉 MyScreen；安裝程式會自動關閉（`CloseApplications`） |
+| 執行中的 exe 會被鎖住 | 建置、安裝前先關閉黑板樹；安裝程式會自動關閉（`CloseApplications`） |
 | 背景分頁計時器被節流 | 用瀏覽器測手機遙控時，如果分頁在背景，`setTimeout`／`requestAnimationFrame` 會被延遲，狀態看起來「慢一步」，測試時把分頁切到前景 |
 | 網頁版的全螢幕與彈出視窗 | 瀏覽器只允許使用者點擊時進入全螢幕、開新視窗；從手機遙控觸發時會失敗（桌面版沒有這個限制），程式已處理成退而求其次 |
 | 防火牆詢問 | 每個新位置的 `myscreen-relay.exe` 第一次監聽時 Windows 都會詢問；一般帳號無法允許。開發機上測試時會留下多筆規則，可在「Windows 安全性 → 防火牆 → 允許應用程式」清掉 |
@@ -324,7 +337,7 @@ export const example = {
 - 16 種小工具（含座位表、課堂加分；1.2.0 移除紅綠燈、骰子，時鐘與日期合併），小工具放大到全螢幕
 - 班級名單：Excel／CSV（含 Big5）／貼上匯入、欄位自動判斷與手動對應、學號／姓名／座號比對照片
 - 手機遙控：各小工具操作、傳送網址（YouTube／影片檔／FB／IG／Threads／TikTok／Vimeo／一般網頁）
-- 內建 relay：開啟 MyScreen 時啟動、關閉時結束、重開後手機自動連回
+- 內建 relay：開啟黑板樹時啟動、關閉時結束、重開後手機自動連回
 - 安裝程式：每位使用者安裝（不需系統管理員）、升級、解除安裝（1.2.0 起安裝時不設定遙控伺服器，也移除了 `/RELAY=` 參數）
 - 前端自動化測試：94 項（`npm test`）；relay 協定測試 33 項
 - 投票題庫、匯入、投票紀錄與匯出：已用瀏覽器操作過（網頁版下載 CSV）

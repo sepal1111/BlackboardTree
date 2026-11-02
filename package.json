@@ -1,7 +1,7 @@
 {
-  "name": "myscreen",
+  "name": "blackboard-tree",
   "private": true,
-  "description": "MyScreen 前端測試（Node 內建測試工具，不需要安裝套件）",
+  "description": "黑板樹前端測試（Node 內建測試工具，不需要安裝套件）",
   "type": "module",
   "scripts": {
     "test": "node --test \"tests/*.test.mjs\"",
