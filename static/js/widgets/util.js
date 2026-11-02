@@ -50,3 +50,20 @@ export function shuffle(arr) {
 export const splitNames = (text) => String(text || '').split(/[\n,，、]+/).map((s) => s.trim()).filter(Boolean);
 
 export const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+// 觀察元素大小變化。在回呼裡改版面會讓瀏覽器回報「ResizeObserver loop」，
+// 所以延到下一個畫格再執行，而且大小沒變時不重複處理；回傳停止觀察的函式
+export function observeSize(el, fn) {
+  let frame = 0, last = '';
+  const ro = new ResizeObserver(() => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      const key = el.clientWidth + 'x' + el.clientHeight;
+      if (key === last) return;
+      last = key;
+      fn();
+    });
+  });
+  ro.observe(el);
+  return () => { cancelAnimationFrame(frame); ro.disconnect(); };
+}

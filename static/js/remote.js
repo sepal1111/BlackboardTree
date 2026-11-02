@@ -178,6 +178,7 @@ function renderCards() {
 function cardHead(w) {
   return h('div', { class: 'card-head' },
     h('span', { class: 'card-title' }, `${w.icon} ${w.title}`),
+    h('button', { class: 'card-max' + (w.max ? ' on' : ''), title: w.max ? '還原大小' : '在電視上放大到全螢幕', onclick: () => send('app', 'max', { widgetId: w.id }) }, w.max ? '🗗 還原' : '⛶ 放大'),
     h('button', { class: 'card-x', title: '從白板移除', onclick: () => { if (confirm(`要從白板移除「${w.title}」嗎？`)) send('app', 'close', { widgetId: w.id }); } }, '✕'));
 }
 
@@ -298,6 +299,24 @@ const RENDER = {
         h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload')), btn('🌐 改用瀏覽器開啟', () => wcmd(w, 'browser'))));
     } else if (v.kind === 'web') out.push(h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload'))));
     return out;
+  },
+  points(w) {
+    const list = w.view?.students || [];
+    if (!list.length) return [h('div', { class: 'muted' }, '請先在電腦上選擇班級名單')];
+    const sum = list.reduce((a, p) => a + p.score, 0);
+    return [
+      h('div', { class: 'row' },
+        btn('全班 +1', () => wcmd(w, 'all', { d: 1 }), 'primary'),
+        btn('全班 −1', () => wcmd(w, 'all', { d: -1 })),
+        btn('歸零', () => { if (confirm('要把所有人的分數歸零嗎？')) wcmd(w, 'reset'); })),
+      h('div', { class: 'muted', style: { textAlign: 'center' } }, `全班 ${sum} 分`),
+      h('div', { class: 'pts-list' }, list.map((p) => h('div', { class: 'pts-row' + (p.score > 0 ? ' pos' : p.score < 0 ? ' neg' : '') },
+        h('span', { class: 'pts-r-no' }, p.no),
+        h('span', { class: 'pts-r-name' }, p.name),
+        h('span', { class: 'pts-r-score' }, p.score > 0 ? `+${p.score}` : String(p.score)),
+        h('button', { class: 'pts-r-minus', onclick: () => wcmd(w, 'add', { name: p.name, d: -1 }) }, '−'),
+        h('button', { class: 'pts-r-plus', onclick: () => wcmd(w, 'add', { name: p.name, d: 1 }) }, '+')))),
+    ];
   },
   text(w) {
     const ta = h('textarea', { placeholder: '在這裡輸入，送到電視上的文字框' });

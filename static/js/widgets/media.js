@@ -1,5 +1,6 @@
 // 內容類：文字、畫板、圖片、QR Code、嵌入網頁、視訊鏡頭
 import { h, field, select, checkbox, pickImage, setImage, toast } from '../ui.js';
+import { observeSize } from './util.js';
 
 const COLORS = ['#1f2937', '#ffffff', '#ef4444', '#f97316', '#eab308', '#22c55e', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899'];
 
@@ -104,8 +105,7 @@ export const draw = {
       canvas.height = Math.round(r.height * dpr);
       loadImage(snapshot);
     }
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
+    const unobserve = observeSize(canvas, resize);
 
     let saveT;
     function persist() {
@@ -142,7 +142,7 @@ export const draw = {
       g.stroke();
     }
     return {
-      destroy: () => { ro.disconnect(); clearTimeout(saveT); },
+      destroy: () => { unobserve(); clearTimeout(saveT); },
       update(state) { if (!last) loadImage(state.img); },
       settings: (c) => c.append(field('背景顏色', colorRow(s.bg, (v) => { s.bg = v; body.style.background = v; ctx.save(); }))),
     };

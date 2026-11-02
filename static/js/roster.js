@@ -28,6 +28,7 @@ function renameIn(state, from, to) {
   if (Array.isArray(state.picked)) state.picked = state.picked.map(r);
   if (Array.isArray(state.groups)) state.groups = state.groups.map((g) => g.map(r));
   if (state.current === from) state.current = to;
+  if (state.scores && from in state.scores) { state.scores[to] = state.scores[from]; delete state.scores[from]; }
 }
 
 export function watchRoster(ctx, onChange) {
@@ -70,40 +71,142 @@ export function photoThumb(store, ref, onReady) {
 }
 
 // ------------------------------------------------------------ 匯入名單
-// 標題列欄位：學號要先判斷（「學生編號」不能被當成姓名或座號）
-const SID_RE = /學號|學生編號|學籍|student\s*(id|no)|^id$/i;
-const NO_RE = /座號|號碼|序號|^序$|^編號$|^no\.?$|^number$/i;
-const NAME_RE = /姓名|名字|^name$/i;
-const isSid = (v) => /^[A-Za-z]{0,2}\d{4,}$/.test(v);
+// ---- 欄位判斷
+// 學校匯出的名單欄位很多（班級、座號、學號、姓名、性別、身分證、家長姓名、電話…），
+// 先自動判斷，再由老師在匯入畫面確認或修改
+export const FIELDS = [
+  { key: 'no', label: '座號' },
+  { key: 'name', label: '姓名', required: true },
+  { key: 'sid', label: '學號' },
+];
+const OTHER_PERSON = /家長|父|母|監護|聯絡|緊急|導師|老師|教師|班長/;
+// 標題文字的分數（越高越像）
+const HEAD_SCORE = {
+  name: (t) => (/^(學生)?姓名$|^name$/i.test(t) ? 10 : /姓名|名字|^學生$/.test(t) && !OTHER_PERSON.test(t) ? 6 : 0),
+  no: (t) => (/^座號$/.test(t) ? 10 : /座號/.test(t) ? 8 : /^(序號|序|編號|號碼|號次|no\.?|number)$/i.test(t) ? 5 : 0),
+  sid: (t) => (/^學號$/.test(t) ? 10 : /學號|學生編號|學籍|student\s*(id|no)/i.test(t) && !/身分|身份/.test(t) ? 8 : /^id$/i.test(t) ? 3 : 0),
+};
+const isNatId = (v) => /^[A-Za-z][12890]\d{8}$/.test(v); // 身分證、居留證
+const isPhone = (v) => /^0\d{7,9}$/.test(v.replace(/[-\s()]/g, '')) && v.replace(/\D/g, '').length >= 8;
+const isSid = (v) => /^[A-Za-z]{0,2}\d{4,10}$/.test(v) && !isNatId(v) && !isPhone(v);
+const isName = (v) => /^[一-鿿㐀-䶿·．‧]{2,6}$/.test(v) || /^[A-Za-z][A-Za-z .'-]{1,40}$/.test(v);
 
-// rows：二維陣列（Excel 的工作表或文字解析結果）→ [{no, sid, name}]
-export function parseRows(rows) {
-  rows = rows.map((r) => (r || []).map((c) => String(c ?? '').trim())).filter((r) => r.some(Boolean));
-  if (!rows.length) return [];
-  const head = rows[0];
-  const col = (re) => head.findIndex((c) => re.test(c));
-  const iSid0 = col(SID_RE);
-  const colExcept = (re) => head.findIndex((c, i) => i !== iSid0 && re.test(c));
-  let iSid = iSid0, iName = colExcept(NAME_RE), iNo = colExcept(NO_RE);
-  if (iName < 0) iName = colExcept(/學生/); // 標題只寫「學生」
-  let body = rows;
-  if (iName >= 0) body = rows.slice(1);
-  else {
-    // 沒有標題列：數字欄當座號，第一個有文字的欄當姓名
-    const sample = rows.slice(0, 15);
-    const cols = Math.max(...rows.map((r) => r.length));
-    const idx = [...Array(cols).keys()];
-    iNo = idx.find((c) => sample.every((r) => /^\d{1,3}$/.test(r[c] || ''))) ?? -1;
-    iSid = idx.find((c) => c !== iNo && sample.every((r) => isSid(r[c] || ''))) ?? -1;
-    iName = idx.find((c) => c !== iNo && c !== iSid && sample.some((r) => r[c] && !/^\d+$/.test(r[c]) && !isSid(r[c]))) ?? -1;
-    if (iName < 0) return [];
+const clean = (rows) => rows.map((r) => (r || []).map((c) => String(c ?? '').trim())).filter((r) => r.some(Boolean));
+export const colCount = (rows) => Math.max(0, ...rows.map((r) => r.length));
+
+// 回傳 { header: 標題列位置（-1 = 沒有標題）, no, name, sid: 欄位位置（-1 = 不匯入） }
+export function detectColumns(rows) {
+  rows = clean(rows);
+  const cols = colCount(rows);
+  const idx = [...Array(cols).keys()];
+  // 標題列：前 6 列中最像標題的一列（學校報表第一列常是「○○學年度 ○年○班 名單」）
+  let header = -1, best = 0;
+  rows.slice(0, 6).forEach((r, i) => {
+    const sc = FIELDS.reduce((a, f) => a + Math.max(0, ...r.map((t) => HEAD_SCORE[f.key](t))), 0);
+    if (sc > best) { best = sc; header = i; }
+  });
+  if (best < 6) header = -1;
+  const body = rows.slice(header + 1);
+  const sample = body.slice(0, 30);
+  const ratio = (c, fn) => { const v = sample.map((r) => r[c] || '').filter(Boolean); return v.length ? v.filter(fn).length / v.length : 0; };
+  // 座號、學號每個人都不一樣（班級欄每列都相同，不能當座號）
+  const unique = (c) => { const v = sample.map((r) => r[c] || '').filter(Boolean); return v.length < 2 || new Set(v).size / v.length >= 0.9; };
+  const used = new Set();
+  const choose = (key, contentFn, needUnique) => {
+    let bi = -1, bs = 0;
+    for (const c of idx) {
+      if (used.has(c) || (needUnique && !unique(c))) continue;
+      const hs = header >= 0 ? HEAD_SCORE[key](rows[header][c] || '') : 0;
+      const cs = contentFn ? ratio(c, contentFn) : 0;
+      // 有標題時以標題為主、內容為輔；沒有標題時只看內容
+      const sc = header >= 0 ? (hs ? hs + cs * 3 : 0) : cs >= 0.8 ? cs : 0;
+      if (sc > bs) { bs = sc; bi = c; }
+    }
+    if (bi >= 0) used.add(bi);
+    return bi;
+  };
+  const sid = choose('sid', isSid, true);
+  const no = choose('no', (v) => /^\d{1,2}$/.test(v) && +v > 0, true);
+  let name = choose('name', isName);
+  if (name < 0) {
+    // 後備：第一個大部分是文字（不是數字）的欄
+    name = idx.find((c) => !used.has(c) && ratio(c, (v) => !/^\d+$/.test(v) && !isSid(v) && !isNatId(v)) >= 0.6) ?? -1;
   }
+  return { header, no, name, sid };
+}
+
+// 依欄位對應轉成學生資料
+export function rowsToPeople(rows, map) {
+  rows = clean(rows);
+  if (map.name < 0) return [];
   const seen = new Set();
-  return body.map((r) => ({
-    no: iNo >= 0 ? normNo(r[iNo]) : '',
-    sid: iSid >= 0 ? r[iSid] || '' : '',
-    name: r[iName] || '',
-  })).filter((s) => s.name && !seen.has(s.name) && seen.add(s.name));
+  return rows.slice(map.header + 1).map((r) => ({
+    no: map.no >= 0 ? normNo(r[map.no]) : '',
+    sid: map.sid >= 0 ? r[map.sid] || '' : '',
+    name: (r[map.name] || '').replace(/\s+/g, ' '),
+  }))
+    // 跳過重複出現的標題列、空白與重複姓名
+    .filter((p) => p.name && !HEAD_SCORE.name(p.name) && !seen.has(p.name) && seen.add(p.name));
+}
+
+// rows：二維陣列（Excel 的工作表或文字解析結果）→ [{no, sid, name}]（自動判斷欄位）
+export const parseRows = (rows) => rowsToPeople(rows, detectColumns(rows));
+
+const colLetter = (i) => (i >= 26 ? colLetter(Math.floor(i / 26) - 1) : '') + String.fromCharCode(65 + (i % 26));
+
+// 欄位對應畫面：顯示自動判斷結果與預覽，讓老師選擇每個項目要用檔案的哪一欄
+export function columnDialog(rawRows, source) {
+  const rows = clean(rawRows);
+  const cols = colCount(rows);
+  const map = detectColumns(rows);
+  return new Promise((resolve) => {
+    let result = null;
+    const body = h('div', { class: 'colmap' });
+    const okBtn = { label: '匯入', primary: true, onClick: () => { result = rowsToPeople(rows, map); if (!result.length) { toast('請選擇「姓名」欄'); return false; } } };
+    function colName(c) {
+      const head = map.header >= 0 ? rows[map.header][c] : '';
+      const sample = rows.slice(map.header + 1).map((r) => r[c]).find(Boolean) || '';
+      return `${colLetter(c)} 欄：${head || sample || '（空白）'}${head && sample ? `（例：${sample}）` : ''}`;
+    }
+    function render() {
+      body.innerHTML = '';
+      const headOpts = [[-1, '沒有標題列（第 1 列就是學生）'], ...rows.slice(0, 6).map((r, i) => [i, `第 ${i + 1} 列：${r.filter(Boolean).slice(0, 4).join('、')}`])];
+      const sel = (value, opts, onChange) => {
+        const el = h('select', { class: 'input', onchange: (e) => onChange(+e.target.value) }, opts.map(([v, l]) => h('option', { value: v }, l)));
+        el.value = value;
+        return el;
+      };
+      body.append(
+        h('p', { class: 'muted' }, `來源：${source}。系統已自動判斷欄位，請確認下方每個項目對應到檔案的哪一欄；其他欄位（性別、身分證、家長資料等）不會匯入。`),
+        h('div', { class: 'colmap-fields' },
+          h('label', { class: 'colmap-f' }, h('span', null, '標題列'), sel(map.header, headOpts, (v) => {
+            map.header = v;
+            const d = detectColumns(rows); // 換標題列後重新判斷欄位
+            if (d.header === v) Object.assign(map, d);
+            render();
+          })),
+          ...FIELDS.map((f) => h('label', { class: 'colmap-f' + (f.required && map[f.key] < 0 ? ' missing' : '') },
+            h('span', null, f.label + (f.required ? '（必選）' : '')),
+            sel(map[f.key], [[-1, '（不匯入）'], ...[...Array(cols).keys()].map((c) => [c, colName(c)])], (v) => {
+              for (const g of FIELDS) if (g.key !== f.key && map[g.key] === v && v >= 0) map[g.key] = -1; // 一欄只能對應一個項目
+              map[f.key] = v; render();
+            })))));
+      // 預覽表格
+      const tag = (c) => FIELDS.find((f) => map[f.key] === c);
+      const table = h('table', { class: 'colmap-table' },
+        h('thead', null, h('tr', null, [...Array(cols).keys()].map((c) => h('th', { class: tag(c) ? 'on' : '' },
+          h('div', { class: 'cm-letter' }, colLetter(c)), tag(c) ? h('div', { class: 'cm-tag' }, tag(c).label) : h('div', { class: 'cm-tag off' }, '不匯入'),
+          map.header >= 0 ? h('div', { class: 'cm-head' }, rows[map.header][c] || '') : null)))),
+        h('tbody', null, rows.slice(map.header + 1, map.header + 9).map((r) => h('tr', null, [...Array(cols).keys()].map((c) => h('td', { class: tag(c) ? 'on' : '' }, r[c] || ''))))));
+      const people = rowsToPeople(rows, map);
+      body.append(h('div', { class: 'colmap-preview' }, table),
+        h('div', { class: 'colmap-sum' + (people.length ? '' : ' err') }, people.length
+          ? `將匯入 ${people.length} 位學生，例如：${people.slice(0, 3).map((p) => [p.no && p.no + '號', p.name, p.sid && `（${p.sid}）`].filter(Boolean).join(' ')).join('、')}`
+          : '請選擇「姓名」對應的欄位'));
+    }
+    render();
+    modal({ title: '📥 選擇匯入欄位', body, wide: true, onClose: () => resolve(result), actions: [{ label: '取消' }, okBtn] });
+  });
 }
 
 const normNo = (v) => (/^\d+$/.test(String(v || '').trim()) ? String(parseInt(v, 10)).padStart(2, '0') : String(v || '').trim());
@@ -308,17 +411,24 @@ export async function rosterDialog(store, { selectId } = {}) {
     const [file] = await pick('.xlsx,.xls,.ods,.csv,.txt', false);
     if (!file) return;
     if (studentsOf(l).length && !(await confirmDialog(`要用「${file.name}」取代目前的 ${studentsOf(l).length} 位學生嗎？（照片會依學號或姓名保留）`))) return;
-    try { applyImport(l, parseRows(await fileToRows(file))); } catch (e) { toast('無法讀取檔案：' + e.message, 4000); }
+    let rows;
+    try { rows = await fileToRows(file); } catch (e) { return toast('無法讀取檔案：' + e.message, 4000); }
+    const people = await columnDialog(rows, file.name);
+    if (people) applyImport(l, people);
   }
   function importPaste(l) {
     const ta = h('textarea', { class: 'input', rows: 12, placeholder: '從 Excel 選取「座號、姓名」兩欄複製後貼上，\n或每行輸入一個名字：\n01 王小明\n02 陳大華' });
     const dlg = modal({ title: '📋 貼上名單', body: ta, actions: [
       { label: '取消' },
-      { label: '匯入', primary: true, onClick: () => {
-        const people = parseRows(textToRows(ta.value));
-        const n = studentsOf(l).length;
-        if (!n || !people.length) applyImport(l, people);
-        else confirmDialog(`要用貼上的 ${people.length} 位學生取代目前的 ${n} 位學生嗎？（照片會依學號或姓名保留）`).then((ok) => ok && applyImport(l, people));
+      { label: '下一步', primary: true, onClick: () => {
+        const rows = textToRows(ta.value);
+        (async () => {
+          const n = studentsOf(l).length;
+          if (n && !(await confirmDialog(`要用貼上的名單取代目前的 ${n} 位學生嗎？（照片會依學號或姓名保留）`))) return;
+          // 有多欄時讓老師確認欄位；只有一欄名字就直接匯入
+          const people = colCount(rows.filter((r) => r.some((c) => String(c).trim()))) > 1 ? await columnDialog(rows, '貼上的內容') : parseRows(rows);
+          if (people) applyImport(l, people);
+        })();
       } },
     ] });
     setTimeout(() => ta.focus(), 50);

@@ -93,3 +93,19 @@ footer button { flex: 0 0 auto; }
 .seat-cell.sel { outline: 3px solid var(--accent); background: #dbe4ff; }
 .seat-cell.hl { background: #ffd43b; border-color: #f08c00; }
 .stu-photo { display: block; margin: 0 auto; width: 120px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+
+.pts-list { display: flex; flex-direction: column; gap: 4px; }
+.pts-row { display: grid; grid-template-columns: 34px 1fr 48px 48px 48px; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 10px; background: #f8f9fa; }
+.pts-r-no { color: var(--muted); font-size: 13px; text-align: center; }
+.pts-r-name { font-weight: 700; font-size: 17px; }
+.pts-r-score { text-align: center; font-weight: 800; color: #868e96; font-variant-numeric: tabular-nums; }
+.pts-row.pos .pts-r-score { color: #2b8a3e; }
+.pts-row.neg .pts-r-score { color: #c92a2a; }
+.pts-row button { padding: 8px 0; font-size: 20px; line-height: 1; color: #fff; border: 0; }
+.pts-r-minus { background: #e03131; }
+.pts-r-plus { background: #12b886; }
+
+.card-head { gap: 6px; }
+.card-head .card-title { flex: 1; }
+.card-max { border: 1px solid var(--line); background: #fff; padding: 4px 10px; font-size: 13px; border-radius: 99px; color: var(--muted); }
+.card-max.on { background: var(--accent); border-color: var(--accent); color: #fff; }

@@ -9,6 +9,7 @@
   <script>
     // 程式出錯時直接顯示在畫面上，方便老師回報問題
     function msFatal(m) {
+      if (/ResizeObserver loop/.test(m)) return; // 瀏覽器的無害通知
       var d = document.getElementById('fatal');
       if (!d) { d = document.createElement('pre'); d.id = 'fatal'; (document.body || document.documentElement).appendChild(d); }
       d.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#fff5f5;color:#c92a2a;border:1px solid #ffc9c9;border-radius:8px;padding:8px 12px;max-width:90vw;white-space:pre-wrap;font:12px monospace';

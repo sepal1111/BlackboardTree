@@ -295,6 +295,7 @@ function openBoard(board) {
 }
 
 function closeBoard() {
+  if (S.maxId) toggleMax(null);
   S.settingsModal?.close();
   for (const m of S.mounted.values()) m.inst.destroy?.();
   S.mounted.clear();
@@ -318,6 +319,7 @@ const save = (immediate) => { if (!S.board) return; S.store.saveBoard(S.board, i
 
 // ------------------------------------------------------------ 畫面
 function renderBoard() {
+  if (S.maxId) toggleMax(null);
   S.settingsModal?.close();
   for (const m of S.mounted.values()) m.inst.destroy?.();
   S.mounted.clear();
@@ -393,6 +395,7 @@ function addWidget(type, copyFrom, init) {
 }
 
 function removeWidget(id) {
+  if (S.maxId === id) toggleMax(null);
   const m = S.mounted.get(id);
   m?.inst.destroy?.();
   m?.el.remove();
@@ -418,6 +421,7 @@ function mountWidget(w) {
   const head = h('div', { class: 'w-head' },
     h('span', { class: 'w-title' }, def.icon + ' ' + def.title),
     h('div', { class: 'w-actions' },
+      h('button', { title: '放大到全螢幕（雙擊標題列也可以）', 'data-act': 'max' }, '⛶'),
       h('button', { title: '設定', 'data-act': 'settings' }, '⚙'),
       h('button', { title: '複製', 'data-act': 'dup' }, '⧉'),
       h('button', { title: '關閉', 'data-act': 'close' }, '✕')));
@@ -434,10 +438,13 @@ function mountWidget(w) {
 
   head.addEventListener('click', (e) => {
     const act = e.target.closest('button')?.dataset.act;
+    if (act === 'max') toggleMax(w.id);
     if (act === 'close') removeWidget(w.id);
     if (act === 'dup') addWidget(w.type, w);
     if (act === 'settings') openSettings(w, def, inst);
   });
+
+  head.addEventListener('dblclick', (e) => { if (!e.target.closest('button')) toggleMax(w.id); });
 
   // 點擊時移到最上層
   el.addEventListener('pointerdown', () => {
@@ -459,7 +466,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 function dragHandler(handle, el, w, apply) {
   handle.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || e.target.closest('button')) return;
+    if (e.button !== 0 || e.target.closest('button') || el.classList.contains('maximized')) return;
     e.preventDefault();
     const r = $('#stage').getBoundingClientRect();
     const sx = e.clientX, sy = e.clientY;
@@ -549,6 +556,50 @@ function userMenu(anchor) {
   ]);
 }
 
+async function isFullscreen() {
+  if (DESKTOP) return window.Neutralino.window.isFullScreen().catch(() => false);
+  return !!document.fullscreenElement;
+}
+async function setFullscreen(on) {
+  try {
+    if (DESKTOP) { if (on) await window.Neutralino.window.setFullScreen(); else await window.Neutralino.window.exitFullScreen(); return true; }
+    if (on) await document.documentElement.requestFullscreen(); else if (document.fullscreenElement) await document.exitFullscreen();
+    return true;
+  } catch { return false; } // 手機遙控觸發時瀏覽器不允許全螢幕，小工具仍會填滿視窗
+}
+
+// 小工具放大：填滿整個畫面（蓋住工具列），並切換到全螢幕；再按一次或按 Esc 還原
+// fromRemote：手機遙控觸發時，網頁版瀏覽器不允許全螢幕（需要在電腦上點擊），只填滿視窗
+function toggleMax(id, { fromRemote = false } = {}) {
+  const prev = S.maxId && S.mounted.get(S.maxId);
+  if (prev) setMaxButton(prev, false);
+  if (!id || S.maxId === id) {
+    S.maxId = null;
+    document.body.classList.remove('has-max');
+    if (S.maxFull) { S.maxFull = false; setFullscreen(false); }
+  } else {
+    const m = S.mounted.get(id);
+    if (!m) return;
+    S.maxId = id;
+    setMaxButton(m, true);
+    document.body.classList.add('has-max');
+    if (!S.maxFull && (DESKTOP || !fromRemote)) {
+      // 原本就是全螢幕時，還原後也維持全螢幕
+      isFullscreen().then((full) => {
+        if (full || S.maxId !== id) return;
+        S.maxFull = true;
+        setFullscreen(true).then((ok) => { if (!ok) S.maxFull = false; });
+      });
+    }
+  }
+  S.remote?.push();
+}
+function setMaxButton(m, on) {
+  m.el.classList.toggle('maximized', on);
+  const b = m.el.querySelector('[data-act=max]');
+  if (b) { b.textContent = on ? '🗗' : '⛶'; b.title = on ? '還原大小（Esc）' : '放大到全螢幕（雙擊標題列也可以）'; }
+}
+
 async function toggleFullscreen() {
   if (DESKTOP) {
     const w = window.Neutralino.window;
@@ -571,14 +622,14 @@ function remoteState() {
     board: b ? { id: b.id, name: b.name } : null,
     boards: (S.store?.index || []).map((x) => ({ id: x.id, name: x.name })),
     chromeHidden: document.body.classList.contains('chrome-hidden'),
-    addable: widgetList.filter((d) => ['timer', 'stopwatch', 'names', 'groups', 'seats', 'text', 'traffic', 'work', 'dice', 'poll', 'clock', 'calendar'].includes(d.type))
+    addable: widgetList.filter((d) => ['timer', 'stopwatch', 'names', 'groups', 'seats', 'points', 'text', 'traffic', 'work', 'dice', 'poll', 'clock', 'calendar'].includes(d.type))
       .map((d) => ({ type: d.type, title: d.title, icon: d.icon })),
     widgets: list.map((w) => {
       const def = widgets[w.type];
       const inst = S.mounted.get(w.id)?.inst;
       let view = null;
       try { view = inst?.remote?.view() ?? null; } catch { /* ignore */ }
-      return { id: w.id, type: w.type, title: def?.title || w.type, icon: def?.icon || '', view };
+      return { id: w.id, type: w.type, title: def?.title || w.type, icon: def?.icon || '', view, max: S.maxId === w.id };
     }),
   };
 }
@@ -596,6 +647,8 @@ async function remoteCmd(m) {
       addWidget(args.type);
     } else if (m.action === 'close' && S.board) {
       removeWidget(args.widgetId);
+    } else if (m.action === 'max' && S.board) {
+      toggleMax(S.maxId === args.widgetId ? null : args.widgetId, { fromRemote: true });
     } else if (m.action === 'url') {
       await openUrlFromRemote(String(args.url || ''));
     }
@@ -707,6 +760,7 @@ $('#clear-btn').addEventListener('click', async () => {
 $('#hide-btn').addEventListener('click', () => { document.body.classList.toggle('chrome-hidden'); S.remote?.push(); });
 $('#remote-btn').addEventListener('click', remoteDialog);
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && S.maxId && !document.querySelector('#modal-root .m-wrap')) { toggleMax(null); return; }
   if (e.target.closest('input,textarea,[contenteditable]')) return;
   if (e.key === 'h' || e.key === 'H') { document.body.classList.toggle('chrome-hidden'); S.remote?.push(); }
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();

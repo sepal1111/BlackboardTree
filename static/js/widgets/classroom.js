@@ -1,6 +1,6 @@
-// 班級經營類：抽籤、分組、座位表、骰子、紅綠燈、工作模式、投票、音量計
-import { h, field, select, checkbox, promptDialog, toast, setImage } from '../ui.js';
-import { shuffle, splitNames, beep } from './util.js';
+// 班級經營類：抽籤、分組、座位表、課堂加分、骰子、紅綠燈、工作模式、投票、音量計
+import { h, field, select, checkbox, promptDialog, confirmDialog, toast, setImage } from '../ui.js';
+import { shuffle, splitNames, beep, observeSize } from './util.js';
 import { studentsOf, hasPhotos, linkedList, watchRoster, photoThumb, rosterDialog, rememberList } from '../roster.js';
 
 // 目前的名單：連結班級名單時讀名單（含座號、照片），否則用自己輸入的名字
@@ -251,11 +251,10 @@ export const traffic = {
           onclick: () => { s.light = c; render(); ctx.save(); } }));
       }
     }
-    const ro = new ResizeObserver(() => wrap.classList.toggle('horizontal', body.clientWidth > body.clientHeight * 1.3));
-    ro.observe(body);
+    const unobserve = observeSize(body, () => wrap.classList.toggle('horizontal', body.clientWidth > body.clientHeight * 1.3));
     render();
     return {
-      destroy: () => ro.disconnect(),
+      destroy: () => unobserve(),
       remote: {
         view: () => ({ light: s.light }),
         act(a, { light } = {}) { if (a === 'set' && ['red', 'yellow', 'green'].includes(light)) { s.light = light; render(); ctx.save(); } },
@@ -543,6 +542,130 @@ export const seats = {
           checkbox('顯示照片（班級名單有照片時）', s.showPhoto, (v) => { s.showPhoto = v; ctx.save(); render(); }),
           h('p', { class: 'muted' }, '在座位表上點一個座位，再點另一個座位，兩人就會交換（也可以和空位交換）。'));
       },
+    };
+  },
+};
+
+// 沒有照片時的預設頭像
+const AVATAR = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#cfe3f1"/><circle cx="50" cy="40" r="17" fill="#f6d5bf"/><path d="M17 100c2-21 15-31 33-31s31 10 33 31z" fill="#46587a"/></svg>');
+
+// 課堂加分：每位學生一張卡片（座號、照片、姓名、分數、加減分按鈕）
+export const points = {
+  type: 'points', title: '課堂加分', icon: '⭐', size: { w: 0.64, h: 0.66 },
+  state: () => ({ names: '', listId: '', scores: {}, showPhoto: true, sort: 'no', sound: true }),
+  mount(body, ctx) {
+    const s = ctx.state;
+    const grid = h('div', { class: 'pts-grid' });
+    const total = h('span', { class: 'pts-total' });
+    body.append(h('div', { class: 'pts' },
+      h('div', { class: 'pts-bar' },
+        h('button', { class: 'btn', onclick: () => all(1) }, '全班 +1'),
+        h('button', { class: 'btn', onclick: () => all(-1) }, '全班 −1'),
+        total,
+        h('button', { class: 'btn', onclick: async () => { if (await confirmDialog('要把所有人的分數歸零嗎？', '歸零', true)) reset(); } }, '↺ 歸零')),
+      grid));
+    const score = (n) => s.scores[n] || 0;
+    // 沒有座號時依名單順序編號
+    const list = () => {
+      const ps = people(ctx).map((p, i) => ({ ...p, no: p.no || String(i + 1).padStart(2, '0') }));
+      if (s.sort === 'score') ps.sort((a, b) => score(b.name) - score(a.name) || String(a.no).localeCompare(String(b.no), undefined, { numeric: true }));
+      return ps;
+    };
+    const cards = new Map(); // 姓名 -> { el, scoreEl }
+
+    function change(name, d, { quiet = false } = {}) {
+      const v = score(name) + d;
+      if (v) s.scores[name] = v; else delete s.scores[name];
+      if (s.sort === 'score' && !quiet) render(); else updateCard(name);
+      const c = cards.get(name);
+      if (c && !quiet) {
+        const f = h('span', { class: 'pts-float ' + (d > 0 ? 'up' : 'down') }, (d > 0 ? '+' : '−') + Math.abs(d));
+        c.el.append(f);
+        setTimeout(() => f.remove(), 900);
+        c.el.classList.remove('flash-up', 'flash-down');
+        void c.el.offsetWidth; // 重新觸發動畫
+        c.el.classList.add(d > 0 ? 'flash-up' : 'flash-down');
+      }
+      if (s.sound && !quiet) beep({ times: 1, freq: d > 0 ? 988 : 330, dur: 0.12 });
+      updateTotal();
+      ctx.save();
+    }
+    function all(d) {
+      const ps = list();
+      if (!ps.length) return toast('請先按右上角 ⚙ 選擇班級名單');
+      ps.forEach((p) => change(p.name, d, { quiet: true }));
+      if (s.sort === 'score') render();
+      grid.classList.remove('flash-all'); void grid.offsetWidth; grid.classList.add('flash-all');
+      if (s.sound) beep({ times: 2, freq: d > 0 ? 988 : 330, dur: 0.1 });
+    }
+    function reset() { s.scores = {}; render(); ctx.save(); }
+    function updateCard(name) {
+      const c = cards.get(name);
+      if (!c) return;
+      const v = score(name);
+      c.scoreEl.textContent = v > 0 ? `+${v}` : String(v);
+      c.el.classList.toggle('pos', v > 0);
+      c.el.classList.toggle('neg', v < 0);
+    }
+    function updateTotal() {
+      const ps = list();
+      total.textContent = ps.length ? `全班 ${ps.reduce((a, p) => a + score(p.name), 0)} 分` : '';
+    }
+    function render() {
+      grid.innerHTML = '';
+      cards.clear();
+      const ps = list();
+      if (!ps.length) { grid.append(h('div', { class: 'muted center' }, '按右上角 ⚙ 選擇班級名單')); updateTotal(); return; }
+      for (const p of ps) {
+        const scoreEl = h('span', { class: 'pts-score' });
+        const photo = s.showPhoto ? h('div', { class: 'pts-photo' }, p.photo ? photoImg(ctx, p.photo, '') : h('img', { src: AVATAR, alt: '' })) : null;
+        const el = h('div', { class: 'pts-card' + (s.showPhoto ? '' : ' no-photo') },
+          scoreEl,
+          h('span', { class: 'pts-no' }, `${p.no}號`),
+          h('div', { class: 'pts-main' }, photo, h('div', { class: 'pts-name' }, p.name)),
+          h('div', { class: 'pts-btns' },
+            h('button', { class: 'pts-minus', title: '減 1 分', onclick: () => change(p.name, -1) }, '−'),
+            h('button', { class: 'pts-plus', title: '加 1 分', onclick: () => change(p.name, 1) }, '+')));
+        cards.set(p.name, { el, scoreEl });
+        grid.append(el);
+        updateCard(p.name);
+      }
+      fit();
+      updateTotal();
+    }
+    // 依小工具大小算出最適合的欄數，讓全班卡片盡量放大又不用捲動
+    function fit() {
+      const n = cards.size;
+      const W = grid.clientWidth, H = grid.clientHeight;
+      if (!n || !W || !H) return;
+      const gap = 8, ratio = 1.45; // 卡片寬高比
+      let best = 1, bestW = 0;
+      for (let c = 1; c <= n; c++) {
+        const rows = Math.ceil(n / c);
+        const cw = (W - gap * (c - 1)) / c, ch = (H - gap * (rows - 1)) / rows;
+        const w = Math.min(cw, ch * ratio);
+        if (w > bestW) { bestW = w; best = c; }
+      }
+      grid.style.setProperty('--cols', best);
+      grid.style.setProperty('--card-w', Math.max(120, Math.floor(bestW)) + 'px');
+    }
+    const unobserve = observeSize(grid, fit);
+    const unwatch = watchRoster(ctx, render);
+    render();
+    return {
+      destroy: () => { unobserve(); unwatch(); },
+      remote: {
+        view: () => ({ students: list().map((p) => ({ name: p.name, no: p.no, score: score(p.name) })) }),
+        act(a, args = {}) {
+          if (a === 'add' && list().some((p) => p.name === args.name)) change(args.name, Math.sign(+args.d) || 1);
+          else if (a === 'all') all(Math.sign(+args.d) || 1);
+          else if (a === 'reset') reset();
+        },
+      },
+      settings: (c) => c.append(namesEditor(ctx, render),
+        field('排列方式', select([['no', '依座號'], ['score', '依分數（高分在前）']], s.sort, (v) => { s.sort = v; ctx.save(); render(); })),
+        checkbox('顯示照片', s.showPhoto, (v) => { s.showPhoto = v; ctx.save(); render(); }),
+        checkbox('加減分時播放音效', s.sound, (v) => { s.sound = v; ctx.save(); })),
     };
   },
 };
