@@ -62,6 +62,7 @@ Filename: "{app}\{#AppExeName}"; Description: "立即開啟 MyScreen"; WorkingDi
 ; Neutralino 執行時產生的暫存檔（白板資料存在 V:\MyScreen，不會被刪除）
 Type: filesandordirs; Name: "{app}\.tmp"
 Type: files; Name: "{app}\neutralinojs.log"
+; 1.4 以前資訊組可能放的學校預設遙控伺服器設定（已不再使用），解除安裝時一併清掉
 Type: files; Name: "{app}\myscreen.json"
 
 [Code]

@@ -6,16 +6,18 @@ import { normalizeUi, visibleTools, toggleTool, iconPx, dockInfo, DEFAULT_UI } f
 const types = ['timer', 'clock', 'names'];
 const list = types.map((type) => ({ type }));
 
-describe('畫面偏好（工具列位置、圖示大小、顯示的工具）', () => {
+describe('畫面偏好（工具列位置、圖示大小、工具列文字、顯示的工具）', () => {
   test('沒有設定或格式錯誤時用預設值', () => {
     assert.deepEqual(normalizeUi(undefined, types), DEFAULT_UI);
     assert.deepEqual(normalizeUi('x', types), DEFAULT_UI);
-    assert.deepEqual(normalizeUi({ dock: 'middle', icon: 'huge', hidden: 'timer' }, types), DEFAULT_UI);
+    assert.deepEqual(normalizeUi({ dock: 'middle', icon: 'huge', labels: 'maybe', hidden: 'timer' }, types), DEFAULT_UI);
+    assert.equal(DEFAULT_UI.labels, 'auto'); // 預設：視窗小的時候自動只顯示圖示
   });
 
   test('保留正確的設定，去掉不存在或重複的小工具', () => {
-    assert.deepEqual(normalizeUi({ dock: 'left', icon: 'xl', hidden: ['clock', 'clock', 'gone'] }, types),
-      { dock: 'left', icon: 'xl', hidden: ['clock'] });
+    assert.deepEqual(normalizeUi({ dock: 'left', icon: 'xl', labels: 'hide', hidden: ['clock', 'clock', 'gone'] }, types),
+      { dock: 'left', icon: 'xl', labels: 'hide', hidden: ['clock'] });
+    assert.equal(normalizeUi({ dock: 'top' }, types).labels, 'auto'); // 1.3 以前沒有這個設定
   });
 
   test('全部隱藏時改回全部顯示', () => {
@@ -38,6 +40,8 @@ describe('畫面偏好（工具列位置、圖示大小、顯示的工具）', (
   test('圖示大小與位置說明', () => {
     assert.equal(iconPx({ icon: 'm' }), 24);
     assert.equal(iconPx({ icon: 'xl' }), 42);
+    assert.equal(iconPx({ icon: 'xs' }), 14);
+    assert.equal(iconPx({ icon: '??' }), 24); // 不認得的大小用「中」
     assert.equal(dockInfo({ dock: 'right' }).where, '右側');
   });
 });

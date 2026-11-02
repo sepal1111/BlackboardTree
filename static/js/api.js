@@ -1,9 +1,9 @@
-// 與伺服器溝通的薄包裝
+// 與 MyScreen 伺服器（網頁版）溝通的薄包裝；目前只用來讀取 /api/config
 export class ApiError extends Error {
   constructor(message, status, data) { super(message); this.status = status; this.data = data; }
 }
 
-async function req(method, url, body, { quiet401 = false } = {}) {
+async function req(method, url, body) {
   const opts = { method, credentials: 'same-origin', headers: {} };
   if (body instanceof Blob) {
     opts.body = body;
@@ -20,7 +20,6 @@ async function req(method, url, body, { quiet401 = false } = {}) {
   let data = null;
   if ((res.headers.get('content-type') || '').includes('json')) data = await res.json().catch(() => null);
   if (!res.ok) {
-    if (res.status === 401 && !quiet401) window.dispatchEvent(new Event('ms:unauthorized'));
     const d = data?.detail;
     const msg = typeof d === 'string' ? d : d?.message || res.statusText;
     throw new ApiError(msg, res.status, d);
@@ -29,10 +28,6 @@ async function req(method, url, body, { quiet401 = false } = {}) {
 }
 
 export const api = {
-  get: (u, o) => req('GET', u, undefined, o),
-  post: (u, b, o) => req('POST', u, b, o),
-  put: (u, b, o) => req('PUT', u, b, o),
-  del: (u, o) => req('DELETE', u, undefined, o),
+  get: (u) => req('GET', u),
+  post: (u, b) => req('POST', u, b),
 };
-
-export const fileUrl = (path) => '/api/file?path=' + encodeURIComponent(path);

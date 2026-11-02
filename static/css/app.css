@@ -126,7 +126,8 @@ body.chrome-hidden .widget:hover .w-head { opacity: 1; }
 
 #dock {
   position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 5000; max-width: calc(100% - 132px); /* 右下角留給 👁 按鈕 */
-  background: var(--chrome); backdrop-filter: blur(10px); border-radius: 18px; padding: 6px; box-shadow: var(--shadow);
+  background: var(--chrome); backdrop-filter: blur(10px); border-radius: calc(var(--dock-icon, 24px) * .5 + 6px);
+  padding: max(3px, calc(var(--dock-icon, 24px) * .25)); box-shadow: var(--shadow);
 }
 #dock-items { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
 .dock-btn {
@@ -136,7 +137,14 @@ body.chrome-hidden .widget:hover .w-head { opacity: 1; }
 .dock-btn .di { font-size: var(--dock-icon, 24px); line-height: 1; }
 .dock-btn img.di { width: calc(var(--dock-icon, 24px) * 1.15); height: calc(var(--dock-icon, 24px) * 1.15); margin: calc(var(--dock-icon, 24px) * -.075) 0; object-fit: contain; }
 .dock-btn .dl { font-size: max(10.5px, calc(var(--dock-icon, 24px) * .48)); opacity: .9; white-space: nowrap; }
-.dock-btn { min-width: max(62px, calc(var(--dock-icon, 24px) * 2.6)); }
+.dock-btn { min-width: max(50px, calc(var(--dock-icon, 24px) * 2.6)); padding: max(3px, calc(var(--dock-icon, 24px) * .25)) 4px; }
+/* 只顯示圖示（設定 → 工具列 → 工具列文字）：按鈕縮成圖示大小 */
+body[data-dock-labels="hide"] .dock-btn .dl { display: none; }
+body[data-dock-labels="hide"] .dock-btn { min-width: 0; padding: max(4px, calc(var(--dock-icon, 24px) * .3)); }
+@media (max-width: 1279px), (max-height: 799px) {
+  body[data-dock-labels="auto"] .dock-btn .dl { display: none; }
+  body[data-dock-labels="auto"] .dock-btn { min-width: 0; padding: max(4px, calc(var(--dock-icon, 24px) * .3)); }
+}
 
 /* 工具列位置（設定 → 工具列）：body[data-dock] = bottom | top | left | right */
 body[data-dock="top"] #dock { top: 62px; bottom: auto; }

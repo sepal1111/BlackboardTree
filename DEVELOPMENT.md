@@ -11,18 +11,19 @@
 免費的教室投影白板（類似 classroomscreen.com），給學校老師使用：
 
 - 白板資料存在老師個人資料夾 `V:\MyScreen`（學校的「網路磁碟機」程式會把個人資料夾連到 V:），換電腦、換教室都能接著用
-- 主要使用方式是 **Windows 桌面版**（Neutralino），也有網頁版與伺服器版
+- 主要使用方式是 **Windows 桌面版**（Neutralino），也有網頁版
 - 老師可以用手機／平板遙控教室電腦（接大電視）上的白板
 
-### 三種執行方式
+### 兩種執行方式
 
 | 方式 | 說明 | 儲存 |
 |---|---|---|
-| 桌面版（主要） | `desktop/` 打包成 `MyScreen.exe` 與安裝程式 | 直接讀寫 `V:\MyScreen` |
-| 網頁版 | `static/` 放到任何網頁伺服器 | 瀏覽器 File System Access API 選資料夾 |
-| 伺服器版 | `server/app.py`（FastAPI），老師用 SAMBA 帳號登入 | 伺服器代為連線 SAMBA |
+| 桌面版（主要） | `desktop/` 打包成 `MyScreen.exe` 與安裝程式 | 直接讀寫 `V:\MyScreen`，或老師選的其他資料夾 |
+| 網頁版 | `server/app.py`（FastAPI，提供網頁與 relay）或只放 `static/` | 瀏覽器 File System Access API 選資料夾 |
 
-三種方式讀寫**同一種資料格式**，可以混用。
+兩種方式讀寫**同一種資料格式**，可以混用。白板一律由老師選擇儲存位置（資料夾，或只存在這台電腦）；**伺服器不存白板**。
+
+> 1.4.0 移除了「學校帳號登入」（伺服器用 SAMBA 帳號代存白板）、NAS 遙控伺服器設定（老師設定、`myscreen.json` 學校預設、建置時的 `RELAY`、Docker 部署），以及「開啟網路磁碟機程式」按鈕。需要參考舊程式時看 `v1.3.0` 標籤。
 
 ---
 
@@ -55,12 +56,6 @@ py -3 -m venv .venv
 
 （或直接雙擊 `start.bat`，第一次會自動建立 `.venv` 並安裝套件。）
 
-學校的「網路磁碟機」程式是**另一個 repo**，不在這裡（`.gitignore` 排除了 `NetDrive/`）。需要的話：
-
-```bash
-git clone https://github.com/sepal1111/NetDrive.git NetDrive
-```
-
 ---
 
 ## 3. 日常開發流程
@@ -71,10 +66,10 @@ git clone https://github.com/sepal1111/NetDrive.git NetDrive
 .venv\Scripts\python server\app.py
 ```
 
-開啟 `http://localhost:8080`。沒有 `config.json` 時是**本機測試模式**（`mode: local`）：
+開啟 `http://localhost:8080`：
 
+- 「網路磁碟機或資料夾」：選任何資料夾測試（`localhost` 才能使用資料夾存取）
 - 「只存在這台電腦」：資料在瀏覽器 localStorage
-- 「學校帳號登入」：任意帳號都能登入，資料存在 `./data/<帳號>/MyScreen`（測完可以刪掉 `data/`）
 - 手機遙控頁：`http://localhost:8080/remote.html`（這個伺服器也內含 relay）
 - 學生投票頁：在投票小工具按「📱 學生投票」後，用顯示的網址開啟（`/vote.html#<投票代碼>`）。改了 `server/relay.py` 要重新啟動伺服器
 
@@ -143,10 +138,13 @@ node desktop/relay/test-relay.mjs
 1. 改 `desktop/neutralino.config.json` 的 `version`（安裝程式檔名、exe 版本資訊都會跟著變）
 2. 執行 `build.ps1`（會自動刪除 `out\` 裡舊版本的安裝程式）
 3. `desktop/out/` 的安裝程式與 `MyScreen.exe` **有放進 git**（`.gitignore` 只排除執行時產生的 `.tmp`、`myscreen-relay.exe`、log），commit 時會一起更新
-4. commit 後打標籤：`git tag v1.1.0`，以後才查得到每個版本對應的程式碼
+4. 更新 `RELEASE.md`：標題與檔名的版本號、「從舊版升級」會注意到的變化、最上面加一段新版本的版本紀錄（給從 GitHub 下載的老師、資訊組看，用一般老師看得懂的說法）；`DEVELOPMENT.md` 的版本表也加一列
+5. commit 後打標籤：`git tag -a v1.1.0 -m "MyScreen 1.1.0"`，以後才查得到每個版本對應的程式碼；推送用 `git push --follow-tags`
+6. 在 GitHub 的 Releases 頁面建立新版本：選剛推上去的標籤，說明貼上 `RELEASE.md` 該版本的「版本紀錄」與下載說明，並把 `desktop/out/` 的兩個 exe 上傳到 Assets
 
 | 版本 | 內容 |
 |---|---|
+| 1.4.0 | 工具列文字（自動／顯示／隱藏，自動：視窗小於 1280×800 時只顯示圖示）、新增「迷你」工具大小，按鈕間距跟著工具大小縮放；移除「學校帳號登入」（SAMBA）、NAS 遙控伺服器設定與 Docker 部署、「開啟網路磁碟機程式」按鈕 |
 | 1.3.0 | 投票題庫（存題目、重複使用、從文字／Excel／CSV 匯入）、投票紀錄（結束投票、歸零、換題目時自動記錄，可匯出 CSV）、⚙ 設定新增「📊 投票」分頁 |
 | 1.2.0 | ⚙ 總設定（白板、班級名單、工具列位置／圖示大小／顯示的工具）、座位表照片保持 1:1.35（空間不夠時保留上方、最多裁到 1:1）、安裝精靈移除遙控伺服器設定頁與 `/RELAY=` 參數；移除紅綠燈、骰子，時鐘與日期合併成「時鐘日期」（舊白板開啟時由 `upgradeWidget` 自動轉換）；工具列改用自訂 SVG 圖示；學生用手機掃 QR Code 投票（relay 新增 `/ws/vote`） |
 | 1.1.0 | 系統匣圖示（遙控伺服器狀態、QR Code、結束）、網路變動時自動更新 IP、前端自動化測試 |
@@ -165,7 +163,7 @@ static/                     前端（桌面版、網頁版共用）
   css/app.css, remote.css
   js/app.js                 主程式：儲存位置、白板清單、小工具框、放大、手機遙控（含內建 relay 控制）
   js/store.js               存檔、離線備份、跨裝置同步；LS（這台電腦的設定，桌面版存檔案）
-  js/backends/index.js      FolderBackend／ServerBackend／LocalBackend
+  js/backends/index.js      FolderBackend／LocalBackend
   js/backends/fs.js         資料夾存取：FsaAdapter（瀏覽器）、NeuAdapter（Neutralino）
   js/roster.js              班級名單：匯入 Excel/CSV/貼上、欄位對應、照片比對
   js/remote-host.js         教室電腦端的遙控連線（RemoteHost）
@@ -176,9 +174,8 @@ static/                     前端（桌面版、網頁版共用）
   vendor/qrcode.js          QR Code
   vendor/xlsx.mini.min.js   SheetJS 0.20.3（讀 Excel，用到時才載入）
 server/
-  app.py                    FastAPI 伺服器（smb／local／relay 三種模式）
-  storage.py                SMB（smbprotocol）與本機儲存
-  relay.py                  手機遙控轉送（NAS／伺服器版用）
+  app.py                    網頁版伺服器（FastAPI）：靜態網頁、relay、/api/config（校內 IP）
+  relay.py                  手機遙控、學生投票轉送（網頁版用；桌面版用 C# 版）
 desktop/
   neutralino.config.json    桌面版設定（版本、globalVariables、允許的 API）
   build.ps1                 建置腳本（UTF-8 BOM，見「注意事項」）
@@ -190,35 +187,34 @@ desktop/
   out/                      建置產出（安裝程式、免安裝版，有放進 git）
 tests/                      前端自動化測試（npm test）
 package.json                只有測試指令，沒有相依套件
-Dockerfile, docker-compose.yml   NAS 上架設 relay／伺服器版
-config.example.json         伺服器版設定範例（複製成 config.json，已被 .gitignore 排除）
+config.example.json         網頁版伺服器設定範例：host、port、HTTPS 憑證（複製成 config.json，已被 .gitignore 排除）
+start.bat, start.sh         啟動網頁版伺服器（第一次會建立 .venv）
 ```
 
 ---
 
 ## 5. 資料格式
 
-都在 `V:\MyScreen`（或伺服器版的 `data_dir`）：
+都在老師選的資料夾（通常是 `V:\MyScreen`）：
 
 ```
 MyScreen/
   boards/<id>.json     {id, name, rev, created, updatedAt, data: {background, widgets: [...]}}
-  settings.json        {data: {classLists: [...], relay?, ui?}, updatedAt}
+  settings.json        {data: {classLists: [...], ui?, pollBank?, pollResults?}, updatedAt}
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
 
 - **小工具**：`{id, type, x, y, w, h, z, state}`，位置與大小是「佔畫面的比例」（0～1）
-- **衝突處理**：寫入時帶 `baseRev`，和檔案的 `rev` 不同就拒絕（伺服器回 409），前端載入最新版並提示
+- **衝突處理**：寫入時帶 `baseRev`，和檔案的 `rev` 不同就拒絕（409），前端載入最新版並提示
 - **班級名單**：`classLists: [{id, name, students: [{no, sid, name, photo?}], names}]`
   - `no` 座號（兩位數字串）、`sid` 學號、`photo` 圖片參照
   - `names` 是給舊版程式讀的，存檔時自動由 `students` 產生
 - **圖片參照**：`{kind:'file', base:'data'|'root', path}`、`{kind:'data'|'url', url}`（`{kind:'smb', path}` 是舊格式，等同 root）
-- **relay**：老師自己設定的遙控伺服器網址（選填）
-- **ui**：畫面偏好 `{dock: 'bottom'|'top'|'left'|'right', icon: 's'|'m'|'l'|'xl', hidden: [小工具 type]}`（選填）。讀取時一律經過 `ui-prefs.js` 的 `normalizeUi()`：不認得的值改回預設、不存在的小工具去掉、全部隱藏時改回全部顯示
+- **relay**：1.3 以前老師自己設定的遙控伺服器網址；1.4.0 起不再使用（舊資料留著也沒關係）
+- **ui**：畫面偏好 `{dock: 'bottom'|'top'|'left'|'right', icon: 'xs'|'s'|'m'|'l'|'xl', labels: 'auto'|'show'|'hide', hidden: [小工具 type]}`（選填）。讀取時一律經過 `ui-prefs.js` 的 `normalizeUi()`：不認得的值改回預設、不存在的小工具去掉、全部隱藏時改回全部顯示
 - **這台電腦上的資料**（不在 V:）：
   - 網頁版：瀏覽器 localStorage
   - 桌面版：`%APPDATA%\MyScreen\prefs.json`（遙控代碼、上次用的班級、V: 斷線時的離線備份等）
-  - 學校預設遙控伺服器：程式資料夾的 `myscreen.json`（`{"relay": "..."}`，資訊組手動放置；安裝程式不會寫入，解除安裝時會刪除）
 
 ---
 
@@ -254,7 +250,7 @@ export const example = {
 
 - `app.js` 的 `settingsDialog(tab)`：分頁 `board`（白板）、`roster`（班級名單）、`dock`（工具列）。要加新分頁：在 `SETTING_TABS` 加一項，並在 `render()` 的對照表加上畫面函式
 - 白板操作（`switchBoard`、`newBoardAction`、`renameBoardAction`、`copyBoardAction`、`deleteBoardAction`）由上方白板選單與設定畫面共用
-- 工具列偏好：`setUi()` 立即套用（`applyUi()` 設定 `body[data-dock]` 與 CSS 變數 `--dock-icon`）並存進 settings.json；位置的版面在 `app.css` 的 `body[data-dock=...]` 規則
+- 工具列偏好：`setUi()` 立即套用（`applyUi()` 設定 `body[data-dock]`、`body[data-dock-labels]` 與 CSS 變數 `--dock-icon`）並存進 settings.json；位置的版面在 `app.css` 的 `body[data-dock=...]` 規則；工具列文字「自動」用 media query（寬度小於 1280 或高度小於 800 時隱藏），按鈕與工具列的內距跟著 `--dock-icon` 縮放
 - 需要班級名單的小工具：參考 `classroom.js` 的 `people(ctx)`、`namesEditor()`、`watchRoster()`（設定變更時自動重畫、學生改名時更新狀態）
 - 大小改變時要重排版面：用 `widgets/util.js` 的 `observeSize()`，不要直接用 ResizeObserver（會出現 ResizeObserver loop 警告）
 - 小工具內的文字大小用容器單位（`cqw`、`cqh`、`cqmin`），放大到全螢幕時會自動放大
@@ -284,9 +280,9 @@ export const example = {
   - 匯出檔案用 `ui.js` 的 `saveTextFile()`：桌面版跳出「另存新檔」（Neutralino `os.showSaveDialog` + `filesystem.writeFile`），網頁版直接下載
   - 同一時間只有一個投票小工具開放；刪除小工具、換白板、回到白板清單時自動結束投票
 - relay 有兩種實作，協定必須保持一致：
-  - `server/relay.py`：NAS／伺服器版
+  - `server/relay.py`：網頁版（`server/app.py`）
   - `desktop/relay/MyScreenRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，之後每 5 秒檢查網路，IP 變了就印 `IPS <ip,...>`；`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁與學生投票頁共 6 個檔案）
-- 桌面版使用哪個 relay（`app.js` 的 `relayBase()`）：老師設定（V: settings.json）→ 學校預設（myscreen.json）→ 建置時的 `RELAY` → **內建 relay**
+- 使用哪個 relay（`app.js` 的 `relayBase()`）：桌面版一律用**內建 relay**；網頁版用提供網頁的 `server/app.py`（只放 `static/` 時沒有遙控）
 - 內建 relay：MyScreen 開啟時啟動（`startLocalRelay()`），關閉時結束（`windowClose` 或系統匣「結束」→ `quitApp()` → `stopLocalRelay()`）。收到 `IPS` 時 `onLocalIpsChanged()` 更新 QR Code 的網址
 - 系統匣（`initTray()`／`updateTray()`，Neutralino `os.setTray`）：顯示 relay 狀態、手機連線數，選單可開 QR Code、結束程式。狀態有變化時（`renderRemoteBtn()`、relay 啟動／結束）呼叫 `updateTray()` 重設整個選單。Neutralino 的系統匣沒有滑鼠停留提示文字，狀態只能放在停用的選單項目裡
 - 安裝版與免安裝版的 relay 位置：安裝版在程式資料夾；免安裝版內嵌在 exe 的 resources，執行時用 `Neutralino.resources.extractFile` 解出
@@ -299,7 +295,7 @@ export const example = {
 | 問題 | 說明 |
 |---|---|
 | Neutralino 每次啟動連接埠都不同 | localStorage 的來源跟著變，**每次啟動都是空的**。所以桌面版的 `LS`（`store.js`）改存 `%APPDATA%\MyScreen\prefs.json`。新增需要跨次保存的資料請用 `LS`，不要直接用 `localStorage` |
-| `globalVariables` 不會跳脫反斜線 | `neutralino.config.json` 的路徑請用 `/`（例如 `%LOCALAPPDATA%/Programs/...`），程式裡再轉換；用 `\` 會產生錯誤的 JSON、畫面全白 |
+| `globalVariables` 不會跳脫反斜線 | `neutralino.config.json` 的路徑請用 `/`，程式裡再轉換；用 `\` 會產生錯誤的 JSON、畫面全白 |
 | 檔案編碼 | `build.ps1`、`setup.iss` 要 **UTF-8 with BOM**（PowerShell 5.1、Inno Setup 才讀得懂中文）；`neutralino.config.json` **不能有 BOM**（neu build 會失敗）。用 PowerShell 5.1 的 `Set-Content -Encoding utf8` 會自動加 BOM，要小心 |
 | 執行中的 exe 會被鎖住 | 建置、安裝前先關閉 MyScreen；安裝程式會自動關閉（`CloseApplications`） |
 | 背景分頁計時器被節流 | 用瀏覽器測手機遙控時，如果分頁在背景，`setTimeout`／`requestAnimationFrame` 會被延遲，狀態看起來「慢一步」，測試時把分頁切到前景 |
@@ -333,8 +329,6 @@ export const example = {
 - [ ] **桌面版匯出投票紀錄**（「另存新檔」對話框）：只測過網頁版的下載
 - [ ] **全班同時投票**：只測過 2 位學生，還沒測過 30 人同時連線
 - [ ] **安裝程式加入防火牆例外**：需要系統管理員權限，請資訊組以 `/ALLUSERS` 或輸入系統管理員密碼測試
-- [ ] **NAS Docker 部署**（`docker-compose.yml`）：開發機沒有 Docker，沒有實際建置過（現在有內建 relay，NAS 變成選用）
-- [ ] **伺服器版連學校 SAMBA**：只測過本機模式，沒有連過真正的學校 SAMBA
 - [ ] **網頁版的資料夾選擇**（File System Access 的原生對話框）沒有實際操作過
 
 ### 可以考慮的後續工作

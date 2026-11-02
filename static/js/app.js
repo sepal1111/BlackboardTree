@@ -1,7 +1,7 @@
 // MyScreen 主程式：選擇儲存位置、白板清單、拖曳縮放、工具列、背景
 import { api } from './api.js';
 import { Store, LS, uid, initLocalPrefs, flushLocalPrefs } from './store.js';
-import { FolderBackend, ServerBackend, LocalBackend, DATA_DIR } from './backends/index.js';
+import { FolderBackend, LocalBackend, DATA_DIR } from './backends/index.js';
 import { FsaAdapter, NeuAdapter, kvGet, kvSet } from './backends/fs.js';
 import { widgets, widgetList, upgradeWidget } from './widgets/index.js';
 import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
@@ -9,7 +9,7 @@ import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from '.
 import { RemoteHost } from './remote-host.js';
 import { rosterDialog, studentsOf, hasPhotos } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
-import { DOCK_POSITIONS, ICON_SIZES, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool } from './ui-prefs.js';
+import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool } from './ui-prefs.js';
 
 const TOOL_TYPES = widgetList.map((d) => d.type);
 
@@ -30,7 +30,6 @@ const BG_PRESETS = {
 // 桌面版（Neutralino）會注入 NL_ 開頭的全域變數
 const DESKTOP = typeof window.NL_PORT !== 'undefined';
 const DESKTOP_ROOT = window.NL_MSROOT || 'V:';      // 老師個人資料夾的磁碟機
-const NETDRIVE_EXE = window.NL_NETDRIVE || '';     // 網路磁碟機連線程式
 const CHOICE_KEY = 'ms:storage';
 
 const $ = (s) => document.querySelector(s);
@@ -45,9 +44,8 @@ async function boot() {
     initTray();
   }
   S.config = DESKTOP ? null : await api.get('/api/config').catch(() => null);
-  await loadSchoolConfig();
   // 桌面版：開啟 MyScreen 時一起啟動內建遙控伺服器，關閉時一起關閉
-  if (DESKTOP && !S.relaySchool && !window.NL_RELAY) startLocalRelay().catch((e) => console.warn(e));
+  if (DESKTOP) startLocalRelay().catch((e) => console.warn(e));
   let choice = LS.get(CHOICE_KEY, null);
   if (!choice && LS.get('ms:guest', false)) choice = { kind: 'local' }; // 舊版訪客模式
   if (!choice && DESKTOP) choice = { kind: 'neu', path: DESKTOP_ROOT };
@@ -64,10 +62,6 @@ async function autoConnect(choice) {
       const ad = new FsaAdapter(handle);
       if ((await ad.permission(false)) !== 'granted') return false;
       return await connectFolder(ad, choice);
-    }
-    if (choice.kind === 'server' && S.config) {
-      const me = await api.get('/api/me', { quiet401: true });
-      return await connect(new ServerBackend(me.username, me.dataPath), choice);
     }
     if (choice.kind === 'local') return await connect(new LocalBackend(), choice);
   } catch { /* 自動連線失敗就讓老師自己選 */ }
@@ -111,11 +105,7 @@ async function connect(backend, choice) {
   S.ui = normalizeUi(settings.ui, TOOL_TYPES); // 工具列位置、圖示大小、顯示的工具（跟著老師）
   applyUi();
   renderStatus();
-  const prevRelay = relayBase();
-  S.relayUser = normalizeRelay(settings.relay || '');
-  if (relayBase() !== prevRelay) resetRemote();
   if (relayBase() === LOCAL) ensureRemote().catch(() => {});
-  else if (!S.relaySchool && !window.NL_RELAY) stopLocalRelay(); // 老師改用 NAS 等其他伺服器
   renderRemoteBtn();
   if (S.store.remote) S.pollTimer = setInterval(() => S.store?.poll(S.board).catch(() => {}), 8000);
   showBoards();
@@ -125,23 +115,7 @@ async function connect(backend, choice) {
 function stopPolling() { clearInterval(S.pollTimer); S.pollTimer = null; }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.pollTimer) S.store?.poll(S.board).catch(() => {}); });
 
-window.addEventListener('ms:unauthorized', () => {
-  if (S.store?.backend.kind === 'server') {
-    stopPolling();
-    showStart('登入已過期，請重新登入（尚未儲存的變更保留在這台電腦）');
-  }
-});
-
 // ------------------------------------------------------------ 第一步：選擇儲存位置
-async function resolveNetDrive() {
-  if (!NETDRIVE_EXE) return '';
-  let p = NETDRIVE_EXE.replace(/\//g, '\\'); // 設定檔用 / 避免 Neutralino 的跳脫問題
-  for (const [m, name] of NETDRIVE_EXE.matchAll(/%(\w+)%/g)) {
-    p = p.replace(m, await window.Neutralino.os.getEnv(name).catch(() => ''));
-  }
-  try { await window.Neutralino.filesystem.getStats(p); return p; } catch { return ''; }
-}
-
 function screen(card) {
   closeBoard();
   $('#app').classList.add('hidden');
@@ -166,21 +140,11 @@ function showStart(message) {
         try { await connectFolder(drive, { kind: 'neu', path: DESKTOP_ROOT }); } catch (e) { fail(e); status.textContent = ''; }
       } else status.textContent = `尚未連線 ${drive.label}，請先用「網路磁碟機」程式登入，再按「重新檢查」。`;
     };
-    // 有安裝「網路磁碟機」程式（NetDrive）就提供一鍵開啟
-    const netBtn = h('span');
-    resolveNetDrive().then((exe) => {
-      if (!exe) return;
-      netBtn.append(h('button', { class: 'btn', onclick: () => {
-        window.Neutralino.os.execCommand(`"${exe}"`, { background: true }).catch(fail);
-        status.textContent = '連線完成後，請按「重新檢查」。';
-      } }, '開啟網路磁碟機程式'));
-    });
     options.push(h('div', { class: 'opt main' },
       h('div', { class: 'opt-title' }, `📁 我的網路磁碟機（${drive.label}）`),
       status,
       h('div', { class: 'row-btns' },
         h('button', { class: 'btn primary', onclick: retry }, '重新檢查'),
-        netBtn,
         h('button', { class: 'btn', onclick: async () => {
           const p = await window.Neutralino.os.showFolderDialog('選擇白板要儲存的資料夾').catch(() => '');
           if (p) connectFolder(new NeuAdapter(p), { kind: 'neu', path: p }).catch(fail);
@@ -224,25 +188,6 @@ function showStart(message) {
         : '網址必須是 https:// 或 localhost 才能存取資料夾；也可以改用 MyScreen 桌面版。')));
   }
 
-  if (S.config && S.config.mode !== 'relay') {
-    // 伺服器模式（由伺服器用 SAMBA 帳號代為連線）
-    const smb = S.config.mode === 'smb';
-    const user = h('input', { class: 'input', placeholder: smb ? 'SAMBA 帳號' : '名稱（例如：王老師）', autocomplete: 'username', value: LS.get('ms:lastUser', '') });
-    const pass = h('input', { class: 'input', type: 'password', placeholder: '密碼', autocomplete: 'current-password' });
-    const btn = h('button', { class: 'btn primary', type: 'submit' }, '登入');
-    options.push(h('form', { class: 'opt', onsubmit: async (e) => {
-      e.preventDefault();
-      btn.disabled = true; btn.textContent = '連線中…'; err.textContent = '';
-      try {
-        const r = await api.post('/api/login', { username: user.value.trim(), password: pass.value }, { quiet401: true });
-        LS.set('ms:lastUser', user.value.trim());
-        await connect(new ServerBackend(r.username, r.dataPath), { kind: 'server' });
-      } catch (ex) { fail(ex); } finally { btn.disabled = false; btn.textContent = '登入'; }
-    } },
-    h('div', { class: 'opt-title' }, smb ? '🔑 用學校帳號登入（不需連線網路磁碟機）' : '🔑 登入 MyScreen 伺服器'),
-    h('div', { class: 'row-btns' }, user, S.config.needsPassword ? pass : null, btn)));
-  }
-
   options.push(h('div', { class: 'opt' },
     h('div', { class: 'opt-title' }, '💻 只存在這台電腦'),
     h('div', { class: 'row-btns' },
@@ -278,7 +223,7 @@ function showBoards() {
     if (n) openBoard(store.newBoard(n));
   } }, h('div', { class: 'bc-plus' }, '＋'), h('div', null, '新增白板')));
 
-  const icon = { folder: '📁', server: '🔑', local: '💻' }[store.backend.kind];
+  const icon = { folder: '📁', local: '💻' }[store.backend.kind];
   screen(h('div', { class: 'login-card boards' },
     h('div', { class: 'boards-head' },
       h('div', null, h('h2', null, '選擇白板'),
@@ -319,10 +264,7 @@ function closeBoard() {
 }
 
 async function leaveStorage() {
-  if (S.store) {
-    await S.store.flushAll().catch(() => {});
-    if (S.store.backend.kind === 'server') await api.post('/api/logout').catch(() => {});
-  }
+  if (S.store) await S.store.flushAll().catch(() => {});
   stopPolling();
   LS.del(CHOICE_KEY);
   S.store = null;
@@ -398,6 +340,7 @@ function renderDock() {
 function applyUi() {
   const pos = dockInfo(S.ui);
   document.body.dataset.dock = pos.value;
+  document.body.dataset.dockLabels = S.ui.labels;
   document.documentElement.style.setProperty('--dock-icon', iconPx(S.ui) + 'px');
   $('#eh-icon').textContent = pos.arrow;
   $('#eh-text').textContent = `從${pos.where}工具列加入計時器、抽籤、文字等小工具`;
@@ -470,7 +413,7 @@ function voteApi(w) {
     async open(poll) {
       if (relayBase() === LOCAL && !S.remote) toast('正在啟動伺服器…', 1500);
       const r = await ensureRemote();
-      if (!r) throw new Error('沒有可用的遙控伺服器，請先在「📱 遙控」完成設定');
+      if (!r) throw new Error('網頁版要用 MyScreen 伺服器（start.bat）開啟，才能讓學生投票');
       if (r.poll && r.poll.id !== w.id) toast('已結束另一個投票，改為開放這一題');
       r.openPoll({ id: w.id, ...poll });
     },
@@ -707,9 +650,12 @@ function settingsDialog(tab = 'board') {
     main.append(
       sec('工具列位置',
         seg(DOCK_POSITIONS.map((p) => ({ value: p.value, label: `${p.arrow} ${p.label}` })), ui.dock, (v) => update({ ...ui, dock: v }))),
-      sec('工具圖示大小',
+      sec('工具大小',
         seg(ICON_SIZES, ui.icon, (v) => update({ ...ui, icon: v })),
-        h('small', { class: 'muted' }, '在教室大電視上使用時，可以選「大」或「特大」。')),
+        h('small', { class: 'muted' }, '螢幕解析度較低（例如筆電、投影機）時可選「迷你」或「小」；在教室大電視上可以選「大」或「特大」。')),
+      sec('工具列文字',
+        seg(LABEL_MODES, ui.labels, (v) => update({ ...ui, labels: v })),
+        h('small', { class: 'muted' }, '「自動」：視窗寬度小於 1280 或高度小於 800 時只顯示圖示，滑鼠移到圖示上會顯示名稱。')),
       sec(`要顯示的工具（${shown} / ${TOOL_TYPES.length}）`,
         h('small', { class: 'muted' }, '點一下切換顯示或隱藏。隱藏的工具不會出現在工具列與手機遙控，已經放在白板上的不受影響。'),
         h('div', { class: 'tool-grid' }, widgetList.map((d) => {
@@ -778,10 +724,10 @@ function backgroundDialog() {
 function userMenu(anchor) {
   const b = S.store.backend;
   menu(anchor, [
-    { label: `${{ folder: '📁', server: '👤', local: '💻' }[b.kind]} ${b.label}`, onClick: () => {} },
+    { label: `${{ folder: '📁', local: '💻' }[b.kind]} ${b.label}`, onClick: () => {} },
     ...(S.store.remote ? [{ label: '🔄 立即檢查更新', onClick: () => S.store.poll(S.board).then(() => toast("已檢查更新"), (e) => toast(e.message)) }] : []),
     '-',
-    { label: b.kind === 'server' ? '登出' : '更換儲存位置', onClick: () => leaveStorage() },
+    { label: '更換儲存位置', onClick: () => leaveStorage() },
   ]);
 }
 
@@ -840,14 +786,11 @@ async function toggleFullscreen() {
 }
 
 // ------------------------------------------------------------ 手機遙控
-// 轉送伺服器（手機與教室電腦之間的中繼，通常架在學校 NAS），優先順序：
-//   1. 老師自己設定的（存在 V:\MyScreen\settings.json，換電腦也能用）
-//   2. 學校預設：程式資料夾的 myscreen.json（資訊組手動放置，安裝程式不會寫入）
-//   3. 建置時寫入的 NL_RELAY
-//   4. 桌面版：都沒有設定時，用這台電腦當伺服器（內建的 myscreen-relay.exe，手機要在同一個校內網路）
-//   5. 網頁版：提供這個網頁的伺服器
+// 轉送伺服器（手機、學生與教室電腦之間的中繼）：
+//   桌面版：這台電腦（內建的 myscreen-relay.exe，手機要在同一個校內網路）
+//   網頁版：提供這個網頁的 MyScreen 伺服器（server/app.py）；只放在一般網頁伺服器上時沒有遙控
 const LOCAL = 'local';
-const relayBase = () => (S.relayUser || S.relaySchool || window.NL_RELAY || (DESKTOP ? LOCAL : (S.config ? location.origin : ''))).replace(/\/+$/, '');
+const relayBase = () => (DESKTOP ? LOCAL : (S.config ? location.origin : ''));
 
 // ---- 內建遙控伺服器（桌面版）
 // 程式資料夾裡的 myscreen-relay.exe；免安裝版沒有時，從 MyScreen.exe 內嵌的資源解出來
@@ -948,8 +891,6 @@ function onLocalIpsChanged(info) {
 // ---- 系統匣（桌面版右下角的圖示）：顯示遙控伺服器狀態，可開啟 QR Code 或結束程式
 let trayTimer = 0;
 function trayStatus() {
-  const base = relayBase();
-  if (base !== LOCAL) return `遙控伺服器：${base}`;
   const info = S.relayInfo;
   if (!info) return S.localRelay ? '遙控伺服器：啟動中…' : '遙控伺服器：未啟動';
   const pub = S.remote?.local ? S.remote.publicBase.replace(/^https?:\/\//, '') : `${info.ips[0] || '127.0.0.1'}:${info.port}`;
@@ -1003,24 +944,6 @@ function initTray() {
   updateTray();
 }
 
-// 讀取安裝程式寫入的學校預設（桌面版）
-async function loadSchoolConfig() {
-  if (!DESKTOP) return;
-  try {
-    const dir = String(window.NL_PATH || '.').replace(/[\\/]+$/, '');
-    const cfg = JSON.parse(await window.Neutralino.filesystem.readFile(dir + '/myscreen.json'));
-    S.relaySchool = normalizeRelay(cfg.relay || '');
-  } catch { /* 沒有設定檔 */ }
-}
-
-// 「192.168.1.10:8080」→「http://192.168.1.10:8080」
-function normalizeRelay(v) {
-  v = String(v || '').trim().replace(/\/+$/, '').replace(/\/remote\.html.*$/, '');
-  if (!v) return '';
-  if (!/^https?:\/\//i.test(v)) v = 'http://' + v;
-  try { const u = new URL(v); return u.origin + u.pathname.replace(/\/+$/, ''); } catch { return ''; }
-}
-
 // 換伺服器：關掉舊連線，下次開啟遙控時用新的伺服器
 function resetRemote() {
   S.remote?.stop();
@@ -1029,34 +952,6 @@ function resetRemote() {
   renderRemoteBtn();
 }
 
-// 遙控伺服器設定畫面
-function relaySetupDialog(message = '') {
-  const input = h('input', { class: 'input', placeholder: '例如：192.168.1.10:8080', value: S.relayUser || '' });
-  const school = S.relaySchool || window.NL_RELAY || '';
-  const fallback = school ? `學校預設：${school}` : '這台電腦（內建遙控伺服器，不需要 NAS）';
-  const dlg = modal({
-    title: '📱 設定手機遙控',
-    body: h('div', { class: 'stack' },
-      message ? h('p', { class: 'err' }, message) : null,
-      h('p', null, '預設由這台電腦擔任遙控伺服器，手機只要連上校內網路就能使用。如果學校另外架了遙控伺服器（例如在 NAS 上），可以在這裡填入網址。'),
-      h('label', { class: 'field' }, h('span', null, '遙控伺服器網址'), input),
-      h('p', { class: 'muted' }, `留空則使用${fallback}。這個設定存在你的個人資料夾（V:\\MyScreen），換到其他電腦也會套用。`)),
-    actions: [
-      { label: '取消' },
-      { label: '儲存', primary: true, onClick: () => {
-        const raw = input.value.trim();
-        const v = normalizeRelay(raw);
-        if (raw && !v) { toast('網址格式不正確'); return false; }
-        S.relayUser = v;
-        if (S.store) S.store.getSettings().then((st) => { if (v) st.relay = v; else delete st.relay; S.store.saveSettings(); });
-        resetRemote();
-        setTimeout(remoteDialog, 50);
-      } },
-    ],
-  });
-  setTimeout(() => input.focus(), 50);
-  return dlg;
-}
 
 function remoteState() {
   const b = S.board;
@@ -1185,16 +1080,15 @@ async function remoteDialog() {
 async function openRemoteDialog() {
   let r;
   if (relayBase() === LOCAL && !S.remote) toast('正在啟動遙控伺服器…', 1500);
-  try { r = await ensureRemote(); } catch (e) { return relaySetupDialog(e.message); }
-  if (!r) return relaySetupDialog();
+  try { r = await ensureRemote(); } catch (e) { return toast('無法啟動遙控伺服器：' + e.message, 5000); }
+  if (!r) return toast('網頁版要用 MyScreen 伺服器（start.bat）開啟，才能使用手機遙控', 5000);
   const box = h('div', { class: 'remote-box' });
   const render = () => {
     box.innerHTML = '';
     if (r.status !== 'online') {
       box.append(h('div', { class: 'remote-wait' }, r.status === 'error'
         ? [h('div', null, `無法連線到遙控伺服器（${r.local ? '這台電腦' : r.base}），正在重試…`),
-          h('div', { class: 'muted' }, r.local ? '內建遙控伺服器沒有回應，請關閉 MyScreen 後重新開啟。' : '請確認網址正確、這台電腦連得到學校 NAS。'),
-          h('button', { class: 'btn', onclick: () => { dlg.close(); relaySetupDialog(); } }, '⚙ 更改遙控伺服器')]
+          h('div', { class: 'muted' }, r.local ? '內建遙控伺服器沒有回應，請關閉 MyScreen 後重新開啟。' : '請確認 MyScreen 伺服器（start.bat）仍在執行。')]
         : '連線中…'));
       return;
     }
@@ -1223,8 +1117,7 @@ async function openRemoteDialog() {
         r.local ? h('div', { class: 'muted remote-tip' }, '由這台電腦擔任遙控伺服器：手機要連上校內網路。若一直連不上，可能被 Windows 防火牆擋住，請資訊組協助（安裝時勾選「允許手機連線」）。') : null,
         h('div', { class: 'remote-count' }, r.remotes ? `📱 目前有 ${r.remotes} 台裝置連線` : '尚無裝置連線'),
         h('div', { class: 'row-btns' },
-          h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有遙控裝置，並更換新代碼'); } }, '中斷全部並換代碼'),
-          DESKTOP ? h('button', { class: 'linkbtn', onclick: () => { dlg.close(); relaySetupDialog(); } }, '⚙ 遙控伺服器設定') : null)));
+          h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有遙控裝置，並更換新代碼'); } }, '中斷全部並換代碼'))));
   };
   render();
   // 手機連上後自動關閉，讓電視畫面回到白板

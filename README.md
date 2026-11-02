@@ -2,6 +2,8 @@
 
 免費的教室投影白板。白板存在老師自己的**網路磁碟機（V:）**，換電腦、換教室都能接著用。
 
+> **下載與安裝**：請看 [RELEASE.md](RELEASE.md)（要下載哪個檔案、安裝步驟、升級注意事項、版本紀錄）
+
 ## 功能
 
 | 類別 | 小工具 |
@@ -16,7 +18,7 @@
 - **⚙ 設定**（上方工具列）：集中管理
   - 白板：切換、新增、重新命名、複製、刪除、背景
   - 班級名單：查看各班人數，進入名單管理
-  - 工具列：放在畫面上／下／左／右、圖示大小（小／中／大／特大）、要顯示哪些工具（不常用的可以隱藏，手機遙控的「加入小工具」也會跟著隱藏）
+  - 工具列：放在畫面上／下／左／右、工具大小（迷你／小／中／大／特大）、工具列文字（自動／顯示／隱藏；自動：視窗較小時只顯示圖示，適合解析度較低的筆電、投影機）、要顯示哪些工具（不常用的可以隱藏，手機遙控的「加入小工具」也會跟著隱藏）
   - 這些設定存在老師的 `V:\MyScreen\settings.json`，換電腦也會套用
 - 計時器、碼錶記錄的是「絕對時間」，換台電腦打開，倒數時間一樣是對的
 - **小工具放大到全螢幕**：按小工具右上角的 ⛶（或雙擊標題列），小工具會填滿整個畫面並切換到全螢幕，內容自動放大；按 🗗 或 `Esc` 還原。手機遙控的每張卡片也有「⛶ 放大」按鈕
@@ -66,11 +68,10 @@
 
 | 儲存位置 | 說明 |
 |---|---|
-| 📁 網路磁碟機或資料夾 | **建議使用**。存在 `V:\MyScreen`，任何連上 V: 的電腦都能讀取 |
-| 🔑 學校帳號登入 | 不需要先連線網路磁碟機，由 MyScreen 伺服器代為連線 SAMBA（需要架設伺服器，見下方說明） |
+| 📁 網路磁碟機或資料夾 | **建議使用**。存在 `V:\MyScreen`，任何連上 V: 的電腦都能讀取；也可以「選擇其他資料夾」，例如隨身碟或雲端硬碟同步資料夾 |
 | 💻 只存在這台電腦 | 不同步，適合臨時使用 |
 
-三種「遠端」方式讀寫的是同一份資料：桌面版寫入 `V:\MyScreen` 的白板，用學校帳號登入伺服器版也看得到。
+桌面版和網頁版讀寫的是同一種資料夾格式：選同一個資料夾，就會看到同樣的白板。
 
 ### 資料夾內容
 
@@ -83,18 +84,18 @@ V:\MyScreen\
 
 V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連線恢復後會自動補存。兩台電腦同時修改同一個白板時，較晚存檔的那台會收到提示，並載入最新版本。
 
-## 三種執行方式
+## 兩種執行方式
 
 ### A. 桌面版（建議）
 
 和「網路磁碟機」程式一樣，是一個 Windows 程式（Neutralino）。開啟後直接讀寫 V:，**不需要架設伺服器，也不需要 HTTPS**。
 
-- V: 還沒連線時，畫面上有「開啟網路磁碟機程式」按鈕（會尋找 `%LOCALAPPDATA%\Programs\NASDriveConnector\nas-drive-connector.exe`）
-- 磁碟機代號、NetDrive 路徑可在 `desktop/neutralino.config.json` 的 `globalVariables` 修改
+- V: 還沒連線時，請先用學校的網路磁碟機程式連線，再按「重新檢查」；也可以按「選擇其他資料夾」改存到別的地方
+- 預設的磁碟機代號（V:）可在 `desktop/neutralino.config.json` 的 `globalVariables.MSROOT` 修改
 
 #### 安裝
 
-執行 `MyScreen-Setup-1.3.0.exe`，依畫面按「下一步」即可：
+執行 `MyScreen-Setup-1.4.0.exe`，依畫面按「下一步」即可：
 
 - 安裝到 `%LOCALAPPDATA%\Programs\MyScreen`，**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
@@ -104,10 +105,10 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 資訊組大量部署時可以用靜默安裝：
 
 ```
-MyScreen-Setup-1.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+MyScreen-Setup-1.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
-手機遙控由老師的電腦擔任伺服器，安裝時不需要設定。學校另外架了遙控伺服器（例如 NAS）時，見「讓桌面版連到 NAS」。
+手機遙控與學生投票由老師的電腦擔任伺服器，安裝時不需要設定。
 
 要為電腦上所有使用者安裝（裝到 Program Files），請以系統管理員執行並加上 `/ALLUSERS`。不想安裝的話，也可以直接使用免安裝版 `MyScreen.exe`。
 
@@ -131,43 +132,16 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ### B. 網頁版
 
-把 `static/` 資料夾放到任何網頁伺服器上，用 **Edge 或 Chrome** 開啟。選擇「網路磁碟機或資料夾」→ 選 V: 磁碟機（或 V: 裡的 MyScreen 資料夾）→ 瀏覽器詢問時選「允許」。之後開啟會自動讀取；部分瀏覽器版本每次開啟需要再按一次「繼續使用」。
+用 **Edge 或 Chrome** 開啟，選擇「網路磁碟機或資料夾」→ 選 V: 磁碟機（或 V: 裡的 MyScreen 資料夾）→ 瀏覽器詢問時選「允許」。之後開啟會自動讀取；部分瀏覽器版本每次開啟需要再按一次「繼續使用」。
 
-> 瀏覽器只允許 `https://` 或 `localhost` 網址存取資料夾。若用 `http://192.168.x.x` 開啟，將無法使用資料夾模式（麥克風、鏡頭也無法使用）。
+有兩種放法：
 
-### C. 伺服器版（學校帳號登入）
+- **用 MyScreen 伺服器開啟（可以手機遙控、學生投票）**：在一台電腦上執行 `start.bat`（Linux 執行 `sh start.sh`，第一次會自動安裝相依套件，需要 Python 3.10 以上），再開啟 `http://localhost:8080`。伺服器只提供網頁與手機遙控的轉送，**白板不會存在伺服器上**
+- **只放網頁**：把 `static/` 資料夾放到任何網頁伺服器上即可，但沒有手機遙控與學生投票
 
-由一台伺服器用老師的 SAMBA 帳號代為連線，老師不需要先連網路磁碟機，手機或平板也能使用。
+> 瀏覽器只允許 `https://` 或 `localhost` 網址存取資料夾。若用 `http://192.168.x.x` 開啟，將無法使用資料夾模式（麥克風、鏡頭也無法使用），需要開啟 HTTPS。
 
-1. 複製 `config.example.json` 為 `config.json`，修改 `smb` 區段：
-
-   ```json
-   "smb": {
-     "server": "192.168.1.10",   // SAMBA 主機 IP 或名稱
-     "port": 445,
-     "share": "{username}",      // 分享資料夾名稱，{username} 會換成登入帳號
-     "domain": "",               // 若使用 AD 網域帳號，填入網域名稱
-     "encrypt": false
-   }
-   ```
-
-   常見的 `share` 設定：
-   - 每位老師各自有一個分享資料夾（Samba 的 `[homes]`）：`"{username}"`
-   - 所有老師共用一個分享資料夾，底下各有個人資料夾：`"share": "teachers"`，並將 `data_dir` 設為 `"{username}/MyScreen"`、`browse_root` 設為 `"{username}"`
-
-   **請讓 `share` 對應到和 V: 相同的資料夾**，這樣伺服器版和桌面版讀到的就是同一份白板。
-
-2. 執行：Windows 雙擊 `start.bat`，Linux / NAS 執行 `sh start.sh`（第一次會自動安裝相依套件，需要 Python 3.10 以上）
-3. 開啟 `http://伺服器IP:8080`
-
-伺服器不會儲存老師的密碼，只在登入期間暫存於記憶體中。正式使用時建議開啟 HTTPS（見下方說明），否則密碼會以明文傳送。
-
-| 設定欄位 | 說明 |
-|---|---|
-| `data_dir` | 白板資料位於分享資料夾的哪個子資料夾，預設 `MyScreen` |
-| `browse_root` | 「選擇圖片」可以瀏覽的根目錄，預設為整個分享資料夾 |
-| `session_hours` | 登入有效時間，預設 12 小時 |
-| `mode: "local"` | 不使用 SAMBA，資料存在 `local.root`（測試用） |
+伺服器設定（選用）：複製 `config.example.json` 為 `config.json`，可以修改 `host`、`port`（預設 8080）與 HTTPS 憑證。
 
 #### 開啟 HTTPS
 
@@ -219,14 +193,14 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - 每個白板最多 8 台裝置同時連線
 - 遙控伺服器只負責轉送指令，不保存任何資料，白板仍然存在老師的 V:
 
-### 老師的電腦就是遙控伺服器（預設，不需要 NAS）
+### 老師的電腦就是遙控伺服器
 
 桌面版內建遙控伺服器（`myscreen-relay.exe`，約 64 KB），安裝版與免安裝版都已經包含：
 
 - **安裝版**：安裝在程式資料夾（防火牆例外也是指定這個位置）
 - **免安裝版**：內嵌在 `MyScreen.exe` 裡，仍然是單一檔案；第一次執行時自動解出到旁邊，換新版時自動更新
 
-**開啟 MyScreen 時伺服器就一起啟動**，按「📱 遙控」會直接顯示 QR Code，並自動帶入這台電腦的校內 IP（例如 `http://192.168.0.99:52480`），手機連上校內網路掃描即可，**不需要架設 NAS**。
+**開啟 MyScreen 時伺服器就一起啟動**，按「📱 遙控」會直接顯示 QR Code，並自動帶入這台電腦的校內 IP（例如 `http://192.168.0.99:52480`），手機連上校內網路掃描即可，**不需要另外架設伺服器**。
 
 - **右下角系統匣**有 MyScreen 圖示（Windows 11 可能收在「^」裡，可拖到工作列上常駐顯示），按一下可以看到：
   - 遙控伺服器狀態與網址（例如「執行中（192.168.0.99:52480）」）、目前有幾台手機連線
@@ -242,31 +216,10 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 **Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
 
 - 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
-- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.3.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.4.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
 - 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
 
-### 在 NAS 安裝遙控伺服器（選用，全校共用）
-
-學校的手機網路連不到教室電腦（不同網段）時，可以改把遙控伺服器架在 NAS 上：
-
-以 Synology 為例：
-
-1. 在「套件中心」安裝 **Container Manager**
-2. 把整個 MyScreen 資料夾（不含 `desktop`、`NetDrive`、`.venv`）複製到 NAS，例如 `/docker/myscreen`
-3. Container Manager →「專案」→「新增」→ 路徑選 `/docker/myscreen`，它會讀取裡面的 `docker-compose.yml` → 建立並啟動
-4. 用瀏覽器開啟 `http://NAS的IP:8080/remote.html`，看到輸入代碼的畫面就代表成功
-
-QNAP 可以用 Container Station 匯入同一份 `docker-compose.yml`。預設是 `MYSCREEN_MODE=relay`（只做遙控轉送）；若也要開放「學校帳號登入」，請改成 `smb` 並掛載 `config.json`（見檔案內的說明）。
-
-### 讓桌面版連到 NAS
-
-安裝版、免安裝版都**不需要重新建置**，有三種設定方式（上面的優先；都沒有設定時使用老師電腦的內建伺服器）：
-
-1. **老師自己設定**：按上方「📱 遙控」→ 還沒設定時會出現設定畫面，填入 NAS 網址（例如 `192.168.1.10:8080`）。設定存在老師的 `V:\MyScreen\settings.json`，換到任何一台電腦都能直接使用；之後可在遙控畫面按「⚙ 遙控伺服器設定」修改，留空即清除
-2. **學校預設（資訊組手動放置）**：在程式資料夾（或免安裝版 `MyScreen.exe` 旁邊）放一個 `myscreen.json`，內容為 `{"relay": "http://192.168.1.10:8080"}`。安裝程式不會寫入這個檔案，升級時也不會改動；刪除它就改回老師電腦的內建伺服器
-3. **建置時寫入**：`desktop/neutralino.config.json` 的 `globalVariables.RELAY`
-
-> **網路注意事項**：老師的手機必須能連到 NAS 的 8080 埠。若學校的無線網路（手機）和教學網路（NAS、教室電腦）是分開的網段，請資訊組開放手機網段連到 NAS 的 8080 埠。
+> **網路注意事項**：手機必須能連到教室電腦（同一個校內網路）。若學校的無線網路（手機）和教學網路（教室電腦）是分開的網段，請資訊組開放手機網段連到教室電腦的 52480 埠（網頁版是 8080 埠）。
 
 ## 檔案結構
 
@@ -277,7 +230,7 @@ static/                  前端（原生 JavaScript，不需要編譯）
   js/app.js              主程式：選擇儲存位置、白板清單、拖曳、工具列
   js/store.js            存檔、離線暫存、跨裝置同步
   js/roster.js           班級名單：匯入 Excel／CSV、學生照片
-  js/backends/index.js   三種儲存方式（資料夾／伺服器／本機）
+  js/backends/index.js   兩種儲存方式（資料夾／本機）
   js/backends/fs.js      資料夾存取：瀏覽器（File System Access）與桌面版（Neutralino）
   js/widgets/            各個小工具
 static/remote.html       手機遙控頁（js/remote.js）
@@ -286,10 +239,9 @@ static/js/remote-host.js 教室電腦端的遙控連線
 desktop/relay/           內建遙控伺服器（C#，Windows 內建 .NET Framework 編譯）
 desktop/installer/       安裝程式（Inno Setup）
 desktop/                 桌面版設定與建置腳本
-server/                  伺服器版（FastAPI + smbprotocol）
-server/relay.py          手機遙控轉送（WebSocket）
-Dockerfile               NAS 用 Docker 安裝
-docker-compose.yml
+server/app.py            網頁版伺服器（FastAPI）：提供網頁與手機遙控轉送
+server/relay.py          手機遙控、學生投票轉送（WebSocket）
+start.bat, start.sh      啟動網頁版伺服器
 ```
 
 新增小工具：在 `static/js/widgets/` 中新增一個物件 `{ type, title, icon, size, state(), mount(body, ctx) }`，並加入 `widgets/index.js` 的清單。若要支援遙控，讓 `mount` 回傳 `remote: { view(), act(action, args) }`，並在 `static/js/remote.js` 的 `RENDER` 加上手機畫面。

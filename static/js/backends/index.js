@@ -1,8 +1,6 @@
-// 三種儲存方式，介面相同：
-//   FolderBackend — 網路磁碟機（V:）或任何資料夾，格式與伺服器模式相同，可以互通
-//   ServerBackend — 透過 MyScreen 伺服器用 SAMBA 帳號登入
+// 兩種儲存方式，介面相同：
+//   FolderBackend — 網路磁碟機（V:）或任何資料夾（老師自己選擇的儲存位置）
 //   LocalBackend  — 只存在這台電腦的瀏覽器
-import { api, fileUrl } from '../api.js';
 import { mimeOf, splitPath } from './fs.js';
 
 export const DATA_DIR = 'MyScreen';
@@ -22,7 +20,7 @@ const mediaName = (name) => `${new Date().toISOString().slice(0, 10).replace(/-/
 // 圖片參照格式：
 //   {kind:'file', base:'data', path:'media/x.png'}  資料夾內（MyScreen\media）的圖片
 //   {kind:'file', base:'root', path:'照片/a.jpg'}    使用者瀏覽個人資料夾選的圖片
-//   {kind:'smb', path}                               舊格式，等同 base:'root'
+//   {kind:'smb', path}                               1.0 以前的舊格式，等同 base:'root'
 //   {kind:'data'|'url', url}                         內嵌或外部網址
 function commonImage(ref) {
   if (!ref) return '';
@@ -121,39 +119,6 @@ export class FolderBackend {
   }
 
   thumbUrl(path) { return this.imageUrl({ kind: 'file', base: 'root', path }); }
-}
-
-// ---------------------------------------------------------------- MyScreen 伺服器（SAMBA 帳號）
-export class ServerBackend {
-  constructor(user, dataPath) {
-    this.kind = 'server';
-    this.id = 'server:' + user;
-    this.user = user;
-    this.dataPath = dataPath || DATA_DIR; // 資料夾相對於可瀏覽根目錄的位置
-    this.label = user;
-    this.canBrowse = true;
-  }
-
-  async check() { await api.get('/api/me'); }
-  async listBoards() { return (await api.get('/api/boards')).boards; }
-  async getBoard(id) {
-    try { return await api.get('/api/boards/' + id); } catch (e) { if (e.status === 404) return null; throw e; }
-  }
-  putBoard({ id, name, data }, baseRev, force = false) { return api.put('/api/boards/' + id, { name, data, baseRev, force }); }
-  async deleteBoard(id) { await api.del('/api/boards/' + id); }
-  async getSettings() { return (await api.get('/api/settings')).data || {}; }
-  async putSettings(data) { await api.put('/api/settings', { data }); }
-  async listFiles(path) { return (await api.get('/api/files?path=' + encodeURIComponent(path))).items; }
-  async upload(file) {
-    const r = await api.post('/api/upload?name=' + encodeURIComponent(file.name), file);
-    return { kind: 'file', base: 'data', path: r.path };
-  }
-  async imageUrl(ref) {
-    const c = commonImage(ref);
-    if (c !== null) return c;
-    return fileUrl(ref.kind === 'file' && ref.base === 'data' ? `${this.dataPath}/${ref.path}` : ref.path);
-  }
-  thumbUrl(path) { return fileUrl(path); }
 }
 
 // ---------------------------------------------------------------- 只存在這台電腦
