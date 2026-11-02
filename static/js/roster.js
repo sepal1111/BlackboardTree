@@ -70,9 +70,11 @@ export function photoThumb(store, ref, onReady) {
 }
 
 // ------------------------------------------------------------ 匯入名單
-const NO_RE = /座號|號碼|編號|^no\.?$|^number$/i;
-const SID_RE = /學號|student\s*id|^id$/i;
-const NAME_RE = /姓名|名字|學生|^name$/i;
+// 標題列欄位：學號要先判斷（「學生編號」不能被當成姓名或座號）
+const SID_RE = /學號|學生編號|學籍|student\s*(id|no)|^id$/i;
+const NO_RE = /座號|號碼|序號|^序$|^編號$|^no\.?$|^number$/i;
+const NAME_RE = /姓名|名字|^name$/i;
+const isSid = (v) => /^[A-Za-z]{0,2}\d{4,}$/.test(v);
 
 // rows：二維陣列（Excel 的工作表或文字解析結果）→ [{no, sid, name}]
 export function parseRows(rows) {
@@ -80,7 +82,10 @@ export function parseRows(rows) {
   if (!rows.length) return [];
   const head = rows[0];
   const col = (re) => head.findIndex((c) => re.test(c));
-  let iName = col(NAME_RE), iNo = col(NO_RE), iSid = col(SID_RE);
+  const iSid0 = col(SID_RE);
+  const colExcept = (re) => head.findIndex((c, i) => i !== iSid0 && re.test(c));
+  let iSid = iSid0, iName = colExcept(NAME_RE), iNo = colExcept(NO_RE);
+  if (iName < 0) iName = colExcept(/學生/); // 標題只寫「學生」
   let body = rows;
   if (iName >= 0) body = rows.slice(1);
   else {
@@ -89,8 +94,8 @@ export function parseRows(rows) {
     const cols = Math.max(...rows.map((r) => r.length));
     const idx = [...Array(cols).keys()];
     iNo = idx.find((c) => sample.every((r) => /^\d{1,3}$/.test(r[c] || ''))) ?? -1;
-    iSid = idx.find((c) => c !== iNo && sample.every((r) => /^\d{4,}$/.test(r[c] || ''))) ?? -1;
-    iName = idx.find((c) => c !== iNo && c !== iSid && sample.some((r) => r[c] && !/^\d+$/.test(r[c]))) ?? -1;
+    iSid = idx.find((c) => c !== iNo && sample.every((r) => isSid(r[c] || ''))) ?? -1;
+    iName = idx.find((c) => c !== iNo && c !== iSid && sample.some((r) => r[c] && !/^\d+$/.test(r[c]) && !isSid(r[c]))) ?? -1;
     if (iName < 0) return [];
   }
   const seen = new Set();
@@ -175,16 +180,27 @@ async function savePhoto(store, file, baseName) {
   return backend.upload(new File([blob], baseName + '.jpg', { type: 'image/jpeg' }));
 }
 
-// 檔名對學生：座號（01.jpg、1.jpg）、學號、姓名（王小明.jpg、01王小明.jpg）
-export function matchPhoto(students, fileName) {
+// 檔名對學生，依序比對：
+//   1. 學號：檔名中的數字串等於學號（1130101.jpg、1130101_王小明.jpg、S1130101.png、IMG_1130101.jpg）
+//   2. 姓名：王小明.jpg、01王小明.jpg
+//   3. 座號：檔名只有 1～3 位數字（01.jpg、1.jpg）
+const idKey = (v) => String(v || '').trim().toLowerCase().replace(/^([a-z]*)0+(?=\d)/, '$1');
+export function findPhotoMatch(students, fileName) {
   const base = fileName.replace(/\.[^.]+$/, '').trim();
-  const num = base.match(/^\d+$/) ? base : '';
-  return students.find((s) => s.name === base)
-    || (num && students.find((s) => s.sid && s.sid === num))
-    || (num && num.length <= 3 && students.find((s) => s.no && parseInt(s.no, 10) === parseInt(num, 10)))
-    || students.find((s) => s.name.length >= 2 && base.includes(s.name))
-    || null;
+  const low = base.toLowerCase();
+  const runs = (low.match(/[a-z]{0,2}\d+/g) || []).flatMap((r) => [r, r.replace(/^[a-z]+/, '')]).map(idKey);
+  // 學號有英文字母（S1130103）時，檔名只寫數字（1130103.jpg）也算
+  const bySid = students.find((s) => s.sid && (runs.includes(idKey(s.sid)) || runs.includes(idKey(s.sid.replace(/^[a-z]+/i, '')))));
+  if (bySid) return { student: bySid, by: 'sid' };
+  const byName = students.find((s) => s.name === base) || students.find((s) => s.name.length >= 2 && base.includes(s.name));
+  if (byName) return { student: byName, by: 'name' };
+  if (/^\d{1,3}$/.test(base)) {
+    const byNo = students.find((s) => s.no && parseInt(s.no, 10) === parseInt(base, 10));
+    if (byNo) return { student: byNo, by: 'no' };
+  }
+  return null;
 }
+export const matchPhoto = (students, fileName) => findPhotoMatch(students, fileName)?.student || null;
 
 const pick = (accept, multiple) => new Promise((resolve) => {
   const input = h('input', { type: 'file', accept, multiple, style: { display: 'none' } });
@@ -234,7 +250,7 @@ export async function rosterDialog(store, { selectId } = {}) {
         h('button', { class: 'btn primary', onclick: () => importFile(l) }, '📥 匯入名單（Excel／CSV）'),
         h('button', { class: 'btn', onclick: () => importPaste(l) }, '📋 貼上名單'),
         h('button', { class: 'btn', onclick: () => importPhotos(l) }, '🖼️ 匯入照片')),
-      h('p', { class: 'muted roster-tip' }, 'Excel 第一列可以是標題（座號、姓名、學號）。照片可一次選多張，檔名用座號（01.jpg）、學號或姓名（王小明.jpg）就會自動對應。'));
+      h('p', { class: 'muted roster-tip' }, 'Excel 第一列可以是標題（座號、姓名、學號）。照片可一次選多張，檔名含學號（1130101.jpg、1130101_王小明.jpg）、姓名或座號都會自動對應，學號優先。'));
 
     const grid = h('div', { class: 'roster-grid' });
     list.forEach((s, i) => {
@@ -242,7 +258,13 @@ export async function rosterDialog(store, { selectId } = {}) {
       const ph = h('button', { class: 'roster-photo' + (s.photo ? '' : ' none'), title: '更換照片', onclick: () => onePhoto(l, s) }, s.photo ? img : '📷');
       if (s.photo) store.imageUrl(s.photo).then((u) => { img.src = u; });
       grid.append(h('div', { class: 'roster-card' }, ph,
-        h('input', { class: 'roster-no', value: s.no || '', placeholder: '座號', onchange: (e) => { s.no = normNo(e.target.value); changed(); } }),
+        h('div', { class: 'roster-ids' },
+          h('input', { class: 'roster-no', value: s.no || '', placeholder: '座號', title: '座號', onchange: (e) => { s.no = normNo(e.target.value); changed(); } }),
+          h('input', { class: 'roster-sid', value: s.sid || '', placeholder: '學號', title: '學號', onchange: (e) => {
+            const v = e.target.value.trim();
+            if (v && list.some((x) => x !== s && x.sid && idKey(x.sid) === idKey(v))) { e.target.value = s.sid || ''; return toast('這個學號已經有人使用'); }
+            s.sid = v; changed();
+          } })),
         h('input', { class: 'roster-nm', value: s.name, onchange: (e) => {
           const v = e.target.value.trim();
           if (!v || list.some((x) => x !== s && x.name === v)) { e.target.value = s.name; return toast(v ? '已經有同名的學生' : '姓名不能空白'); }
@@ -260,7 +282,7 @@ export async function rosterDialog(store, { selectId } = {}) {
       list.push({ no: normNo(String((nos.length ? Math.max(...nos) : 0) + 1)), name: name.trim() });
       changed(); render();
     } }, '＋ 新增學生'));
-    main.append(h('div', { class: 'roster-count muted' }, `共 ${list.length} 人，${list.filter((s) => s.photo).length} 人有照片`), grid);
+    main.append(h('div', { class: 'roster-count muted' }, `共 ${list.length} 人，${list.filter((s) => s.sid).length} 人有學號，${list.filter((s) => s.photo).length} 人有照片`), grid);
   }
 
   function render() {
@@ -276,7 +298,7 @@ export async function rosterDialog(store, { selectId } = {}) {
     if (people.every((p) => !p.no)) people.forEach((p, i) => { p.no = String(i + 1).padStart(2, '0'); });
     const old = studentsOf(l);
     l.students = people.map((p) => {
-      const o = old.find((x) => x.name === p.name);
+      const o = (p.sid && old.find((x) => x.sid && idKey(x.sid) === idKey(p.sid))) || old.find((x) => x.name === p.name);
       return { ...p, ...(o?.photo ? { photo: o.photo } : {}) };
     });
     changed(); render();
@@ -285,14 +307,19 @@ export async function rosterDialog(store, { selectId } = {}) {
   async function importFile(l) {
     const [file] = await pick('.xlsx,.xls,.ods,.csv,.txt', false);
     if (!file) return;
-    if (studentsOf(l).length && !(await confirmDialog(`要用「${file.name}」取代目前的 ${studentsOf(l).length} 位學生嗎？（已上傳的照片會依姓名保留）`))) return;
+    if (studentsOf(l).length && !(await confirmDialog(`要用「${file.name}」取代目前的 ${studentsOf(l).length} 位學生嗎？（照片會依學號或姓名保留）`))) return;
     try { applyImport(l, parseRows(await fileToRows(file))); } catch (e) { toast('無法讀取檔案：' + e.message, 4000); }
   }
   function importPaste(l) {
     const ta = h('textarea', { class: 'input', rows: 12, placeholder: '從 Excel 選取「座號、姓名」兩欄複製後貼上，\n或每行輸入一個名字：\n01 王小明\n02 陳大華' });
     const dlg = modal({ title: '📋 貼上名單', body: ta, actions: [
       { label: '取消' },
-      { label: '匯入', primary: true, onClick: () => { applyImport(l, parseRows(textToRows(ta.value))); } },
+      { label: '匯入', primary: true, onClick: () => {
+        const people = parseRows(textToRows(ta.value));
+        const n = studentsOf(l).length;
+        if (!n || !people.length) applyImport(l, people);
+        else confirmDialog(`要用貼上的 ${people.length} 位學生取代目前的 ${n} 位學生嗎？（照片會依學號或姓名保留）`).then((ok) => ok && applyImport(l, people));
+      } },
     ] });
     setTimeout(() => ta.focus(), 50);
     return dlg;
@@ -304,14 +331,19 @@ export async function rosterDialog(store, { selectId } = {}) {
     if (!files.length) return;
     let ok = 0;
     const miss = [];
+    const by = { sid: 0, name: 0, no: 0 };
     toast(`正在處理 ${files.length} 張照片…`, 60000);
     for (const f of files) {
-      const s = matchPhoto(list, f.name);
-      if (!s) { miss.push(f.name); continue; }
-      try { s.photo = await savePhoto(store, f, `${l.id}-${s.no || s.name}`); ok++; } catch { miss.push(f.name); }
+      const m = findPhotoMatch(list, f.name);
+      if (!m) { miss.push(f.name); continue; }
+      const s = m.student;
+      try { s.photo = await savePhoto(store, f, `${l.id}-${s.sid || s.no || s.name}`); ok++; by[m.by]++; } catch { miss.push(f.name); }
     }
     changed(); render();
-    toast(`已加入 ${ok} 張照片` + (miss.length ? `；${miss.length} 張對應不到：${miss.slice(0, 5).join('、')}${miss.length > 5 ? '…' : ''}` : ''), miss.length ? 8000 : 3000);
+    const how = [by.sid && `學號 ${by.sid}`, by.name && `姓名 ${by.name}`, by.no && `座號 ${by.no}`].filter(Boolean).join('、');
+    // 檔名是學號但名單沒有學號：提醒先匯入含學號的名單
+    const hint = miss.some((n) => /\d{4,}/.test(n)) && !list.some((s) => s.sid) ? '。照片檔名像是學號，但名單沒有學號，請匯入含「學號」欄的名單，或在名單中填入學號' : '';
+    toast(`已加入 ${ok} 張照片${how ? `（依${how}）` : ''}` + (miss.length ? `；${miss.length} 張對應不到：${miss.slice(0, 5).join('、')}${miss.length > 5 ? '…' : ''}` : '') + hint, miss.length ? 10000 : 3500);
   }
   async function onePhoto(l, s) {
     const [f] = await pick('image/*', false);

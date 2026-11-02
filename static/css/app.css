@@ -456,3 +456,8 @@ body.dragging iframe { pointer-events: none; }
 .seat-photo { flex: 1; min-height: 0; width: 100%; object-fit: cover; border-radius: 4px; }
 .seats-grid.with-photo .seat { padding: 2px; font-size: min(calc(70cqw / var(--cols) / 3.6), calc(30cqh / var(--rows) / 1.4)); }
 .seat-name { flex: 0 0 auto; max-width: 100%; overflow: hidden; }
+.roster-ids { display: flex; gap: 2px; }
+.roster-ids input { flex: 1; min-width: 0; }
+.roster-sid { border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; font: inherit; font-size: 12px; color: var(--muted); text-align: center; }
+.roster-sid:hover, .roster-sid:focus { border-color: #ced4da; outline: none; }
+.roster-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
