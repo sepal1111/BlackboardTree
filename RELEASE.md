@@ -1,9 +1,9 @@
-# 黑板樹 Blackboard Tree v1.6.2 發布說明
+# 黑板樹 Blackboard Tree v1.6.3 發布說明
 
 黑板樹（Blackboard Tree）是一套專為學校教學與教室投影設計的免費電子白板軟體。白板與班級設定預設儲存於教師個人的**網路磁碟機（V:）**或隨身硬碟，換電腦、換教室皆能無縫接續教學。軟體內建手機遙控與學生即時投票伺服器，**無須額外架設外部主機**即可實現互動教學。
 
 - 專案首頁：[https://github.com/sepal1111/BlackboardTree](https://github.com/sepal1111/BlackboardTree)
-- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v1.6.2](https://github.com/sepal1111/BlackboardTree/releases/tag/v1.6.1)
+- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v1.6.3](https://github.com/sepal1111/BlackboardTree/releases/tag/v1.6.3)
 - 詳細開發與使用文件：[README.md](README.md)
 
 ---
@@ -44,11 +44,11 @@
 
 ## 📦 下載檔案說明
 
-請至 [GitHub Releases (v1.6.2)](https://github.com/sepal1111/BlackboardTree/releases/tag/v1.6.1) 下載對應檔案：
+請至 [GitHub Releases (v1.6.3)](https://github.com/sepal1111/BlackboardTree/releases/tag/v1.6.3) 下載對應檔案：
 
 | 下載檔案                                     | 適用情境                     | 說明                                                                                         |
 | -------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
-| **`BlackboardTree-Setup-1.6.2.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
+| **`BlackboardTree-Setup-1.6.3.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
 | **`BlackboardTree.exe`**             | 臨時使用／隨身碟執行         | 免安裝綠色版。單一執行檔，下載後雙擊即可直接執行（已內建遙控轉送模組）。                     |
 
 ---
@@ -66,7 +66,7 @@
 
 ### 安裝步驟（安裝版）
 
-1. 雙擊執行 `BlackboardTree-Setup-1.6.2.exe`。
+1. 雙擊執行 `BlackboardTree-Setup-1.6.3.exe`。
 2. 若出現微軟藍色警示畫面「Windows 已保護您的電腦」：請點擊「**其他資訊**」→「**仍要執行**」。
 3. 依安裝引導步驟點選「下一步」，建議勾選：
    - **建立桌面捷徑**
@@ -93,7 +93,7 @@
 
 ```cmd
 :: 為電腦所有使用者安裝（需以系統管理員身分執行），並自動設定防火牆例外
-BlackboardTree-Setup-1.6.2.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
+BlackboardTree-Setup-1.6.3.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
 ```
 
 - **防火牆說明**：手機遙控與學生投票使用內建的轉送程式 `myscreen-relay.exe`，通訊埠預設為 `52480`。
@@ -116,3 +116,54 @@ BlackboardTree-Setup-1.6.2.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="d
 **Q3：如何解除安裝黑板樹？**
 
 - 於 Windows「設定」→「應用程式」→「已安裝的應用程式」中找到「黑板樹」，點選「解除安裝」即可。解除安裝不會刪除您儲存在 `V:\MyScreen` 中的白板資料與設定。
+
+---
+
+## 版本紀錄
+
+### 1.6.3
+- 新的黑板樹 Logo：程式圖示、安裝程式、工作列與系統匣圖示，以及開始畫面、「關於與更新」都改用新 Logo
+
+### 1.6.2
+- 第一版正式釋出：全新的下載與安裝說明（功能介紹、系統需求、安裝步驟、資訊組大量部署、常見問題）
+
+### 1.6.1
+- 專案網址改為 <https://github.com/sepal1111/BlackboardTree>（舊網址會自動轉到新網址），檢查更新改用新網址
+
+### 1.6.0
+- **改名為「黑板樹 Blackboard Tree」**（原名 MyScreen）：視窗標題、開始功能表、桌面捷徑、手機遙控與投票頁面都換成新名稱，程式檔名改為 `BlackboardTree.exe`、安裝程式改為 `BlackboardTree-Setup-1.6.0.exe`
+- 白板仍然存在 `V:\MyScreen`，舊版的白板、班級名單、設定都能直接使用
+- 程式內更新完成後，改由安裝程式重新開啟黑板樹
+
+### 1.5.0
+- **檢查更新**：「⚙ 設定」新增「ℹ 關於與更新」分頁，顯示目前版本，可以檢查 GitHub 上的新版本並看到更新內容
+- **一鍵更新**：按「下載並更新」，自動下載、檢查檔案完整後安裝，完成後重新開啟黑板樹（安裝版、免安裝版都可以）
+- 開啟黑板樹時自動檢查新版本（一天一次，可以關閉），有新版本時「⚙ 設定」按鈕會出現小紅點
+
+### 1.4.0
+- 工具列文字可選「自動／顯示／隱藏」；自動：視窗小於 1280×800 時只顯示圖示，解析度較低的筆電、投影機不會被工具列佔太多空間
+- 工具大小新增「迷你」，工具列的間距也會跟著縮小
+- 白板一律存在老師選擇的位置（網路磁碟機、其他資料夾，或只存在這台電腦），因此移除了：
+  - 「學校帳號登入」（由伺服器用 SAMBA 帳號代為存取）
+  - 遙控伺服器設定（連到學校 NAS、`myscreen.json` 學校預設、NAS 的 Docker 部署）
+  - 「開啟網路磁碟機程式」按鈕
+
+### 1.3.0
+- 投票題庫：把常用題目存起來重複使用，或從文字、Excel、CSV 一次匯入多題
+- 投票紀錄：結束學生投票、歸零、換題目時自動記錄結果（包含每位學生投給哪一項），可匯出成 Excel 能開啟的 CSV
+- 「⚙ 設定」新增「📊 投票」分頁
+
+### 1.2.0
+- **學生用手機投票**：投票小工具顯示 QR Code，學生掃描、輸入名字、點選答案；可設定投票時隱藏票數、是否允許改票
+- 「⚙ 設定」集中管理白板、班級名單、工具列（位置上下左右、圖示大小、要顯示的工具）
+- 工具列改用新的彩色圖示
+- 時鐘與日期合併成「時鐘日期」；移除紅綠燈、骰子
+- 座位表的學生照片保持證件照比例
+- 安裝程式不再詢問遙控伺服器（固定由老師的電腦擔任）
+
+### 1.1.0
+- 右下角系統匣圖示：顯示遙控伺服器狀態、開啟 QR Code、結束程式
+- 換 Wi-Fi 或插拔網路線時，自動更新 QR Code 的網址
+
+### 1.0.0
+- 第一個安裝程式版本

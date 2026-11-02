@@ -3,6 +3,7 @@
   "private": true,
   "description": "黑板樹桌面版建置工具（Neutralino 打包、寫入圖示、Inno Setup 安裝檔）",
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "resedit": "^2.0.3"
   }
 }

@@ -198,7 +198,7 @@ function showStart(message) {
       h('button', { class: 'btn', onclick: () => connect(new LocalBackend(), { kind: 'local' }) }, '使用'))));
 
   screen(h('div', { class: 'login-card wide' },
-    h('div', { class: 'logo' }, h('span', null, '🌳'), ' 黑板樹'),
+    h('div', { class: 'logo' }, h('img', { src: 'logo.svg', alt: '' }), ' 黑板樹'),
     h('p', { class: 'muted' }, '請選擇白板要儲存在哪裡。選過一次後，下次開啟會自動讀取。'),
     options, err));
 }
@@ -849,7 +849,7 @@ function updatePanel() {
     const r = U.result;
     box.replaceChildren(
       sec('目前版本',
-        h('div', { class: 'set-item' }, h('div', { class: 'si-main' },
+        h('div', { class: 'set-item' }, h('img', { class: 'about-logo', src: 'logo.svg', alt: '' }), h('div', { class: 'si-main' },
           h('b', null, `黑板樹 ${appVersion() || '（未知版本）'}`),
           h('small', null, KIND_LABEL[kind] + (DESKTOP ? `・${String(window.NL_PATH || '').replace(/\//g, '\\')}` : ''))))),
       sec('檢查更新', ...statusView(r, kind)),

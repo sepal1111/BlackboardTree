@@ -1,10 +1,24 @@
 {
-  "version": "1.6.1",
-  "date": "2026-11-02",
+  "version": "1.6.3",
+  "date": "2026-11-03",
   "notes": [
-    "- 專案網址改為 <https://github.com/sepal1111/BlackboardTree>（舊網址會自動轉到新網址），檢查更新改用新網址"
+    "- 新的黑板樹 Logo：程式圖示、安裝程式、工作列與系統匣圖示，以及開始畫面、「關於與更新」都改用新 Logo"
   ],
   "history": [
+    {
+      "version": "1.6.3",
+      "date": "",
+      "notes": [
+        "- 新的黑板樹 Logo：程式圖示、安裝程式、工作列與系統匣圖示，以及開始畫面、「關於與更新」都改用新 Logo"
+      ]
+    },
+    {
+      "version": "1.6.2",
+      "date": "",
+      "notes": [
+        "- 第一版正式釋出：全新的下載與安裝說明（功能介紹、系統需求、安裝步驟、資訊組大量部署、常見問題）"
+      ]
+    },
     {
       "version": "1.6.1",
       "date": "",
@@ -16,7 +30,7 @@
       "version": "1.6.0",
       "date": "",
       "notes": [
-        "- **改名為「黑板樹 Blackboard Tree」**（原名 MyScreen）：視窗標題、開始功能表、桌面捷徑、手機遙控與投票頁面都換成新名稱，程式檔名改為 `BlackboardTree.exe`、安裝程式改為 `BlackboardTree-Setup-1.6.1.exe`",
+        "- **改名為「黑板樹 Blackboard Tree」**（原名 MyScreen）：視窗標題、開始功能表、桌面捷徑、手機遙控與投票頁面都換成新名稱，程式檔名改為 `BlackboardTree.exe`、安裝程式改為 `BlackboardTree-Setup-1.6.0.exe`",
         "- 白板仍然存在 `V:\\MyScreen`，舊版的白板、班級名單、設定都能直接使用",
         "- 程式內更新完成後，改由安裝程式重新開啟黑板樹"
       ]
@@ -80,13 +94,13 @@
     }
   ],
   "setup": {
-    "file": "BlackboardTree-Setup-1.6.1.exe",
-    "size": 2888929,
-    "sha256": "bd857a890939dc8a3ca1475f0cbe593ccecb83233217e72f9ca42b4f73cc72fe"
+    "file": "BlackboardTree-Setup-1.6.3.exe",
+    "size": 3050928,
+    "sha256": "89a78e7df06fc5fc741bdd24fa98b131442c35428d7ae2b6ccf17a3711f450f5"
   },
   "portable": {
     "file": "BlackboardTree.exe",
-    "size": 3504128,
-    "sha256": "38f057ac111b651622d68aff76f0da0750ebe7352cf1dfe798b93a21b4cbbdc3"
+    "size": 3640320,
+    "sha256": "31d1e2f665fb7b9215edd94002ef716b79d9ae19e141ffc0ab43827f9a17210b"
   }
 }

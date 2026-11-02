@@ -3,6 +3,15 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
+if (-not ((Test-Path node_modules\resedit) -and (Test-Path node_modules\@resvg\resvg-js))) {
+  npm install --no-audit --no-fund
+  if ($LASTEXITCODE -ne 0) { throw 'npm install 失敗（需要網路連線）' }
+}
+
+Write-Host '0. 由 static\logo.svg 產生圖示...' -ForegroundColor Cyan
+node make-icons.mjs
+if ($LASTEXITCODE -ne 0) { throw '產生圖示失敗' }
+
 Write-Host '1. 複製網頁檔案...' -ForegroundColor Cyan
 if (Test-Path resources) { Remove-Item resources -Recurse -Force }
 Copy-Item ..\static resources -Recurse
@@ -37,10 +46,6 @@ npx -y @neutralinojs/neu build --embed-resources
 if ($LASTEXITCODE -ne 0) { throw 'neu build 失敗' }
 
 Write-Host '4. 寫入圖示與版本資訊...' -ForegroundColor Cyan
-if (-not (Test-Path node_modules\resedit)) {
-  npm install --no-audit --no-fund
-  if ($LASTEXITCODE -ne 0) { throw 'npm install 失敗（需要網路連線）' }
-}
 New-Item -ItemType Directory -Force out | Out-Null
 $running = Get-Process BlackboardTree -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $PWD 'out\BlackboardTree.exe') }
 if ($running) { throw 'BlackboardTree.exe 正在執行，無法覆蓋。請先關閉黑板樹視窗後再執行一次。' }

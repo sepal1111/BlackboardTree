@@ -164,6 +164,8 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.6.3 | 新 Logo（`static/logo.svg`）：`make-icons.mjs` 產生 exe／安裝程式／視窗／系統匣圖示，開始畫面、關於與更新、分頁圖示也用它 |
+| 1.6.2 | 第一版正式釋出：`RELEASE.md` 改寫成完整的發布說明（功能介紹、系統需求、安裝、大量部署、常見問題），最後保留「## 版本紀錄」給 `make-latest.mjs` 讀取 |
 | 1.6.1 | GitHub repo 改名為 `sepal1111/BlackboardTree`，檢查更新改用新網址（舊版靠 GitHub 轉址） |
 | 1.6.0 | 改名為「黑板樹 Blackboard Tree」：視窗、捷徑、安裝程式（`BlackboardTree-Setup-*.exe`）、exe（`BlackboardTree.exe`）、手機頁面；資料夾等內部名稱保留 MyScreen（見第 1 節）；升級時刪除舊檔名與捷徑；程式內更新改由安裝程式重新開啟（`IsInAppUpdate`） |
 | 1.5.0 | ⚙ 設定新增「ℹ 關於與更新」：檢查 GitHub 上的新版本、顯示更新內容、一鍵下載並更新（安裝版靜默安裝、免安裝版直接替換），開啟時自動檢查（一天一次）；`build.ps1` 產生 `out/latest.json` |
@@ -180,6 +182,7 @@ node desktop/relay/test-relay.mjs
 ```
 static/                     前端（桌面版、網頁版共用）
   index.html                主畫面；<!-- desktop-scripts --> 由 build.ps1 換成 neutralino.js
+  logo.svg                  黑板樹 Logo（唯一來源：畫面上的 Logo，以及建置時產生的所有圖示）
   remote.html               手機遙控頁
   js/poll-bank.js           投票題庫、匯入題目、投票紀錄與匯出
   vote.html                 學生投票頁（CSS、JS 都寫在檔案內，內建 relay 只要嵌入這一個檔）
@@ -205,6 +208,7 @@ desktop/
   build.ps1                 建置腳本（UTF-8 BOM，見「注意事項」）
   patch-exe.mjs             把圖示與版本資訊寫進 exe（resedit）
   make-latest.mjs           產生 out/latest.json（新版本資訊，「關於與更新」讀這個檔）
+  make-icons.mjs            由 static/logo.svg 產生 icon.png（視窗、工作列、系統匣）與 installer/icon.ico（exe、安裝程式）；換 Logo 只要換 logo.svg 再建置
   relay/BlackboardTreeRelay.cs 內建遙控伺服器（C#，Windows 內建 .NET Framework 編譯）
   relay/test-relay.mjs      relay 測試
   installer/setup.iss       Inno Setup 安裝腳本（UTF-8 BOM）
