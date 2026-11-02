@@ -127,7 +127,7 @@ function fixUrl(t) {
   return t;
 }
 const urlCard = (() => {
-  const input = h('input', { type: 'url', class: 'url-input', placeholder: '貼上網址（YouTube、影片、網頁）', enterkeyhint: 'send', autocomplete: 'off' });
+  const input = h('input', { type: 'url', class: 'url-input', placeholder: '貼上網址（YouTube、FB、IG、Threads、網頁）', enterkeyhint: 'send', autocomplete: 'off' });
   const go = () => {
     const url = fixUrl(input.value);
     if (!isUrl(url)) return toast('請貼上 http:// 或 https:// 開頭的網址');
@@ -148,7 +148,7 @@ const urlCard = (() => {
   return h('section', { class: 'card url-card' },
     h('div', { class: 'card-title' }, '🔗 傳送網址到電視'),
     h('div', { class: 'url-row' }, input, pasteBtn),
-    h('div', { class: 'muted' }, 'YouTube 或影片網址會直接在白板上播放；其他網址會在教室電腦開啟瀏覽器。'));
+    h('div', { class: 'muted' }, 'YouTube、Facebook、Instagram、Threads、TikTok 的影片或影片檔會顯示在白板上；其他網址會在教室電腦開啟瀏覽器。'));
 })();
 
 function renderCards() {
@@ -280,7 +280,9 @@ const RENDER = {
   },
   embed(w) {
     const v = w.view || {};
-    const label = { youtube: '▶️ YouTube 影片', video: '🎬 影片', web: '🌐 網頁' }[v.kind] || '尚未設定網址';
+    const SOCIAL = { facebook: '📘 Facebook', instagram: '📸 Instagram', threads: '🧵 Threads', tiktok: '🎵 TikTok', vimeo: '🎞️ Vimeo' };
+    const label = v.kind === 'social' ? SOCIAL[v.platform] || '社群影片'
+      : { youtube: '▶️ YouTube 影片', video: '🎬 影片', web: '🌐 網頁' }[v.kind] || '尚未設定網址';
     const out = [h('div', { class: 'card-title' }, label), h('div', { class: 'muted url-text' }, v.url || '')];
     if (v.kind === 'youtube' || v.kind === 'video') {
       out.push(h('div', { class: 'row' },
@@ -288,6 +290,10 @@ const RENDER = {
         btn(v.playing ? '⏸ 暫停' : '▶ 播放', () => wcmd(w, v.playing ? 'pause' : 'play'), 'primary big'),
         ...(v.kind === 'video' ? [btn('10 秒 ⏩', () => wcmd(w, 'fwd'))] : [])),
       h('div', { class: 'chips' }, btn(v.muted ? '🔊 取消靜音' : '🔇 靜音', () => wcmd(w, 'mute')), btn('⏮ 從頭播放', () => wcmd(w, 'restart'))));
+    } else if (v.kind === 'social') {
+      // 社群網站的播放器不開放外部控制
+      out.push(h('div', { class: 'muted' }, '社群網站的影片無法從手機控制，請在電視上點播放。若顯示「無法觀看」，可能是非公開貼文，可改用瀏覽器開啟。'),
+        h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload')), btn('🌐 改用瀏覽器開啟', () => wcmd(w, 'browser'))));
     } else if (v.kind === 'web') out.push(h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload'))));
     return out;
   },

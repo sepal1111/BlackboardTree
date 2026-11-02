@@ -4,7 +4,7 @@ import { Store, LS, uid } from './store.js';
 import { FolderBackend, ServerBackend, LocalBackend, DATA_DIR } from './backends/index.js';
 import { FsaAdapter, NeuAdapter, kvGet, kvSet } from './backends/fs.js';
 import { widgets, widgetList } from './widgets/index.js';
-import { classifyUrl } from './widgets/media.js';
+import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
 import { RemoteHost } from './remote-host.js';
 
@@ -611,9 +611,7 @@ async function openUrlFromRemote(url) {
   const info = classifyUrl(url);
   if (!info) return S.remote?.notice('這不是有效的網址（需要 http:// 或 https:// 開頭）');
   if (info.kind === 'web') {
-    if (DESKTOP) {
-      await window.Neutralino.os.open(info.href);
-    } else if (!window.open(info.href, '_blank', 'noopener')) {
+    if (!(await openExternal(info.href))) {
       // 瀏覽器擋掉沒有點擊動作的彈出視窗，改成在畫面上顯示按鈕
       toast(h('span', null, '手機送來網址：', h('a', { href: info.href, target: '_blank', rel: 'noopener', class: 'toast-link' }, '點這裡開啟')), 15000);
       return S.remote?.notice('瀏覽器擋住了新視窗，請在電腦畫面上點一下「點這裡開啟」');
@@ -621,12 +619,14 @@ async function openUrlFromRemote(url) {
     return S.remote?.notice('已在教室電腦開啟瀏覽器');
   }
   if (!S.board) return S.remote?.notice('請先在電腦上開啟一個白板');
-  // 影片：放在畫面中間、佔大部分空間；取代上一個從手機送來的影片，避免兩個一起出聲
+  // 影片：放在畫面中間、佔大部分空間（直式短影音放成直的）；取代上一個從手機送來的影片，避免兩個一起出聲
   const prev = S.board.data.widgets.find((x) => x.type === 'embed' && x.state?.fromRemote);
-  const pos = prev ? { x: prev.x, y: prev.y, w: prev.w, h: prev.h } : { x: 0.12, y: 0.08, w: 0.76, h: 0.8 };
+  const pos = info.portrait ? { x: 0.34, y: 0.05, w: 0.32, h: 0.86 } : { x: 0.12, y: 0.08, w: 0.76, h: 0.8 };
   if (prev) removeWidget(prev.id);
   const w = addWidget('embed', null, { ...pos, state: { url: info.href, autoplay: true, fromRemote: true } });
-  S.remote?.notice(info.kind === 'youtube' ? '已在白板上播放 YouTube 影片' : '已在白板上播放影片');
+  const platform = PLATFORMS[info.platform]?.name;
+  S.remote?.notice(info.kind === 'youtube' ? '已在白板上播放 YouTube 影片'
+    : platform ? `已在白板上顯示 ${platform} 影片，請在電視上點播放` : '已在白板上播放影片');
   return w;
 }
 

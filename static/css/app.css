@@ -412,3 +412,4 @@ body.dragging iframe { pointer-events: none; }
 .seat.sel { outline: 3px solid var(--accent); background: #dbe4ff; }
 .seat.hl { background: #ffd43b; border-color: #f08c00; transform: scale(1.06); box-shadow: 0 0 0 3px #ffe066; z-index: 1; }
 .seats-size { font-weight: 700; }
+.embed.social { background: #fff; }

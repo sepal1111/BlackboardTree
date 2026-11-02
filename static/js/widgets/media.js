@@ -229,8 +229,61 @@ export function classifyUrl(url) {
     const start = m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0;
     return { kind: 'youtube', id, list, start, href: u.href };
   }
+  const social = socialEmbed(u, host);
+  if (social) return { kind: 'social', ...social, href: u.href };
   if (VIDEO_EXT.test(u.pathname)) return { kind: 'video', href: u.href };
   return { kind: 'web', href: u.href };
+}
+
+export const PLATFORMS = {
+  facebook: { name: 'Facebook', icon: '📘' },
+  instagram: { name: 'Instagram', icon: '📸' },
+  threads: { name: 'Threads', icon: '🧵' },
+  tiktok: { name: 'TikTok', icon: '🎵' },
+  vimeo: { name: 'Vimeo', icon: '🎞️' },
+};
+
+// 社群網站的貼文／影片：轉成官方的嵌入網址。portrait = 直式影片（Reels、短影音）
+function socialEmbed(u, host) {
+  const path = u.pathname;
+  const enc = encodeURIComponent;
+  if (/^(facebook\.com|fb\.com|fb\.watch|web\.facebook\.com)$/.test(host)) {
+    const href = enc(u.href);
+    const reel = /\/(reel|share\/r)\//.test(path);
+    if (host === 'fb.watch' || reel || /\/(videos|watch|share\/v)(\/|$)/.test(path)) {
+      return { platform: 'facebook', portrait: reel, embed: `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false` };
+    }
+    if (/\/(posts|permalink\.php|share\/p|photo|story\.php)/.test(path)) {
+      return { platform: 'facebook', portrait: true, embed: `https://www.facebook.com/plugins/post.php?href=${href}&show_text=true` };
+    }
+    return null; // 粉絲專頁首頁等：當一般網頁用瀏覽器開
+  }
+  if (host === 'instagram.com') {
+    const m = path.match(/^\/(?:[\w.]+\/)?(p|reels?|tv)\/([\w-]+)/);
+    if (m) return { platform: 'instagram', portrait: true, embed: `https://www.instagram.com/${m[1] === 'reels' ? 'reel' : m[1]}/${m[2]}/embed/` };
+    return null;
+  }
+  if (host === 'threads.net' || host === 'threads.com') {
+    const m = path.match(/^\/(@[\w.]+)\/post\/([\w-]+)/);
+    if (m) return { platform: 'threads', portrait: true, embed: `https://www.threads.com/${m[1]}/post/${m[2]}/embed` };
+    return null;
+  }
+  if (host === 'tiktok.com') {
+    const m = path.match(/\/video\/(\d+)/);
+    if (m) return { platform: 'tiktok', portrait: true, embed: `https://www.tiktok.com/embed/v2/${m[1]}` };
+    return null;
+  }
+  if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+    const m = path.match(/\/(?:video\/)?(\d+)(?:\/(\w+))?/);
+    if (m) return { platform: 'vimeo', portrait: false, embed: `https://player.vimeo.com/video/${m[1]}${m[2] ? `?h=${m[2]}` : ''}` };
+  }
+  return null;
+}
+
+// 用電腦的預設瀏覽器開啟（桌面版），網頁版則開新分頁
+export async function openExternal(url) {
+  if (window.Neutralino && window.NL_PORT) { await window.Neutralino.os.open(url); return true; }
+  return !!window.open(url, '_blank', 'noopener');
 }
 
 function youtubeSrc(info, autoplay) {
@@ -258,6 +311,7 @@ export const embed = {
     const yt = (func, args = []) => frame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
     function render() {
       wrap.innerHTML = '';
+      wrap.classList.remove('social');
       frame = video = null; playing = false;
       info = s.url ? classifyUrl(s.url) : null;
       if (!info) {
@@ -277,7 +331,7 @@ export const embed = {
         if (autoplay) video.play().catch(() => {});
         return;
       }
-      const src = info.kind === 'youtube' ? youtubeSrc(info, autoplay) : toEmbedUrl(s.url);
+      const src = info.kind === 'youtube' ? youtubeSrc(info, autoplay) : info.kind === 'social' ? info.embed : toEmbedUrl(s.url);
       frame = h('iframe', { src, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
       if (info.kind === 'youtube') {
         playing = autoplay;
@@ -285,6 +339,7 @@ export const embed = {
         frame.addEventListener('load', () => frame?.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*'));
       }
       wrap.append(frame);
+      if (info.kind === 'social') wrap.classList.add('social');
     }
     const onMsg = (e) => {
       if (!frame || e.source !== frame.contentWindow) return;
@@ -299,7 +354,7 @@ export const embed = {
     return {
       destroy: () => window.removeEventListener('message', onMsg),
       remote: {
-        view: () => ({ kind: info?.kind || '', url: s.url, playing, muted: video ? video.muted : muted }),
+        view: () => ({ kind: info?.kind || '', platform: info?.platform || '', url: s.url, playing, muted: video ? video.muted : muted }),
         act(a) {
           if (video) {
             if (a === 'play') video.play().catch(() => {});
@@ -317,6 +372,7 @@ export const embed = {
             else if (a === 'restart') { yt('seekTo', [0, true]); yt('playVideo'); playing = true; }
           }
           if (a === 'reload') render();
+          if (a === 'browser' && info) openExternal(info.href);
           ctx.push?.();
         },
       },
