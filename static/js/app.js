@@ -8,6 +8,7 @@ import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
 import { RemoteHost } from './remote-host.js';
 import { rosterDialog, studentsOf, hasPhotos } from './roster.js';
+import { renderPollLibrary } from './poll-bank.js';
 import { DOCK_POSITIONS, ICON_SIZES, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool } from './ui-prefs.js';
 
 const TOOL_TYPES = widgetList.map((d) => d.type);
@@ -522,7 +523,7 @@ function mountWidget(w) {
   place(el, w);
   $('#stage').append(el);
 
-  const ctx = { state: w.state, widget: w, store: S.store, save: () => save(), push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size) };
+  const ctx = { state: w.state, widget: w, store: S.store, save: () => save(), push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size), boardName: () => S.board?.name || '' };
   let inst = {};
   try { inst = def.mount(body, ctx) || {}; } catch (e) { console.error(e); body.textContent = '此小工具發生錯誤'; }
   S.mounted.set(w.id, { el, inst, w });
@@ -641,6 +642,7 @@ const SETTING_TABS = [
   { id: 'board', label: '🗂 白板' },
   { id: 'roster', label: '👥 班級名單' },
   { id: 'dock', label: '🧰 工具列' },
+  { id: 'poll', label: '📊 投票' },
 ];
 
 function settingsDialog(tab = 'board') {
@@ -669,6 +671,21 @@ function settingsDialog(tab = 'board') {
           b.id === S.board.id ? h('small', null, '使用中') : null))),
         h('div', { class: 'row-btns' },
           h('button', { class: 'btn primary', onclick: async () => { if (await newBoardAction()) render(); } }, '＋ 新增白板'))));
+  }
+
+  function renderPollTab() {
+    const box = h('div', { class: 'poll-lib' });
+    main.append(sec('投票題庫與紀錄',
+      h('p', { class: 'muted' }, '常用的題目可以存在題庫重複使用，也可以從 Excel、文字一次匯入。學生投票結束時會自動記錄結果，可匯出成 Excel。'),
+      box));
+    renderPollLibrary(box, S.store, {
+      useLabel: '加到白板',
+      onUse: (it) => {
+        addWidget('poll', null, { state: { question: it.question, options: it.options.map((label) => ({ label, votes: 0 })), ballots: {} } });
+        dlg.close();
+        toast('已在白板加入這個投票');
+      },
+    });
   }
 
   function renderRosterTab() {
@@ -719,7 +736,7 @@ function settingsDialog(tab = 'board') {
       side.append(h('button', { class: 'set-tab' + (t.id === tab ? ' on' : ''), onclick: () => { tab = t.id; render(); } }, t.label));
     }
     main.innerHTML = '';
-    ({ board: renderBoardTab, roster: renderRosterTab, dock: renderDockTab })[tab]();
+    ({ board: renderBoardTab, roster: renderRosterTab, dock: renderDockTab, poll: renderPollTab })[tab]();
   }
 
   // 名單在名單管理畫面修改後，這裡的人數跟著更新

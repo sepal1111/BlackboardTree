@@ -71,6 +71,27 @@ export function promptDialog(title, value = '', placeholder = '') {
   });
 }
 
+// 存成檔案：桌面版跳出「另存新檔」，網頁版直接下載。回傳存檔路徑（桌面版）、true（下載）或 false（取消）
+export async function saveTextFile(name, text, mime = 'text/csv') {
+  const NL = window.Neutralino;
+  if (window.NL_PORT && NL) {
+    const ext = name.split('.').pop();
+    const path = await NL.os.showSaveDialog('另存新檔', { defaultPath: name, filters: [{ name: ext.toUpperCase() + ' 檔', extensions: [ext] }] });
+    if (!path) return false;
+    const file = /\.[^\\/]+$/.test(path) ? path : `${path}.${ext}`; // 沒打副檔名時補上
+    await NL.filesystem.writeFile(file, text);
+    return file;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime + ';charset=utf-8' }));
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  return true;
+}
+
 export function confirmDialog(msg, okLabel = '確定', danger = false) {
   return new Promise((resolve) => {
     let v = false;

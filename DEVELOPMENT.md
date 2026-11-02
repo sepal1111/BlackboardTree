@@ -108,6 +108,7 @@ npm test
 | `roster.test.mjs` | 名單匯入的欄位自動判斷、貼上文字解析、照片檔名比對（學號／姓名／座號）、學生改名時小工具狀態跟著改 |
 | `store.test.mjs` | `V:\MyScreen` 檔案格式、rev 與衝突（409）、兩台電腦同時修改、網路磁碟機斷線時的離線備份與補存、其他電腦的修改（poll）、舊格式名單 |
 | `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、指令、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
+| `poll-bank.test.mjs` | 投票題目匯入（文字、Excel 貼上、Excel／CSV 的列）、題庫去除重複、投票紀錄（指紋、上限）、匯出 CSV（BOM、逗號、引號、公式開頭） |
 | `ui-prefs.test.mjs` | 畫面偏好（工具列位置、圖示大小、顯示的工具）的檢查與切換 |
 | `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
 
@@ -146,6 +147,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.3.0 | 投票題庫（存題目、重複使用、從文字／Excel／CSV 匯入）、投票紀錄（結束投票、歸零、換題目時自動記錄，可匯出 CSV）、⚙ 設定新增「📊 投票」分頁 |
 | 1.2.0 | ⚙ 總設定（白板、班級名單、工具列位置／圖示大小／顯示的工具）、座位表照片保持 1:1.35（空間不夠時保留上方、最多裁到 1:1）、安裝精靈移除遙控伺服器設定頁與 `/RELAY=` 參數；移除紅綠燈、骰子，時鐘與日期合併成「時鐘日期」（舊白板開啟時由 `upgradeWidget` 自動轉換）；工具列改用自訂 SVG 圖示；學生用手機掃 QR Code 投票（relay 新增 `/ws/vote`） |
 | 1.1.0 | 系統匣圖示（遙控伺服器狀態、QR Code、結束）、網路變動時自動更新 IP、前端自動化測試 |
 | 1.0.0 | 第一個安裝程式版本 |
@@ -158,6 +160,7 @@ node desktop/relay/test-relay.mjs
 static/                     前端（桌面版、網頁版共用）
   index.html                主畫面；<!-- desktop-scripts --> 由 build.ps1 換成 neutralino.js
   remote.html               手機遙控頁
+  js/poll-bank.js           投票題庫、匯入題目、投票紀錄與匯出
   vote.html                 學生投票頁（CSS、JS 都寫在檔案內，內建 relay 只要嵌入這一個檔）
   css/app.css, remote.css
   js/app.js                 主程式：儲存位置、白板清單、小工具框、放大、手機遙控（含內建 relay 控制）
@@ -277,6 +280,8 @@ export const example = {
   - relay 把名字截到 20 字、`choice` 轉成整數，每個投票最多 200 人；錯誤代碼與遙控共用「5 分鐘 20 次」的限制
   - 前端：`RemoteHost.openPoll()／closePoll()`，`app.js` 的 `voteApi(w)` 提供給小工具（`ctx.vote.open/update/close/info/watch`），學生的票由 `onStudentVote()` 交給開放中那個投票小工具的 `inst.vote(name, choice)`，計票在 `classroom.js` 的 `castVote()`
   - QR Code 的網址（`RemoteHost.publicBase`）：桌面版用內建 relay 回報的 IP；網頁版若用 localhost 開啟，改用 `/api/config` 的 `lanIps`（`server/app.py` 的 `lan_ips()`；伺服器只聽 127.0.0.1 時不提供），手機遙控與學生投票共用
+  - 題庫與投票紀錄（`static/js/poll-bank.js`）：存在 settings.json 的 `pollBank`、`pollResults`（新的在前，最多 500 筆）。`renderPollLibrary()` 同時用在投票小工具的「📚 題庫」與「⚙ 設定 → 📊 投票」。投票小工具的 `recordResult()` 在結束投票、歸零、換題目前自動記錄；`s.recordedSig`（`resultSig()`）避免同一個結果重複記錄
+  - 匯出檔案用 `ui.js` 的 `saveTextFile()`：桌面版跳出「另存新檔」（Neutralino `os.showSaveDialog` + `filesystem.writeFile`），網頁版直接下載
   - 同一時間只有一個投票小工具開放；刪除小工具、換白板、回到白板清單時自動結束投票
 - relay 有兩種實作，協定必須保持一致：
   - `server/relay.py`：NAS／伺服器版
@@ -315,7 +320,8 @@ export const example = {
 - 手機遙控：各小工具操作、傳送網址（YouTube／影片檔／FB／IG／Threads／TikTok／Vimeo／一般網頁）
 - 內建 relay：開啟 MyScreen 時啟動、關閉時結束、重開後手機自動連回
 - 安裝程式：每位使用者安裝（不需系統管理員）、升級、解除安裝（1.2.0 起安裝時不設定遙控伺服器，也移除了 `/RELAY=` 參數）
-- 前端自動化測試：84 項（`npm test`）；relay 協定測試 33 項
+- 前端自動化測試：94 項（`npm test`）；relay 協定測試 33 項
+- 投票題庫、匯入、投票紀錄與匯出：已用瀏覽器操作過（網頁版下載 CSV）
 - 學生投票：已用瀏覽器模擬老師與兩位學生實際操作（投票、改票、改題目、結束投票），C# 與 Python 兩個 relay 都測過
 - ⚙ 總設定：白板、班級名單、工具列（位置、圖示大小、顯示的工具），已用瀏覽器實際操作過
 
@@ -324,6 +330,7 @@ export const example = {
 - [ ] **系統匣選單**：已確認圖示有註冊到 Windows、關閉視窗時 relay 一起結束；選單內容與點選動作（顯示 QR Code、結束）還沒有實際點過
 - [ ] **網路變動時更新 IP**（`IPS`）：開發機沒有實際切換過網路
 - [ ] **真實手機**：目前只用瀏覽器模擬手機，請在教室用手機掃 QR Code 實際測一次（手機遙控與學生投票）
+- [ ] **桌面版匯出投票紀錄**（「另存新檔」對話框）：只測過網頁版的下載
 - [ ] **全班同時投票**：只測過 2 位學生，還沒測過 30 人同時連線
 - [ ] **安裝程式加入防火牆例外**：需要系統管理員權限，請資訊組以 `/ALLUSERS` 或輸入系統管理員密碼測試
 - [ ] **NAS Docker 部署**（`docker-compose.yml`）：開發機沒有 Docker，沒有實際建置過（現在有內建 relay，NAS 變成選用）

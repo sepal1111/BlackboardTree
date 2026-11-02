@@ -2,6 +2,7 @@
 import { h, field, select, checkbox, promptDialog, confirmDialog, toast, setImage } from '../ui.js';
 import { shuffle, splitNames, beep, observeSize } from './util.js';
 import { studentsOf, hasPhotos, linkedList, watchRoster, photoThumb, rosterDialog, rememberList } from '../roster.js';
+import { pollLibraryDialog, makeResult, addResult, resultSig, totalVotes } from '../poll-bank.js';
 
 // 目前的名單：連結班級名單時讀名單（含座號、照片），否則用自己輸入的名字
 function people(ctx) {
@@ -282,6 +283,7 @@ export const poll = {
       h('div', { class: 'poll-main' }, h('div', { class: 'poll-core' }, q, list), live),
       h('div', { class: 'poll-foot' }, hint, h('div', { class: 'row-btns' },
         liveBtn,
+        h('button', { class: 'btn small', title: '題庫與投票紀錄：存題目、匯入、重複使用、查看與匯出結果', onclick: library }, '📚 題庫'),
         h('button', { class: 'btn small', onclick: reset }, '歸零'))));
     body.append(wrap);
     let lastQr = '';
@@ -289,8 +291,38 @@ export const poll = {
     const payload = () => ({ question: s.question, options: s.options.map((o) => o.label), allowChange: s.allowChange !== false });
     const ballots = () => Object.keys(s.ballots).length;
 
+    // 記錄目前結果到投票紀錄（有票、而且和上次記錄的不同時才記）；回傳是否有記錄
+    async function recordResult() {
+      if (!totalVotes(s) || s.recordedSig === resultSig(s)) return false;
+      const st = await ctx.store.getSettings();
+      st.pollResults ||= [];
+      addResult(st.pollResults, makeResult(s, ctx.boardName?.() || ''));
+      ctx.store.saveSettings();
+      s.recordedSig = resultSig(s);
+      ctx.save();
+      return true;
+    }
+
+    // 換成題庫裡的題目：先記錄目前結果，再把票數與投票紀錄清空
+    async function useItem(it) {
+      if (await recordResult()) toast('已記錄上一題的結果');
+      s.question = it.question;
+      s.options = it.options.map((label) => ({ label, votes: 0 }));
+      s.ballots = {};
+      s.recordedSig = '';
+      changed();
+    }
+
+    function library() {
+      pollLibraryDialog(ctx.store, { onUse: useItem, useLabel: '使用這題', current: () => s, record: recordResult });
+    }
+
     async function toggleLive() {
-      if (ctx.vote.info()) { ctx.vote.close(); return; }
+      if (ctx.vote.info()) {
+        ctx.vote.close();
+        if (await recordResult()) toast('已記錄投票結果（按「📚 題庫」→ 投票紀錄 可查看、匯出）');
+        return;
+      }
       try {
         liveBtn.disabled = true;
         ctx.fit({ w: 0.5, h: 0.55 }); // QR Code 要夠大，學生才掃得到
@@ -298,7 +330,10 @@ export const poll = {
       } catch (e) { toast(e.message); } finally { liveBtn.disabled = false; render(); }
     }
     async function reset() {
-      if (ballots() && !await confirmDialog(`要把票數歸零嗎？${ballots()} 位學生的投票紀錄也會清除，學生可以重新投票。`)) return;
+      if (!totalVotes(s) && !ballots()) return;
+      const msg = `要把票數歸零嗎？${ballots() ? `${ballots()} 位學生的投票也會清除，學生可以重新投票。` : ''}目前的結果會先存到投票紀錄。`;
+      if (!await confirmDialog(msg, '歸零')) return;
+      await recordResult();
       s.options.forEach((o) => { o.votes = 0; });
       s.ballots = {};
       render(); ctx.save();
@@ -368,8 +403,11 @@ export const poll = {
           const o = s.options[i];
           if (a === 'vote' && o) o.votes++;
           else if (a === 'unvote' && o) o.votes = Math.max(0, o.votes - 1);
-          else if (a === 'reset') { s.options.forEach((x) => { x.votes = 0; }); s.ballots = {}; }
-          else return;
+          else if (a === 'reset') {
+            // 手機按歸零：先記錄結果再清空
+            recordResult().finally(() => { s.options.forEach((x) => { x.votes = 0; }); s.ballots = {}; render(); ctx.save(); });
+            return;
+          } else return;
           render(); ctx.save();
         },
       },
@@ -381,6 +419,7 @@ export const poll = {
             s.options = labels.map((l, i) => ({ label: l, votes: s.options[i]?.label === l ? s.options[i].votes : 0 }));
             changed();
           } })),
+        h('div', { class: 'row-btns' }, h('button', { class: 'btn', onclick: library }, '📚 題庫與投票紀錄…')),
         h('div', { class: 'set-sub' }, '學生投票'),
         checkbox('投票時隱藏票數（結束投票後才顯示結果）', s.hideResults, (v) => { s.hideResults = v; render(); ctx.save(); }),
         checkbox('允許學生改票', s.allowChange !== false, (v) => { s.allowChange = v; changed(); }),

@@ -94,7 +94,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 
 #### 安裝
 
-執行 `MyScreen-Setup-1.2.0.exe`，依畫面按「下一步」即可：
+執行 `MyScreen-Setup-1.3.0.exe`，依畫面按「下一步」即可：
 
 - 安裝到 `%LOCALAPPDATA%\Programs\MyScreen`，**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
@@ -104,7 +104,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 資訊組大量部署時可以用靜默安裝：
 
 ```
-MyScreen-Setup-1.2.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+MyScreen-Setup-1.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 手機遙控由老師的電腦擔任伺服器，安裝時不需要設定。學校另外架了遙控伺服器（例如 NAS）時，見「讓桌面版連到 NAS」。
@@ -188,6 +188,18 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - 學生拿到的是**另一組投票代碼**，只能投票，不能遙控白板
 - 學生的手機要和老師的電腦在同一個校內網路（與手機遙控相同）。網頁版用 `http://localhost` 開啟時，QR Code 會自動改用伺服器的校內 IP；電腦有多個 IP 時，可在「📱 遙控」視窗切換；按「歸零」會清除票數與投票紀錄
 
+### 📚 題庫與投票紀錄
+
+投票小工具下方的「📚 題庫」，或「⚙ 設定 → 📊 投票」：
+
+- **題庫**：把目前的題目存起來，下次按「使用這題」就能再問一次（在設定畫面按「加到白板」會新增一個投票小工具）
+- **匯入題目**：一次加入多題，可以貼上文字或選擇 Excel／CSV／文字檔
+  - 文字：每題一段，第一行是題目，下面每行一個選項，題目之間空一行
+  - Excel／CSV：每列一題，第一欄是題目，後面每欄一個選項（第一列可以是「題目、選項1、選項2…」標題）
+- **投票紀錄**：結束學生投票、按「歸零」或換題目時，會自動記錄當時的結果（包含每位學生投給哪一項）；手動點票的投票也可以按「記錄目前結果」
+- **匯出**：投票紀錄可以匯出成 CSV，用 Excel 直接開啟（每個選項一列：日期、白板、題目、選項、票數、百分比、投票學生）
+- 題庫與紀錄存在老師的 `V:\MyScreen\settings.json`，換電腦也能用；紀錄最多保留最近 500 筆
+
 ## 📱 手機／平板遙控
 
 老師在教室電腦（接大電視）開啟 MyScreen 後，可以用手機或平板遙控：
@@ -230,7 +242,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 **Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
 
 - 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
-- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.2.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 大量部署建議以系統管理員執行：`MyScreen-Setup-1.3.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
 - 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
 
 ### 在 NAS 安裝遙控伺服器（選用，全校共用）
