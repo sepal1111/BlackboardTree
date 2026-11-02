@@ -1,0 +1,10 @@
+{
+  "name": "myscreen",
+  "private": true,
+  "description": "MyScreen 前端測試（Node 內建測試工具，不需要安裝套件）",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "test:relay": "node desktop/relay/test-relay.mjs"
+  }
+}
