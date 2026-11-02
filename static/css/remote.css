@@ -78,3 +78,17 @@ footer button { flex: 0 0 auto; }
 
 #toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: #212529; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100% - 32px); text-align: center; z-index: 20; }
 #toast.show { opacity: 1; }
+
+.url-card { border: 2px solid #bac8ff; }
+.url-row { display: flex; gap: 8px; }
+.url-input { flex: 1; min-width: 0; font-size: 16px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 12px; }
+.url-input:focus { outline: none; border-color: var(--accent); }
+.url-row button { flex: 0 0 auto; }
+.url-text { word-break: break-all; font-size: 12px; }
+
+.seat-desk { align-self: center; width: 40%; text-align: center; background: #495057; color: #fff; border-radius: 6px; font-size: 13px; font-weight: 700; padding: 2px 0; }
+.seat-grid { display: grid; gap: 4px; }
+.seat-cell { padding: 6px 2px; min-height: 40px; border-radius: 8px; background: #fff8e1; font-size: 13px; font-weight: 700; word-break: break-all; line-height: 1.15; }
+.seat-cell.vacant { background: transparent; border-style: dashed; }
+.seat-cell.sel { outline: 3px solid var(--accent); background: #dbe4ff; }
+.seat-cell.hl { background: #ffd43b; border-color: #f08c00; }

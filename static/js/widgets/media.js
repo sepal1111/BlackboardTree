@@ -211,40 +211,117 @@ export const qr = {
   },
 };
 
+const VIDEO_EXT = /\.(mp4|webm|ogv|ogg|mov|m4v)$/i;
+
+// 判斷網址類型：youtube（嵌入播放器）、video（影片檔）、web（一般網頁）
+export function classifyUrl(url) {
+  let u;
+  try { u = new URL(String(url).trim()); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol)) return null;
+  const host = u.hostname.replace(/^(www|m|music)\./, '');
+  let id = null;
+  if (host === 'youtube.com') id = u.searchParams.get('v') || (u.pathname.match(/\/(shorts|live|embed|v)\/([\w-]{6,})/) || [])[2];
+  if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+  const list = u.searchParams.get('list');
+  if (id || (host === 'youtube.com' && list)) {
+    const t = u.searchParams.get('t') || u.searchParams.get('start') || '';
+    const m = String(t).match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+    const start = m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0;
+    return { kind: 'youtube', id, list, start, href: u.href };
+  }
+  if (VIDEO_EXT.test(u.pathname)) return { kind: 'video', href: u.href };
+  return { kind: 'web', href: u.href };
+}
+
+function youtubeSrc(info, autoplay) {
+  const q = new URLSearchParams({ enablejsapi: '1', rel: '0', playsinline: '1' });
+  if (autoplay) q.set('autoplay', '1');
+  if (info.start) q.set('start', info.start);
+  if (info.list) q.set('list', info.list);
+  return `https://www.youtube-nocookie.com/embed/${info.id || 'videoseries'}?${q}`;
+}
+
 function toEmbedUrl(url) {
-  try {
-    const u = new URL(url);
-    let id = null;
-    if (/youtube\.com$/.test(u.hostname.replace(/^www\.|^m\./, ''))) id = u.searchParams.get('v') || (u.pathname.match(/\/(shorts|live|embed)\/([\w-]+)/) || [])[2];
-    if (u.hostname === 'youtu.be') id = u.pathname.slice(1);
-    if (id) return `https://www.youtube-nocookie.com/embed/${id}`;
-    if (/docs\.google\.com$/.test(u.hostname) && /\/(edit|view)/.test(u.pathname)) return url.replace(/\/(edit|view)[^/]*$/, '/preview');
-    return u.href;
-  } catch { return null; }
+  if (/docs\.google\.com/.test(url) && /\/(edit|view)/.test(url)) return url.replace(/\/(edit|view)[^/]*$/, '/preview');
+  return classifyUrl(url)?.href || null;
 }
 
 export const embed = {
-  type: 'embed', title: '嵌入網頁', icon: '🌐', size: { w: 0.45, h: 0.45 },
-  state: () => ({ url: '' }),
+  type: 'embed', title: '網頁／影片', icon: '🌐', size: { w: 0.45, h: 0.45 },
+  state: () => ({ url: '', autoplay: false }),
   mount(body, ctx) {
     const s = ctx.state;
     const wrap = h('div', { class: 'embed' });
     body.append(wrap);
-    const input = h('input', { class: 'input', placeholder: 'YouTube、Google 簡報或其他網址', value: s.url });
+    const input = h('input', { class: 'input', placeholder: 'YouTube、影片檔、Google 簡報或其他網址', value: s.url });
+    let frame = null, video = null, info = null, playing = false, muted = false;
+    const yt = (func, args = []) => frame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
     function render() {
       wrap.innerHTML = '';
-      const src = s.url && toEmbedUrl(s.url);
-      if (!src) {
-        const inline = h('input', { class: 'input', placeholder: '貼上 YouTube 或網頁網址後按 Enter' });
+      frame = video = null; playing = false;
+      info = s.url ? classifyUrl(s.url) : null;
+      if (!info) {
+        const inline = h('input', { class: 'input', placeholder: '貼上 YouTube、影片或網頁網址後按 Enter' });
         inline.addEventListener('keydown', (e) => { if (e.key === 'Enter') { s.url = inline.value.trim(); input.value = s.url; render(); ctx.save(); } });
         wrap.append(h('div', { class: 'embed-empty' }, inline, h('small', { class: 'muted' }, '部分網站不允許被嵌入，會顯示空白。')));
         return;
       }
-      wrap.append(h('iframe', { src, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' }));
+      const autoplay = s.autoplay;
+      if (s.autoplay) { s.autoplay = false; ctx.save(); } // 只在剛從手機送來時自動播放一次
+      if (info.kind === 'video') {
+        video = h('video', { src: info.href, controls: true, playsinline: true, preload: 'metadata' });
+        video.addEventListener('play', () => { playing = true; ctx.push?.(); });
+        video.addEventListener('pause', () => { playing = false; ctx.push?.(); });
+        video.addEventListener('error', () => toast('影片無法播放，可能是格式不支援或網址需要登入'));
+        wrap.append(video);
+        if (autoplay) video.play().catch(() => {});
+        return;
+      }
+      const src = info.kind === 'youtube' ? youtubeSrc(info, autoplay) : toEmbedUrl(s.url);
+      frame = h('iframe', { src, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
+      if (info.kind === 'youtube') {
+        playing = autoplay;
+        // 讓 YouTube 回報播放狀態
+        frame.addEventListener('load', () => frame?.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*'));
+      }
+      wrap.append(frame);
     }
+    const onMsg = (e) => {
+      if (!frame || e.source !== frame.contentWindow) return;
+      let d; try { d = JSON.parse(e.data); } catch { return; }
+      const st = d?.info?.playerState ?? (d?.event === 'onStateChange' ? d.info : undefined);
+      if (typeof st === 'number' && (st === 1) !== playing) { playing = st === 1; ctx.push?.(); }
+      if (typeof d?.info?.muted === 'boolean') muted = d.info.muted;
+    };
+    window.addEventListener('message', onMsg);
     input.addEventListener('change', () => { s.url = input.value.trim(); render(); ctx.save(); });
     render();
-    return { settings: (c) => c.append(field('網址', input)) };
+    return {
+      destroy: () => window.removeEventListener('message', onMsg),
+      remote: {
+        view: () => ({ kind: info?.kind || '', url: s.url, playing, muted: video ? video.muted : muted }),
+        act(a) {
+          if (video) {
+            if (a === 'play') video.play().catch(() => {});
+            else if (a === 'pause') video.pause();
+            else if (a === 'toggle') (video.paused ? video.play().catch(() => {}) : video.pause());
+            else if (a === 'back') video.currentTime = Math.max(0, video.currentTime - 10);
+            else if (a === 'fwd') video.currentTime += 10;
+            else if (a === 'mute') video.muted = !video.muted;
+            else if (a === 'restart') { video.currentTime = 0; video.play().catch(() => {}); }
+          } else if (info?.kind === 'youtube') {
+            if (a === 'toggle') a = playing ? 'pause' : 'play';
+            if (a === 'play') { yt('playVideo'); playing = true; }
+            else if (a === 'pause') { yt('pauseVideo'); playing = false; }
+            else if (a === 'mute') { yt(muted ? 'unMute' : 'mute'); muted = !muted; }
+            else if (a === 'restart') { yt('seekTo', [0, true]); yt('playVideo'); playing = true; }
+          }
+          if (a === 'reload') render();
+          ctx.push?.();
+        },
+      },
+      settings: (c) => c.append(field('網址', input)),
+    };
   },
 };
 

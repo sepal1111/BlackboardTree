@@ -24,7 +24,8 @@ export function h(tag, props, ...kids) {
 let toastTimer;
 export function toast(msg, ms = 2600) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
+  el.replaceChildren(msg);
+  el.classList.toggle('interactive', msg instanceof Node); // 內含連結時可以點
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), ms);

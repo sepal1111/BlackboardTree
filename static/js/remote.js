@@ -117,12 +117,47 @@ $('#add-select').addEventListener('change', (e) => {
 $('#btn-chrome').addEventListener('click', () => send('app', 'chrome'));
 $('#btn-fs').addEventListener('click', () => send('app', 'fullscreen'));
 
+// 傳送網址：YouTube／影片會在白板上播放，其他網址在教室電腦開啟瀏覽器
+const isUrl = (t) => /^https?:\/\/\S+$/i.test(t);
+function fixUrl(t) {
+  t = String(t || '').trim();
+  const m = t.match(/https?:\/\/\S+/i); // 從分享的文字中找出網址
+  if (m) return m[0];
+  if (/^(www\.|youtu\.be\/|youtube\.com\/)\S+$/i.test(t)) return 'https://' + t;
+  return t;
+}
+const urlCard = (() => {
+  const input = h('input', { type: 'url', class: 'url-input', placeholder: '貼上網址（YouTube、影片、網頁）', enterkeyhint: 'send', autocomplete: 'off' });
+  const go = () => {
+    const url = fixUrl(input.value);
+    if (!isUrl(url)) return toast('請貼上 http:// 或 https:// 開頭的網址');
+    send('app', 'url', { url });
+    input.value = '';
+    input.blur();
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+  // 貼上網址就直接送出
+  input.addEventListener('paste', () => setTimeout(() => { if (isUrl(fixUrl(input.value))) go(); }, 0));
+  const pasteBtn = h('button', { class: 'primary', onclick: async () => {
+    if (input.value.trim()) return go();
+    try {
+      input.value = await navigator.clipboard.readText();
+      go();
+    } catch { input.focus(); toast('請長按輸入框，選「貼上」'); }
+  } }, '📋 貼上並開啟');
+  return h('section', { class: 'card url-card' },
+    h('div', { class: 'card-title' }, '🔗 傳送網址到電視'),
+    h('div', { class: 'url-row' }, input, pasteBtn),
+    h('div', { class: 'muted' }, 'YouTube 或影片網址會直接在白板上播放；其他網址會在教室電腦開啟瀏覽器。'));
+})();
+
 function renderCards() {
   const main = $('#cards');
+  main.prepend(urlCard);
   const list = state.widgets || [];
   const ids = new Set(list.map((w) => w.id));
   for (const [id, c] of cards) if (!ids.has(id)) { c.el.remove(); cards.delete(id); }
-  main.querySelector('.empty')?.remove();
+  main.querySelector(':scope > .empty')?.remove();
   if (!state.board) main.append(h('div', { class: 'empty' }, '請在教室電腦上選擇白板，或從上方選單切換。'));
   else if (!list.length) main.append(h('div', { class: 'empty' }, '白板上還沒有小工具，可以從下方「加入小工具」新增。'));
   for (const w of list) {
@@ -219,6 +254,42 @@ const RENDER = {
           h('span', null, `${o.label}　${o.votes}${total ? `（${Math.round((o.votes / total) * 100)}%）` : ''}`)),
         btn('−', () => wcmd(w, 'unvote', { i }), 'minus'))),
       btn('票數歸零', () => wcmd(w, 'reset'))];
+  },
+  seats(w) {
+    const v = w.view || {};
+    const cols = v.cols || 1;
+    let order = (v.seats || []).map((_, i) => i);
+    if (v.flip) order.reverse();
+    const desk = h('div', { class: 'seat-desk' }, '講台');
+    const grid = h('div', { class: 'seat-grid', style: { gridTemplateColumns: `repeat(${cols}, 1fr)` } },
+      order.map((i) => h('button', {
+        class: 'seat-cell' + (v.seats[i] ? '' : ' vacant') + (i === v.highlight ? ' hl' : ''),
+        'data-i': i,
+        onclick: (e) => {
+          const sel = grid.querySelector('.sel');
+          if (!sel) { e.currentTarget.classList.add('sel'); return; }
+          sel.classList.remove('sel');
+          if (sel !== e.currentTarget) wcmd(w, 'swap', { a: +sel.dataset.i, b: i });
+        },
+      }, v.seats[i] || '')));
+    const name = v.highlight >= 0 && !v.picking ? v.seats[v.highlight] : '';
+    return [
+      name ? h('div', { class: 'name' }, name) : h('div', { class: 'muted', style: { textAlign: 'center' } }, '點一個座位，再點另一個座位即可交換'),
+      ...(v.flip ? [grid, desk] : [desk, grid]),
+      h('div', { class: 'row' }, btn('🎯 隨機點名', () => wcmd(w, 'pick'), 'primary'), btn('🔀 隨機排座位', () => { if (confirm('要重新隨機排座位嗎？')) wcmd(w, 'shuffle'); }))];
+  },
+  embed(w) {
+    const v = w.view || {};
+    const label = { youtube: '▶️ YouTube 影片', video: '🎬 影片', web: '🌐 網頁' }[v.kind] || '尚未設定網址';
+    const out = [h('div', { class: 'card-title' }, label), h('div', { class: 'muted url-text' }, v.url || '')];
+    if (v.kind === 'youtube' || v.kind === 'video') {
+      out.push(h('div', { class: 'row' },
+        ...(v.kind === 'video' ? [btn('⏪ 10 秒', () => wcmd(w, 'back'))] : []),
+        btn(v.playing ? '⏸ 暫停' : '▶ 播放', () => wcmd(w, v.playing ? 'pause' : 'play'), 'primary big'),
+        ...(v.kind === 'video' ? [btn('10 秒 ⏩', () => wcmd(w, 'fwd'))] : [])),
+      h('div', { class: 'chips' }, btn(v.muted ? '🔊 取消靜音' : '🔇 靜音', () => wcmd(w, 'mute')), btn('⏮ 從頭播放', () => wcmd(w, 'restart'))));
+    } else if (v.kind === 'web') out.push(h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload'))));
+    return out;
   },
   text(w) {
     const ta = h('textarea', { placeholder: '在這裡輸入，送到電視上的文字框' });

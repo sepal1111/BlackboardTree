@@ -343,3 +343,131 @@ export const sound = {
     };
   },
 };
+
+// 座位表：依名單排座位，點兩個座位可以交換，也能隨機排座、隨機點名
+export const seats = {
+  type: 'seats', title: '座位表', icon: '🪑', size: { w: 0.5, h: 0.55 },
+  state: () => ({ names: '', rows: 5, cols: 6, seats: [], flip: false, highlight: -1 }),
+  mount(body, ctx) {
+    const s = ctx.state;
+    const grid = h('div', { class: 'seats-grid' });
+    const desk = h('div', { class: 'seats-desk' }, '講　台');
+    const wrap = h('div', { class: 'seats' },
+      h('div', { class: 'seats-bar' },
+        h('button', { class: 'btn primary', onclick: () => shuffleSeats() }, '🔀 隨機排座位'),
+        h('button', { class: 'btn', onclick: () => pick() }, '🎯 隨機點名')),
+      desk, grid);
+    body.append(wrap);
+    let selected = -1;
+    let anim = null;
+
+    // 名單改變時：保留原本的位置，刪掉不在名單的人，新的人補進空位
+    function sync() {
+      const list = splitNames(s.names);
+      const total = s.rows * s.cols;
+      let arr = Array.from({ length: total }, (_, i) => s.seats[i] || '');
+      const seen = new Set();
+      arr = arr.map((n) => (n && list.includes(n) && !seen.has(n) ? (seen.add(n), n) : ''));
+      const missing = list.filter((n) => !seen.has(n));
+      for (const n of missing) {
+        let i = arr.indexOf('');
+        if (i < 0) { s.rows += 1; arr.push(...Array(s.cols).fill('')); i = arr.indexOf(''); }
+        arr[i] = n;
+      }
+      s.seats = arr;
+      if (s.highlight >= arr.length || !arr[s.highlight]) s.highlight = -1;
+    }
+    function shuffleSeats() {
+      const list = splitNames(s.names);
+      if (!list.length) return toast('請先按右上角 ⚙ 輸入名單');
+      const total = s.rows * s.cols;
+      // 人數少於座位時，空位也一起打散
+      s.seats = shuffle([...list, ...Array(Math.max(0, total - list.length)).fill('')]);
+      s.highlight = -1; selected = -1;
+      sync(); ctx.save(); render();
+    }
+    function swap(a, b) {
+      if (a === b || a < 0 || b < 0 || a >= s.seats.length || b >= s.seats.length) return;
+      [s.seats[a], s.seats[b]] = [s.seats[b], s.seats[a]];
+      if (s.highlight === a) s.highlight = b; else if (s.highlight === b) s.highlight = a;
+      ctx.save(); render();
+    }
+    function pick() {
+      if (anim) return;
+      const filled = s.seats.map((n, i) => (n ? i : -1)).filter((i) => i >= 0);
+      if (!filled.length) return toast('請先按右上角 ⚙ 輸入名單');
+      const winner = filled[Math.floor(Math.random() * filled.length)];
+      let k = 0;
+      const step = () => {
+        if (k++ < 16) {
+          s.highlight = filled[Math.floor(Math.random() * filled.length)];
+          render();
+          anim = setTimeout(step, 50 + k * k * 1.2);
+        } else {
+          anim = null; s.highlight = winner; ctx.save(); render();
+          beep({ times: 1, freq: 1046, dur: 0.15 });
+        }
+      };
+      step();
+    }
+    function render() {
+      grid.innerHTML = '';
+      grid.style.setProperty('--cols', s.cols);
+      grid.style.setProperty('--rows', s.rows);
+      wrap.classList.toggle('flip', s.flip);
+      const order = s.seats.map((_, i) => i);
+      if (s.flip) order.reverse(); // 老師視角：講台在下方，左右也相反
+      if (!splitNames(s.names).length) {
+        grid.append(h('div', { class: 'muted center', style: { gridColumn: '1 / -1' } }, '按右上角 ⚙ 輸入名單，或載入已儲存的班級名單'));
+        return;
+      }
+      for (const i of order) {
+        const n = s.seats[i];
+        grid.append(h('button', {
+          class: 'seat' + (n ? '' : ' empty') + (i === selected ? ' sel' : '') + (i === s.highlight ? ' hl' : ''),
+          title: n ? '點一下，再點另一個座位即可交換' : '空位',
+          onclick: () => {
+            if (selected < 0) { selected = i; render(); return; }
+            const a = selected; selected = -1;
+            if (a === i) render(); else swap(a, i);
+          },
+        }, n));
+      }
+    }
+    sync();
+    render();
+    const resize = (dr, dc) => {
+      const list = splitNames(s.names);
+      const rows = Math.max(1, Math.min(15, s.rows + dr)), cols = Math.max(1, Math.min(15, s.cols + dc));
+      if (rows * cols < list.length) return toast(`座位不夠，至少要 ${list.length} 個`);
+      // 依「列、行」重新對應，保留原本的位置
+      const next = Array(rows * cols).fill('');
+      for (let r = 0; r < s.rows; r++) for (let c = 0; c < s.cols; c++) if (r < rows && c < cols) next[r * cols + c] = s.seats[r * s.cols + c] || '';
+      s.seats = next; s.rows = rows; s.cols = cols;
+      sync(); ctx.save(); render();
+    };
+    return {
+      destroy: () => clearTimeout(anim),
+      remote: {
+        view: () => ({ rows: s.rows, cols: s.cols, seats: s.seats, flip: s.flip, highlight: s.highlight, picking: !!anim }),
+        act(a, args = {}) {
+          if (a === 'shuffle') shuffleSeats();
+          else if (a === 'pick') pick();
+          else if (a === 'swap') swap(+args.a, +args.b);
+          else if (a === 'clear') { s.highlight = -1; ctx.save(); render(); }
+        },
+      },
+      settings: (c) => {
+        const size = h('span', { class: 'seats-size' });
+        const showSize = () => { size.textContent = `${s.rows} 排 × ${s.cols} 行（${s.rows * s.cols} 個座位）`; };
+        showSize();
+        const adj = (label, dr, dc) => h('button', { class: 'btn', onclick: () => { resize(dr, dc); showSize(); } }, label);
+        c.append(namesEditor(ctx, () => { sync(); render(); showSize(); }),
+          field('座位數', h('div', { class: 'stack' }, size,
+            h('div', { class: 'row-btns' }, adj('− 排', -1, 0), adj('＋ 排', 1, 0), adj('− 行', 0, -1), adj('＋ 行', 0, 1)))),
+          checkbox('老師視角（講台在下方）', s.flip, (v) => { s.flip = v; ctx.save(); render(); }),
+          h('p', { class: 'muted' }, '在座位表上點一個座位，再點另一個座位，兩人就會交換（也可以和空位交換）。'));
+      },
+    };
+  },
+};

@@ -4,6 +4,7 @@ import { Store, LS, uid } from './store.js';
 import { FolderBackend, ServerBackend, LocalBackend, DATA_DIR } from './backends/index.js';
 import { FsaAdapter, NeuAdapter, kvGet, kvSet } from './backends/fs.js';
 import { widgets, widgetList } from './widgets/index.js';
+import { classifyUrl } from './widgets/media.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
 import { RemoteHost } from './remote-host.js';
 
@@ -370,7 +371,7 @@ function renderDock() {
 // ------------------------------------------------------------ 小工具
 function maxZ() { return Math.max(0, ...S.board.data.widgets.map((w) => w.z || 0)); }
 
-function addWidget(type, copyFrom) {
+function addWidget(type, copyFrom, init) {
   const def = widgets[type];
   const n = S.board.data.widgets.length;
   const w = copyFrom
@@ -380,11 +381,14 @@ function addWidget(type, copyFrom) {
       x: Math.max(0, 0.5 - def.size.w / 2 + ((n % 6) - 2.5) * 0.03),
       y: Math.max(0.07, 0.42 - def.size.h / 2 + ((n % 6) - 2.5) * 0.03),
       state: def.state(),
+      ...(init || {}),
     };
+  if (init?.state) w.state = { ...def.state(), ...init.state };
   S.board.data.widgets.push(w);
   mountWidget(w);
   $('#empty-hint').classList.add('hidden');
   save();
+  return w;
 }
 
 function removeWidget(id) {
@@ -421,7 +425,7 @@ function mountWidget(w) {
   place(el, w);
   $('#stage').append(el);
 
-  const ctx = { state: w.state, widget: w, store: S.store, save: () => save() };
+  const ctx = { state: w.state, widget: w, store: S.store, save: () => save(), push: () => S.remote?.push() };
   let inst = {};
   try { inst = def.mount(body, ctx) || {}; } catch (e) { console.error(e); body.textContent = '此小工具發生錯誤'; }
   S.mounted.set(w.id, { el, inst, w });
@@ -566,7 +570,7 @@ function remoteState() {
     board: b ? { id: b.id, name: b.name } : null,
     boards: (S.store?.index || []).map((x) => ({ id: x.id, name: x.name })),
     chromeHidden: document.body.classList.contains('chrome-hidden'),
-    addable: widgetList.filter((d) => ['timer', 'stopwatch', 'names', 'groups', 'text', 'traffic', 'work', 'dice', 'poll', 'clock', 'calendar'].includes(d.type))
+    addable: widgetList.filter((d) => ['timer', 'stopwatch', 'names', 'groups', 'seats', 'text', 'traffic', 'work', 'dice', 'poll', 'clock', 'calendar'].includes(d.type))
       .map((d) => ({ type: d.type, title: d.title, icon: d.icon })),
     widgets: list.map((w) => {
       const def = widgets[w.type];
@@ -591,6 +595,8 @@ async function remoteCmd(m) {
       addWidget(args.type);
     } else if (m.action === 'close' && S.board) {
       removeWidget(args.widgetId);
+    } else if (m.action === 'url') {
+      await openUrlFromRemote(String(args.url || ''));
     }
     return;
   }
@@ -598,6 +604,30 @@ async function remoteCmd(m) {
     const inst = S.mounted.get(m.widgetId)?.inst;
     inst?.remote?.act(m.action, args);
   }
+}
+
+// 手機送來的網址：YouTube／影片檔放到白板上播放，其他網址用瀏覽器開啟
+async function openUrlFromRemote(url) {
+  const info = classifyUrl(url);
+  if (!info) return S.remote?.notice('這不是有效的網址（需要 http:// 或 https:// 開頭）');
+  if (info.kind === 'web') {
+    if (DESKTOP) {
+      await window.Neutralino.os.open(info.href);
+    } else if (!window.open(info.href, '_blank', 'noopener')) {
+      // 瀏覽器擋掉沒有點擊動作的彈出視窗，改成在畫面上顯示按鈕
+      toast(h('span', null, '手機送來網址：', h('a', { href: info.href, target: '_blank', rel: 'noopener', class: 'toast-link' }, '點這裡開啟')), 15000);
+      return S.remote?.notice('瀏覽器擋住了新視窗，請在電腦畫面上點一下「點這裡開啟」');
+    }
+    return S.remote?.notice('已在教室電腦開啟瀏覽器');
+  }
+  if (!S.board) return S.remote?.notice('請先在電腦上開啟一個白板');
+  // 影片：放在畫面中間、佔大部分空間；取代上一個從手機送來的影片，避免兩個一起出聲
+  const prev = S.board.data.widgets.find((x) => x.type === 'embed' && x.state?.fromRemote);
+  const pos = prev ? { x: prev.x, y: prev.y, w: prev.w, h: prev.h } : { x: 0.12, y: 0.08, w: 0.76, h: 0.8 };
+  if (prev) removeWidget(prev.id);
+  const w = addWidget('embed', null, { ...pos, state: { url: info.href, autoplay: true, fromRemote: true } });
+  S.remote?.notice(info.kind === 'youtube' ? '已在白板上播放 YouTube 影片' : '已在白板上播放影片');
+  return w;
 }
 
 function ensureRemote() {
@@ -651,8 +681,12 @@ function remoteDialog() {
           h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有遙控裝置，並更換新代碼'); } }, '中斷全部並換代碼'))));
   };
   render();
+  // 手機連上後自動關閉，讓電視畫面回到白板
+  const onJoin = () => setTimeout(() => dlg.close(), 800);
   r.addEventListener('change', render);
-  modal({ title: '📱 手機遙控', body: box, wide: true, onClose: () => r.removeEventListener('change', render), actions: [{ label: '完成', primary: true }] });
+  r.addEventListener('joined', onJoin);
+  const dlg = modal({ title: '📱 手機遙控', body: box, wide: true, actions: [{ label: '完成', primary: true }],
+    onClose: () => { r.removeEventListener('change', render); r.removeEventListener('joined', onJoin); } });
 }
 
 // ------------------------------------------------------------ 綁定
