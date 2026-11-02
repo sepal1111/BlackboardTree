@@ -87,14 +87,39 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 - V: 還沒連線時，畫面上有「開啟網路磁碟機程式」按鈕（會尋找 `%LOCALAPPDATA%\Programs\NASDriveConnector\nas-drive-connector.exe`）
 - 磁碟機代號、NetDrive 路徑可在 `desktop/neutralino.config.json` 的 `globalVariables` 修改
 
-建置方式（需要 Node.js，第一次建置需要網路來下載 Neutralino）：
+#### 安裝
+
+執行 `MyScreen-Setup-1.0.0.exe`，依畫面按「下一步」即可：
+
+- 安裝到 `%LOCALAPPDATA%\Programs\MyScreen`，**不需要系統管理員權限**（和網路磁碟機程式相同）
+- 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
+- 安裝新版時會自動關閉正在執行的 MyScreen；解除安裝不會刪除 `V:\MyScreen` 裡的白板
+
+資訊組大量部署時可以用靜默安裝：
+
+```
+MyScreen-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+```
+
+要為電腦上所有使用者安裝（裝到 Program Files），請以系統管理員執行並加上 `/ALLUSERS`。不想安裝的話，也可以直接使用免安裝版 `MyScreen.exe`。
+
+#### 建置
+
+需要 Node.js（第一次建置需要網路下載 Neutralino 與 `resedit`）；要產生安裝程式還需要 [Inno Setup 6](https://jrsoftware.org/isdl.php)：
 
 ```
 cd desktop
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-產出 `desktop\out\MyScreen.exe`，單一檔案，複製到各台電腦即可執行。
+產出在 `desktop\out\`：
+
+| 檔案 | 說明 |
+|---|---|
+| `MyScreen-Setup-<版本>.exe` | 安裝程式（找不到 Inno Setup 時不會產生） |
+| `MyScreen.exe` | 免安裝版，單一檔案，複製到電腦即可執行 |
+
+版本號碼在 `desktop/neutralino.config.json` 的 `version`；安裝程式設定在 `desktop/installer/setup.iss`。
 
 ### B. 網頁版
 

@@ -11,3 +11,4 @@ desktop/.tmp/
 
 # 學校網路磁碟機程式（獨立 repo）
 NetDrive/
+desktop/node_modules/
