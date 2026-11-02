@@ -42,6 +42,7 @@ async function boot() {
     });
   }
   S.config = DESKTOP ? null : await api.get('/api/config').catch(() => null);
+  await loadSchoolConfig();
   let choice = LS.get(CHOICE_KEY, null);
   if (!choice && LS.get('ms:guest', false)) choice = { kind: 'local' }; // 舊版訪客模式
   if (!choice && DESKTOP) choice = { kind: 'neu', path: DESKTOP_ROOT };
@@ -103,6 +104,9 @@ async function connect(backend, choice) {
   LS.del('ms:guest');
   renderDock();
   renderStatus();
+  const prevRelay = relayBase();
+  S.relayUser = normalizeRelay((await S.store.getSettings().catch(() => ({}))).relay || '');
+  if (relayBase() !== prevRelay) resetRemote();
   renderRemoteBtn();
   if (S.store.remote) S.pollTimer = setInterval(() => S.store?.poll(S.board).catch(() => {}), 8000);
   showBoards();
@@ -611,8 +615,68 @@ async function toggleFullscreen() {
 }
 
 // ------------------------------------------------------------ 手機遙控
-// 轉送伺服器：桌面版看設定檔（NL_RELAY），網頁版則是提供這個網頁的伺服器
-const relayBase = () => (window.NL_RELAY || (S.config ? location.origin : '')).replace(/\/+$/, '');
+// 轉送伺服器（手機與教室電腦之間的中繼，通常架在學校 NAS），優先順序：
+//   1. 老師自己設定的（存在 V:\MyScreen\settings.json，換電腦也能用）
+//   2. 學校預設：安裝時填寫，存在程式資料夾的 myscreen.json
+//   3. 建置時寫入的 NL_RELAY
+//   4. 網頁版：提供這個網頁的伺服器
+const relayBase = () => (S.relayUser || S.relaySchool || window.NL_RELAY || (S.config ? location.origin : '')).replace(/\/+$/, '');
+
+// 讀取安裝程式寫入的學校預設（桌面版）
+async function loadSchoolConfig() {
+  if (!DESKTOP) return;
+  try {
+    const dir = String(window.NL_PATH || '.').replace(/[\\/]+$/, '');
+    const cfg = JSON.parse(await window.Neutralino.filesystem.readFile(dir + '/myscreen.json'));
+    S.relaySchool = normalizeRelay(cfg.relay || '');
+  } catch { /* 沒有設定檔 */ }
+}
+
+// 「192.168.1.10:8080」→「http://192.168.1.10:8080」
+function normalizeRelay(v) {
+  v = String(v || '').trim().replace(/\/+$/, '').replace(/\/remote\.html.*$/, '');
+  if (!v) return '';
+  if (!/^https?:\/\//i.test(v)) v = 'http://' + v;
+  try { const u = new URL(v); return u.origin + u.pathname.replace(/\/+$/, ''); } catch { return ''; }
+}
+
+// 換伺服器：關掉舊連線，下次開啟遙控時用新的伺服器
+function resetRemote() {
+  S.remote?.stop();
+  S.remote = null;
+  renderRemoteBtn();
+}
+
+// 遙控伺服器設定畫面
+function relaySetupDialog(message = '') {
+  const input = h('input', { class: 'input', placeholder: '例如：192.168.1.10:8080', value: S.relayUser || '' });
+  const school = S.relaySchool || window.NL_RELAY || '';
+  const dlg = modal({
+    title: '📱 設定手機遙控',
+    body: h('div', { class: 'stack' },
+      message ? h('p', { class: 'err' }, message) : null,
+      h('p', null, '手機遙控需要學校的「遙控伺服器」轉送指令（通常架在學校 NAS 上，請向資訊組詢問網址）。'),
+      h('label', { class: 'field' }, h('span', null, '遙控伺服器網址'), input),
+      h('p', { class: 'muted' }, school
+        ? `留空則使用學校預設：${school}`
+        : '這個設定會存在你的個人資料夾（V:\\MyScreen），換到其他電腦也能直接使用；留空可清除設定。')),
+    actions: [
+      { label: '取消' },
+      { label: '儲存', primary: true, onClick: () => {
+        const raw = input.value.trim();
+        const v = normalizeRelay(raw);
+        if (raw && !v) { toast('網址格式不正確'); return false; }
+        S.relayUser = v;
+        if (S.store) S.store.getSettings().then((st) => { if (v) st.relay = v; else delete st.relay; S.store.saveSettings(); });
+        resetRemote();
+        if (!relayBase()) return toast('已清除遙控伺服器設定'); // 留空而且沒有學校預設：關閉手機遙控
+        setTimeout(remoteDialog, 50);
+      } },
+    ],
+  });
+  setTimeout(() => input.focus(), 50);
+  return dlg;
+}
 
 function remoteState() {
   const b = S.board;
@@ -698,7 +762,7 @@ function ensureRemote() {
 
 function renderRemoteBtn() {
   const btn = $('#remote-btn');
-  btn.classList.toggle('hidden', !relayBase());
+  btn.classList.toggle('hidden', !relayBase() && !DESKTOP);
   const r = S.remote;
   const n = r?.status === 'online' ? r.remotes : 0;
   btn.querySelector('.tb-label').textContent = n ? `遙控中（${n}）` : '遙控';
@@ -707,13 +771,15 @@ function renderRemoteBtn() {
 
 function remoteDialog() {
   const r = ensureRemote();
-  if (!r) return toast('尚未設定遙控伺服器');
+  if (!r) return relaySetupDialog();
   const box = h('div', { class: 'remote-box' });
   const render = () => {
     box.innerHTML = '';
     if (r.status !== 'online') {
       box.append(h('div', { class: 'remote-wait' }, r.status === 'error'
-        ? `無法連線到遙控伺服器（${r.base}），正在重試…`
+        ? [h('div', null, `無法連線到遙控伺服器（${r.base}），正在重試…`),
+          h('div', { class: 'muted' }, '請確認網址正確、這台電腦連得到學校 NAS。'),
+          h('button', { class: 'btn', onclick: () => { dlg.close(); relaySetupDialog(); } }, '⚙ 更改遙控伺服器')]
         : '連線中…'));
       return;
     }
@@ -732,7 +798,8 @@ function remoteDialog() {
         h('div', { class: 'remote-url' }, `${r.base}/remote.html`),
         h('div', { class: 'remote-count' }, r.remotes ? `📱 目前有 ${r.remotes} 台裝置連線` : '尚無裝置連線'),
         h('div', { class: 'row-btns' },
-          h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有遙控裝置，並更換新代碼'); } }, '中斷全部並換代碼'))));
+          h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有遙控裝置，並更換新代碼'); } }, '中斷全部並換代碼'),
+          DESKTOP ? h('button', { class: 'linkbtn', onclick: () => { dlg.close(); relaySetupDialog(); } }, '⚙ 遙控伺服器設定') : null)));
   };
   render();
   // 手機連上後自動關閉，讓電視畫面回到白板

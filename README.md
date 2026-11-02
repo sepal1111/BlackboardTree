@@ -98,8 +98,10 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 資訊組大量部署時可以用靜默安裝：
 
 ```
-MyScreen-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+MyScreen-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon /RELAY=http://192.168.1.10:8080
 ```
+
+`/RELAY=` 是學校的手機遙控伺服器（選填，見「讓桌面版連到 NAS」）。
 
 要為電腦上所有使用者安裝（裝到 Program Files），請以系統管理員執行並加上 `/ALLUSERS`。不想安裝的話，也可以直接使用免安裝版 `MyScreen.exe`。
 
@@ -198,17 +200,19 @@ QNAP 可以用 Container Station 匯入同一份 `docker-compose.yml`。預設�
 
 ### 讓桌面版連到 NAS
 
-編輯 `desktop/neutralino.config.json`，把 NAS 的網址填進 `RELAY`，再重新建置：
+安裝版、免安裝版都**不需要重新建置**，有三種設定方式（上面的優先）：
 
-```json
-"globalVariables": {
-  "MSROOT": "V:",
-  "RELAY": "http://192.168.1.10:8080",
-  ...
-}
-```
+1. **老師自己設定**：按上方「📱 遙控」→ 還沒設定時會出現設定畫面，填入 NAS 網址（例如 `192.168.1.10:8080`）。設定存在老師的 `V:\MyScreen\settings.json`，換到任何一台電腦都能直接使用；之後可在遙控畫面按「⚙ 遙控伺服器設定」修改，留空即清除
+2. **學校預設（安裝時填寫）**：安裝精靈有一頁「手機遙控」可以填網址；大量部署時用 `/RELAY=` 參數：
 
-`RELAY` 留空時，「📱 遙控」按鈕不會出現。
+   ```
+   MyScreen-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon /RELAY=http://192.168.1.10:8080
+   ```
+
+   網址會寫在程式資料夾的 `myscreen.json`（`{"relay": "http://192.168.1.10:8080"}`），升級時會保留。免安裝版也可以在 `MyScreen.exe` 旁邊放一個同樣的 `myscreen.json`
+3. **建置時寫入**：`desktop/neutralino.config.json` 的 `globalVariables.RELAY`
+
+都沒有設定時，「📱 遙控」按鈕仍會顯示，按下去就是設定畫面。
 
 > **網路注意事項**：老師的手機必須能連到 NAS 的 8080 埠。若學校的無線網路（手機）和教學網路（NAS、教室電腦）是分開的網段，請資訊組開放手機網段連到 NAS 的 8080 埠。
 

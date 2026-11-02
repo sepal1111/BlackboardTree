@@ -59,3 +59,64 @@ Filename: "{app}\{#AppExeName}"; Description: "立即開啟 MyScreen"; WorkingDi
 ; Neutralino 執行時產生的暫存檔（白板資料存在 V:\MyScreen，不會被刪除）
 Type: filesandordirs; Name: "{app}\.tmp"
 Type: files; Name: "{app}\neutralinojs.log"
+Type: files; Name: "{app}\myscreen.json"
+
+[Code]
+// 手機遙控伺服器（學校預設）：寫在程式資料夾的 myscreen.json，MyScreen 啟動時讀取
+// 靜默安裝可用 /RELAY=http://192.168.1.10:8080 指定；老師也可以在 MyScreen 裡自己設定（會優先使用）
+var RelayPage: TInputQueryWizardPage;
+
+function ConfigPath(): String;
+begin
+  Result := ExpandConstant('{app}\myscreen.json');
+end;
+
+// 從舊的 myscreen.json 讀出 relay（升級時保留原本的設定）
+function ReadOldRelay(): String;
+var
+  S: AnsiString;
+  P, Q: Integer;
+begin
+  Result := '';
+  if not LoadStringFromFile(ExpandConstant('{autopf}\MyScreen\myscreen.json'), S) then exit;
+  P := Pos('"relay"', S);
+  if P = 0 then exit;
+  S := Copy(S, P + 7, Length(S));
+  P := Pos('"', S);
+  if P = 0 then exit;
+  S := Copy(S, P + 1, Length(S));
+  Q := Pos('"', S);
+  if Q = 0 then exit;
+  Result := Copy(S, 1, Q - 1);
+end;
+
+procedure InitializeWizard();
+var
+  V: String;
+begin
+  RelayPage := CreateInputQueryPage(wpSelectTasks,
+    '手機遙控',
+    '設定學校的遙控伺服器（選填）',
+    '老師可以用手機或平板遙控教室電腦上的 MyScreen，這需要學校的遙控伺服器轉送指令（通常架在學校 NAS 上）。' + #13#10 + #13#10 +
+    '如果學校已經架好，請填入網址，例如 http://192.168.1.10:8080。不知道的話可以留空，老師之後也能在 MyScreen 裡自行設定。');
+  RelayPage.Add('遙控伺服器網址：', False);
+  V := ExpandConstant('{param:RELAY|}');
+  if V = '' then V := ReadOldRelay();
+  RelayPage.Values[0] := V;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  V: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    V := Trim(RelayPage.Values[0]);
+    StringChangeEx(V, '\', '/', True);
+    StringChangeEx(V, '"', '', True);
+    if V = '' then
+      DeleteFile(ConfigPath())
+    else
+      SaveStringToFile(ConfigPath(), '{"relay": "' + V + '"}' + #13#10, False);
+  end;
+end;
