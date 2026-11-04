@@ -164,6 +164,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.7.0 | 新增「考試時間」小工具（`time.js` 的 `exam`；計算在 `util.js` 的 `examStatus`、`examAttendance`，手機遙控頁共用）：各節科目與起訖時間、自動倒數、結束前提醒、停筆提示、人數統計（應到／實到／缺考座號，可連結班級名單）、手機延長時間與點選缺考；`ui.js` 新增 24 小時制 `timePicker` |
 | 1.6.3 | 新 Logo（`static/logo.svg`）：`make-icons.mjs` 產生 exe／安裝程式／視窗／系統匣圖示，開始畫面、關於與更新、分頁圖示也用它 |
 | 1.6.2 | 第一版正式釋出：`RELEASE.md` 改寫成完整的發布說明（功能介紹、系統需求、安裝、大量部署、常見問題），最後保留「## 版本紀錄」給 `make-latest.mjs` 讀取 |
 | 1.6.1 | GitHub repo 改名為 `sepal1111/BlackboardTree`，檢查更新改用新網址（舊版靠 GitHub 轉址） |
@@ -197,7 +198,7 @@ static/                     前端（桌面版、網頁版共用）
   js/ui.js                  h()、modal、toast、選擇圖片等共用 UI
   js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具）
   js/update.js              檢查新版本、下載並驗證、產生更新用的 PowerShell 指令
-  js/widgets/               小工具：time.js、classroom.js、media.js、util.js、index.js（清單與順序）
+  js/widgets/               小工具：time.js、classroom.js、media.js、util.js、index.js（清單與順序）；考試時間的計算 examStatus() 在 util.js（手機遙控頁共用，內建 relay 也有嵌入）
   vendor/qrcode.js          QR Code
   vendor/xlsx.mini.min.js   SheetJS 0.20.3（讀 Excel，用到時才載入）
 server/

@@ -229,3 +229,86 @@ export function pickImage(store) {
     if (store.backend.canBrowse) open('');
   });
 }
+
+// ---------- 時間選擇器（24 小時制，取代瀏覽器內建的上午／下午選單）
+// value：'08:10'（空字串代表未設定）；onChange 收到新的 'HH:MM'
+const pad2 = (n) => String(n).padStart(2, '0');
+export function timePicker(value, onChange) {
+  let cur = /^\d{1,2}:\d{2}$/.test(value || '') ? value.padStart(5, '0') : '';
+  const label = h('span', { class: 'tp-value' });
+  const btn = h('button', { type: 'button', class: 'input tp-btn', onclick: () => open() }, label, h('span', { class: 'tp-ico' }, '🕒'));
+  const show = () => { label.textContent = cur || '--:--'; btn.classList.toggle('empty', !cur); };
+  show();
+
+  function open() {
+    document.querySelector('.tp-pop')?.dispatchEvent(new Event('tp-close'));
+    let [hh, mm] = (cur || '08:00').split(':').map(Number);
+    const big = h('div', { class: 'tp-big' });
+    const hours = h('div', { class: 'tp-grid tp-hours' });
+    const mins = h('div', { class: 'tp-grid tp-mins' });
+    const pop = h('div', { class: 'tp-pop' },
+      big,
+      h('div', { class: 'tp-sec' }, '時'), hours,
+      h('div', { class: 'tp-sec' }, '分'), mins,
+      h('div', { class: 'tp-foot' },
+        h('button', { type: 'button', class: 'btn', onclick: () => step(-1) }, '−1 分'),
+        h('button', { type: 'button', class: 'btn', onclick: () => step(1) }, '+1 分'),
+        h('button', { type: 'button', class: 'btn primary', onclick: () => close() }, '完成')));
+    function commit() {
+      cur = `${pad2(hh)}:${pad2(mm)}`;
+      show();
+      onChange(cur);
+      draw();
+    }
+    function step(d) {
+      const t = (hh * 60 + mm + d + 1440) % 1440;
+      hh = Math.floor(t / 60); mm = t % 60;
+      commit();
+    }
+    function draw() {
+      big.textContent = `${pad2(hh)}:${pad2(mm)}`;
+      hours.replaceChildren(...Array.from({ length: 24 }, (_, i) => h('button', {
+        type: 'button', class: 'tp-cell' + (i === hh ? ' on' : '') + (i >= 7 && i <= 17 ? ' day' : ''),
+        onclick: () => { hh = i; commit(); },
+      }, pad2(i))));
+      mins.replaceChildren(...Array.from({ length: 12 }, (_, i) => i * 5).map((m) => h('button', {
+        type: 'button', class: 'tp-cell' + (m === mm ? ' on' : (mm > m && mm < m + 5 ? ' near' : '')),
+        onclick: () => { mm = m; commit(); },
+      }, pad2(m))));
+    }
+    draw();
+    document.body.append(pop);
+    // 放在欄位下方；下方空間不夠就放上方。設定視窗捲動時跟著欄位移動
+    function place() {
+      const r = btn.getBoundingClientRect();
+      pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
+      const below = r.bottom + 6;
+      pop.style.top = (below + pop.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - pop.offsetHeight - 6) : below) + 'px';
+    }
+    place();
+    btn.classList.add('open');
+
+    const outside = (e) => { if (!pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) close(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape' || e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); close(); }
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); step(e.key === 'ArrowUp' ? 1 : -1); }
+    };
+    const onScroll = (e) => { if (!pop.contains(e.target)) { if (btn.isConnected) place(); else close(); } };
+    function close() {
+      pop.remove();
+      btn.classList.remove('open');
+      document.removeEventListener('pointerdown', outside, true);
+      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', place);
+    }
+    pop.addEventListener('tp-close', close);
+    setTimeout(() => {
+      document.addEventListener('pointerdown', outside, true);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', place);
+    });
+    document.addEventListener('keydown', onKey, true);
+  }
+  return btn;
+}

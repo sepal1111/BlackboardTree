@@ -1,9 +1,9 @@
-import { clock, timer, stopwatch } from './time.js';
+import { clock, timer, stopwatch, exam } from './time.js';
 import { names, groups, work, poll, sound, seats, points } from './classroom.js';
 import { text, draw, image, qr, embed, webcam } from './media.js';
 
 // 下方工具列的順序
-export const widgetList = [timer, clock, stopwatch, names, groups, seats, points, text, draw, image, work, sound, poll, qr, embed, webcam];
+export const widgetList = [timer, clock, stopwatch, exam, names, groups, seats, points, text, draw, image, work, sound, poll, qr, embed, webcam];
 // 工具列圖示：static/icons/tools/<type>.svg（手機遙控的下拉選單仍用 icon 的 emoji）
 for (const w of widgetList) w.img = `icons/tools/${w.type}.svg`;
 export const widgets = Object.fromEntries(widgetList.map((w) => [w.type, w]));

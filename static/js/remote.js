@@ -1,6 +1,6 @@
 // 黑板樹手機遙控頁：掃描電視上的 QR Code 後開啟
 import { h } from './ui.js';
-import { fmtDuration, pad } from './widgets/util.js';
+import { fmtDuration, pad, fmtHM, examStatus, fmtSeats } from './widgets/util.js';
 
 const $ = (s) => document.querySelector(s);
 let ws = null;
@@ -209,6 +209,37 @@ const RENDER = {
     return [time,
       h('div', { class: 'row' }, btn('−1 分', () => wcmd(w, 'add', { sec: -60 })), btn(running ? '暫停' : '開始', () => wcmd(w, 'toggle'), 'primary big'), btn('+1 分', () => wcmd(w, 'add', { sec: 60 }))),
       h('div', { class: 'chips' }, [1, 3, 5, 10, 15].map((m) => btn(`${m} 分`, () => wcmd(w, 'set', { sec: m * 60 }))), btn('↺ 重設', () => wcmd(w, 'reset')))];
+  },
+  exam(w) {
+    const v = w.view || {};
+    // 依手機的時間（已校正為教室電腦的時間）計算，和電視上的倒數一致
+    const box = ticker(h('div', { class: 'exam-card' }), (el) => {
+      const st = examStatus(v.sessions, new Date(now()));
+      const x = st.session;
+      const warn = st.phase === 'during' && v.warn > 0 && st.left <= v.warn * 60;
+      const label = { empty: '還沒有設定考試，請在教室電腦按 ⚙ 設定', during: '距離考試結束', ended: '考試結束，請停筆', before: st.first ? '距離考試開始' : '下一節考試開始還有', done: '今天的考試都結束了' }[st.phase];
+      el.replaceChildren(...[ // replaceChildren 會把 null 變成文字「null」，所以先濾掉
+        v.title ? h('div', { class: 'muted', style: { textAlign: 'center' } }, v.title) : null,
+        x && st.phase !== 'done' ? h('div', { class: 'name' }, x.subject || '考試') : null,
+        x && st.phase !== 'done' ? h('div', { class: 'muted', style: { textAlign: 'center' } }, `${fmtHM(x.s)} – ${fmtHM(x.e)}`) : null,
+        h('div', { style: { textAlign: 'center', fontWeight: 700 } }, label),
+        st.phase === 'during' || st.phase === 'before' ? h('div', { class: 'big-text' + (warn ? ' done' : '') }, fmtDuration(st.left)) : null,
+        st.list.length ? h('div', { class: 'exam-list' }, st.list.map((y) => h('div', { class: y === x && st.phase !== 'done' ? 'on' : '' }, `${fmtHM(y.s)}–${fmtHM(y.e)}　${y.subject || '考試'}`))) : null].filter(Boolean));
+    });
+    // 人數統計：點座號標記／取消缺考
+    const seats = v.seats || [];
+    const absent = new Set(v.absent || []);
+    const att = seats.length ? h('div', { class: 'exam-att-card' },
+      h('div', { class: 'att-line' },
+        h('span', null, '應到 ', h('b', null, seats.length)),
+        h('span', null, '實到 ', h('b', null, seats.length - absent.size)),
+        h('span', { class: absent.size ? 'miss' : '' }, '缺考 ', h('b', null, absent.size), ' 人')),
+      absent.size ? h('div', { class: 'att-miss' }, '缺考座號：', h('b', null, fmtSeats([...absent].sort((a, b) => a - b)))) : null,
+      h('div', { class: 'muted' }, '點座號標記缺考，再點一下取消'),
+      h('div', { class: 'seat-pick' }, seats.map((no) => btn(String(no), () => wcmd(w, 'absent', { no }), 'seat-chip' + (absent.has(no) ? ' off' : '')))),
+      absent.size ? btn('全部到考', () => wcmd(w, 'allPresent')) : null) : null;
+    return [box, h('div', { class: 'row' },
+      btn('延長 5 分鐘', () => wcmd(w, 'extend', { min: 5 })), btn('延長 10 分鐘', () => wcmd(w, 'extend', { min: 10 }))), att];
   },
   stopwatch(w) {
     const v = w.view || {};

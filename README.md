@@ -8,7 +8,7 @@
 
 | 類別 | 小工具 |
 |---|---|
-| 時間 | 計時器（時間到會閃爍、響鈴）、時鐘日期（時間可選數字／指針／不顯示，日期可選一行文字／月曆，可用民國年）、碼錶（可分段） |
+| 時間 | 計時器（時間到會閃爍、響鈴）、時鐘日期（時間可選數字／指針／不顯示，日期可選一行文字／月曆，可用民國年）、碼錶（可分段）、考試時間（設定各節科目與起訖時間，自動顯示這一節的倒數，結束前提醒、結束時響鈴，手機可延長時間；人數統計：應到、實到、缺考人數與座號，可帶入班級名單，電腦或手機點座號標記缺考） |
 | 班級經營 | 隨機抽籤（不重複）、隨機分組、座位表（隨機排座、點兩下交換、隨機點名）、課堂加分（學生卡片加減分）、工作模式、音量計（麥克風）、投票（可讓學生用手機掃 QR Code 投票） |
 | 內容 | 文字、畫板、圖片（可選個人資料夾裡的圖片）、QR Code、網頁／影片（YouTube、Facebook、Instagram、Threads、TikTok、Vimeo、影片檔、Google 簡報）、視訊鏡頭 |
 
@@ -96,7 +96,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 
 #### 安裝
 
-執行 `BlackboardTree-Setup-1.6.3.exe`，依畫面按「下一步」即可：
+執行 `BlackboardTree-Setup-1.7.0.exe`，依畫面按「下一步」即可：
 
 - 安裝到 `%LOCALAPPDATA%\Programs\BlackboardTree`（從 1.5 以前升級的電腦沿用原本的 `%LOCALAPPDATA%\Programs\MyScreen`），**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
@@ -115,7 +115,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 資訊組大量部署時可以用靜默安裝：
 
 ```
-BlackboardTree-Setup-1.6.3.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+BlackboardTree-Setup-1.7.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 手機遙控與學生投票由老師的電腦擔任伺服器，安裝時不需要設定。
@@ -226,7 +226,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 **Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
 
 - 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
-- 大量部署建議以系統管理員執行：`BlackboardTree-Setup-1.6.3.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 大量部署建議以系統管理員執行：`BlackboardTree-Setup-1.7.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
 - 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
 
 > **網路注意事項**：手機必須能連到教室電腦（同一個校內網路）。若學校的無線網路（手機）和教學網路（教室電腦）是分開的網段，請資訊組開放手機網段連到教室電腦的 52480 埠（網頁版是 8080 埠）。

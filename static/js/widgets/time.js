@@ -1,6 +1,7 @@
-// 時間類：時鐘日期、計時器、碼錶
-import { h, field, select, checkbox, promptDialog } from '../ui.js';
-import { beep, pad, fmtDuration, parseDuration, WEEKDAYS } from './util.js';
+// 時間類：時鐘日期、計時器、碼錶、考試時間
+import { h, field, select, checkbox, promptDialog, timePicker } from '../ui.js';
+import { beep, pad, fmtDuration, parseDuration, WEEKDAYS, parseHM, fmtHM, examSchedule, examStatus, examAttendance, seatNumbersOf, fmtSeats, fmtAttendance } from './util.js';
+import { studentsOf, lastListId, rememberList } from '../roster.js';
 
 // 時鐘日期：時間（數字／指針／不顯示）＋日期（一行／月曆／不顯示）
 export const clock = {
@@ -207,6 +208,199 @@ export const stopwatch = {
           if (a === 'toggle') startBtn.click();
           else if (a === 'lap') { s.laps.unshift(now()); ctx.save(); renderLaps(); }
           else if (a === 'reset') { s.startAt = null; s.elapsed = 0; s.laps = []; ctx.save(); renderLaps(); render(); }
+        },
+      },
+    };
+  },
+};
+
+// 考試時間：設定各節考試的科目與起訖時間，依照現在時間自動顯示這一節的倒數
+// state.sessions：[{ id, subject, start: '08:10', end: '08:50' }]
+// 人數統計：listId 連結班級名單（null＝還沒選過，''＝自己輸入應到人數 expected），absent 是缺考的座號
+export const exam = {
+  type: 'exam', title: '考試時間', icon: '📝', size: { w: 0.36, h: 0.42 },
+  state: () => ({ title: '', sessions: [], warn: 5, sound: true, clock: true, listId: null, expected: 0, absent: [] }),
+  mount(body, ctx) {
+    const s = ctx.state;
+    const el = {
+      title: h('div', { class: 'exam-name' }),
+      subject: h('div', { class: 'exam-subject' }),
+      range: h('div', { class: 'exam-range' }),
+      label: h('div', { class: 'exam-label' }),
+      time: h('div', { class: 'exam-time' }),
+      bar: h('div', { class: 'exam-bar' }),
+      next: h('div', { class: 'exam-next' }),
+      att: h('div', { class: 'exam-att' }),
+      setup: h('button', { class: 'btn primary', onclick: () => body.closest('.widget')?.querySelector('[data-act=settings]')?.click() }, '⚙ 設定考試科目與時間'),
+      clock: h('div', { class: 'exam-clock' }),
+    };
+    const wrap = h('div', { class: 'exam' }, ...Object.values(el));
+    body.append(wrap);
+
+    // 全班座號：連結班級名單時用名單的座號，否則 1～應到人數
+    const classList = () => (s.listId ? ctx.store.settings?.classLists?.find((l) => l.id === s.listId) || null : null);
+    const seatList = () => {
+      const l = classList();
+      if (l) return seatNumbersOf(studentsOf(l));
+      return Array.from({ length: Math.max(0, Math.min(99, +s.expected || 0)) }, (_, i) => i + 1);
+    };
+    const attendance = () => examAttendance(seatList(), s.absent);
+    function drawAtt() {
+      const a = attendance();
+      el.att.replaceChildren(...(a.expected ? [
+        h('span', null, '應到 ', h('b', null, a.expected), ' 人'),
+        h('span', null, '實到 ', h('b', null, a.present), ' 人'),
+        // 缺考 2 人，5號、12號
+        h('span', { class: a.absent.length ? 'miss' : '' }, '缺考 ', h('b', null, a.absent.length), ' 人',
+          a.absent.length ? ['，', h('b', null, fmtSeats(a.absent))] : null),
+      ] : []));
+    }
+    function toggleAbsent(no) {
+      no = +no;
+      if (!seatList().includes(no)) return;
+      const set = new Set((s.absent || []).map(Number));
+      if (set.has(no)) set.delete(no); else set.add(no);
+      s.absent = [...set].sort((a, b) => a - b);
+      changed();
+    }
+    // 第一次使用：自動帶入上次用過的班級；名單載入或修改後重新計算人數
+    const onSettings = () => { drawAtt(); ctx.push?.(); };
+    ctx.store.addEventListener('settings', onSettings);
+    ctx.store.getSettings().then((st) => {
+      if (s.listId == null) {
+        const last = lastListId();
+        s.listId = st.classLists.some((l) => l.id === last) ? last : '';
+        ctx.save();
+      }
+      onSettings();
+    }).catch(() => {});
+
+    let prev = null; // 上一次畫面的狀態：用來判斷「剛進入提醒時間」「剛結束」才響鈴，開啟白板時不會亂響
+    function render() {
+      const now = new Date();
+      const st = examStatus(s.sessions, now);
+      const x = st.session;
+      const warnSec = (+s.warn || 0) * 60;
+      const warning = st.phase === 'during' && warnSec > 0 && st.left <= warnSec;
+      wrap.className = `exam phase-${st.phase}${warning ? ' warning' : ''}`;
+      el.title.textContent = s.title || '';
+      el.clock.textContent = s.clock ? `現在時間 ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` : '';
+      el.subject.textContent = st.phase === 'empty' ? '考試時間'
+        : st.phase === 'done' ? '今天的考試都結束了' : (x.subject || '考試');
+      el.range.textContent = x && st.phase !== 'done' ? `${fmtHM(x.s)} – ${fmtHM(x.e)}` : '';
+      el.label.textContent = {
+        empty: '還沒有設定考試', during: '距離考試結束', ended: '考試結束，請停筆',
+        before: st.first ? '距離考試開始' : '下一節考試開始還有', done: '',
+      }[st.phase];
+      el.time.textContent = st.phase === 'during' || st.phase === 'before' ? fmtDuration(st.left) : '';
+      el.bar.style.setProperty('--p', st.phase === 'during' ? st.left / st.total : 0);
+      const nx = st.phase === 'during' || st.phase === 'ended' ? st.next : null;
+      el.next.textContent = nx ? `下一節：${nx.subject || '考試'} ${fmtHM(nx.s)} – ${fmtHM(nx.e)}` : '';
+      el.setup.hidden = st.phase !== 'empty';
+
+      const key = x ? `${x.id || x.subject}|${x.start}|${x.end}` : '';
+      if (prev && s.sound) {
+        if (warning && !(prev.warning && prev.key === key)) beep({ times: 2 });
+        if (st.phase === 'ended' && !(prev.phase === 'ended' && prev.key === key)) beep({ times: 4 });
+      }
+      prev = { phase: st.phase, key, warning };
+    }
+    drawAtt();
+    render();
+    const t = setInterval(render, 250);
+    // 修改設定後不要因為「狀態改變」而響鈴
+    const changed = () => { ctx.save(); ctx.push?.(); prev = null; drawAtt(); render(); };
+
+    function settings(c) {
+      const rows = h('div', { class: 'exam-rows' });
+      const time = (x, k) => timePicker(x[k] || '', (v) => { x[k] = v; changed(); mark(); });
+      function mark() {
+        rows.querySelectorAll('.exam-row').forEach((r, i) => {
+          const x = s.sessions[i];
+          r.classList.toggle('bad', !(parseHM(x.start) != null && parseHM(x.end) > parseHM(x.start)));
+        });
+      }
+      function draw() {
+        rows.replaceChildren(...s.sessions.map((x, i) => h('div', { class: 'exam-row' },
+          h('input', { class: 'input subj', value: x.subject || '', placeholder: '科目（例如：國語）', oninput: (e) => { x.subject = e.target.value; changed(); } }),
+          time(x, 'start'), h('span', null, '–'), time(x, 'end'),
+          h('button', { class: 'btn', title: '刪除這一節', onclick: () => { s.sessions.splice(i, 1); changed(); draw(); } }, '✕'))));
+        if (!s.sessions.length) rows.append(h('p', { class: 'muted' }, '還沒有考試，按「＋ 新增一節」開始設定。'));
+        mark();
+      }
+      function add() {
+        const last = examSchedule(s.sessions).pop();
+        const d = new Date();
+        const start = last ? last.e + 10 : Math.ceil((d.getHours() * 60 + d.getMinutes() + 1) / 5) * 5;
+        s.sessions.push({ id: Math.random().toString(36).slice(2, 10), subject: '', start: fmtHM(start), end: fmtHM(start + 40) });
+        changed(); draw();
+        rows.querySelector('.exam-row:last-child .subj')?.focus();
+      }
+      draw();
+      c.append(
+        field('考試名稱（可不填）', h('input', { class: 'input', value: s.title || '', placeholder: '例如：第一次段考', oninput: (e) => { s.title = e.target.value; changed(); } })),
+        h('div', { class: 'field' }, h('span', null, '考試科目與時間'), rows,
+          h('div', { class: 'row-btns' }, h('button', { class: 'btn', onclick: add }, '＋ 新增一節')),
+          h('small', null, '依照這台電腦的時間自動切換：考試前倒數開始、考試中倒數結束，結束後自動換到下一節。時間錯誤（結束早於開始）的那一節會標成紅色，不會顯示。')),
+        field('結束前提醒', select([[0, '不提醒'], [1, '1 分鐘'], [3, '3 分鐘'], [5, '5 分鐘'], [10, '10 分鐘'], [15, '15 分鐘']], s.warn, (v) => { s.warn = +v; changed(); }),
+          '剩下這些時間時，倒數會變成紅色'),
+        checkbox('提醒與考試結束時響鈴', s.sound, (v) => { s.sound = v; changed(); }),
+        checkbox('顯示現在時間', s.clock, (v) => { s.clock = v; changed(); }),
+        attSettings(),
+      );
+    }
+
+    // 人數統計：選班級（或自己輸入應到人數），點座號標記缺考
+    function attSettings() {
+      const box = h('div', { class: 'field exam-att-set' });
+      async function draw() {
+        const st = await ctx.store.getSettings().catch(() => ({ classLists: [] }));
+        const lists = st.classLists || [];
+        const linked = classList();
+        const a = attendance();
+        const sum = fmtAttendance(a);
+        box.replaceChildren(...[ // replaceChildren 會把 null 變成文字「null」，所以先濾掉
+          h('span', null, '人數統計'),
+          select([['', '✏️ 自己輸入應到人數'], ...lists.map((l) => [l.id, `👥 ${l.name}（${studentsOf(l).length} 人）`])], linked ? linked.id : '', (v) => {
+            s.listId = v; s.absent = []; rememberList(v); changed(); draw(); // 換班級時缺考重新點選
+          }),
+          linked ? null : h('label', { class: 'row-btns att-row' }, '應到',
+            h('input', {
+              class: 'input att-num', type: 'number', min: 0, max: 99, value: s.expected || '', placeholder: '人數',
+              onchange: (e) => { s.expected = Math.max(0, Math.min(99, parseInt(e.target.value, 10) || 0)); changed(); draw(); },
+            }), '人'),
+          h('small', null, a.expected ? '點選缺考的座號（再點一下取消），手機遙控也可以點選。' : '設定應到人數後，白板上會顯示應到、實到人數與缺考座號。'),
+          a.expected ? h('div', { class: 'seat-pick' }, a.seats.map((no) => h('button', {
+            type: 'button', class: 'seat-chip' + (a.absent.includes(no) ? ' off' : ''),
+            title: a.absent.includes(no) ? '缺考，點一下改為到考' : '點一下標記缺考',
+            onclick: () => { toggleAbsent(no); draw(); },
+          }, no))) : null,
+          a.expected ? h('div', { class: 'row-btns' }, h('b', { class: 'att-sum' }, sum),
+            a.absent.length ? h('button', { type: 'button', class: 'btn', onclick: () => { s.absent = []; changed(); draw(); } }, '全部到考') : null) : null].filter(Boolean));
+      }
+      draw();
+      return box;
+    }
+
+    // 延長目前這一節（例如考卷晚發），也可以在剛結束的 60 秒內延長
+    function extend(min) {
+      const st = examStatus(s.sessions);
+      if (st.phase !== 'during' && st.phase !== 'ended') return;
+      const x = s.sessions.find((y) => (st.session.id ? y.id === st.session.id : y.start === st.session.start && y.end === st.session.end));
+      if (!x) return;
+      x.end = fmtHM(parseHM(x.end) + min);
+      changed();
+    }
+
+    return {
+      destroy: () => { clearInterval(t); ctx.store.removeEventListener('settings', onSettings); },
+      settings,
+      remote: {
+        view: () => { const a = attendance(); return { title: s.title, sessions: s.sessions, warn: s.warn, seats: a.seats, absent: a.absent }; },
+        act(a, { min, no } = {}) {
+          if (a === 'extend' && +min > 0 && +min <= 60) extend(+min);
+          else if (a === 'absent') toggleAbsent(no);
+          else if (a === 'allPresent') { s.absent = []; changed(); }
         },
       },
     };
