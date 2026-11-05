@@ -1,6 +1,6 @@
 // 時間類：時鐘日期、計時器、碼錶、考試時間
 import { h, field, select, checkbox, promptDialog, timePicker } from '../ui.js';
-import { beep, pad, fmtDuration, parseDuration, WEEKDAYS, parseHM, fmtHM, examSchedule, examStatus, examAttendance, seatNumbersOf, fmtSeats, fmtAttendance } from './util.js';
+import { beep, pad, fmtDuration, parseDuration, WEEKDAYS, parseHM, fmtHM, examSchedule, examStatus, examAttendance, seatNumbersOf, fmtSeats, fmtAttendance, observeSize } from './util.js';
 import { studentsOf, lastListId, rememberList } from '../roster.js';
 
 // 時鐘日期：時間（數字／指針／不顯示）＋日期（一行／月曆／不顯示）
@@ -234,8 +234,37 @@ export const exam = {
       setup: h('button', { class: 'btn primary', onclick: () => body.closest('.widget')?.querySelector('[data-act=settings]')?.click() }, '⚙ 設定考試科目與時間'),
       clock: h('div', { class: 'exam-clock' }),
     };
-    const wrap = h('div', { class: 'exam' }, ...Object.values(el));
+    // 考試名稱和現在時間放同一行，不會互相蓋住
+    const inner = h('div', { class: 'exam-in' },
+      h('div', { class: 'exam-head' }, el.title, el.clock),
+      el.subject, el.range, el.label, el.time, el.next, el.att, el.setup);
+    const wrap = h('div', { class: 'exam' }, inner, el.bar);
     body.append(wrap);
+
+    // 自動縮放：所有字體以 .exam 的 font-size 為單位（em），量出內容實際大小後等比例調整，
+    // 直到剛好放進小工具（放大、縮小、全螢幕、換科目、缺考變多時都會重新計算）
+    let fitKey = '';
+    function fit() {
+      const cs = getComputedStyle(wrap);
+      const availW = wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const availH = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      if (availW <= 0 || availH <= 0) return;
+      wrap.style.setProperty('--att-max', availW + 'px'); // 人數統計最寬到小工具的寬度，超過就換行
+      // 寬度看不會換行的那幾行（科目、倒數…）；人數統計會自己換行，只影響高度
+      const fits = (u) => {
+        wrap.style.fontSize = u + 'px';
+        if (inner.offsetHeight > availH) return false;
+        for (const c of inner.children) if (c !== el.att && c.scrollWidth > availW) return false;
+        return el.att.scrollWidth <= el.att.clientWidth + 1;
+      };
+      // 二分搜尋最大的字體單位（換行讓高度和字體不成正比，用比例推算會來回跳）
+      let lo = 1, hi = Math.max(2, Math.min(400, availH / 8));
+      if (fits(hi)) lo = hi;
+      else for (let i = 0; i < 14 && hi - lo > 0.05; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+      wrap.style.fontSize = lo + 'px';
+    }
+    // 大小改變：每次 render 都會比對小工具的寬高（不依賴 requestAnimationFrame，背景分頁也會更新）
+    const stopObserve = observeSize(wrap, () => { fitKey = ''; render(); });
 
     // 全班座號：連結班級名單時用名單的座號，否則 1～應到人數
     const classList = () => (s.listId ? ctx.store.settings?.classLists?.find((l) => l.id === s.listId) || null : null);
@@ -250,10 +279,13 @@ export const exam = {
       el.att.replaceChildren(...(a.expected ? [
         h('span', null, '應到 ', h('b', null, a.expected), ' 人'),
         h('span', null, '實到 ', h('b', null, a.present), ' 人'),
-        // 缺考 2 人，5號、12號
-        h('span', { class: a.absent.length ? 'miss' : '' }, '缺考 ', h('b', null, a.absent.length), ' 人',
-          a.absent.length ? ['，', h('b', null, fmtSeats(a.absent))] : null),
+        // 缺考 2 人，5號、12號（座號很多時可以換行）
+        h('span', { class: 'att-list' + (a.absent.length ? ' miss' : '') },
+          h('span', { class: 'nowrap' }, '缺考 ', h('b', null, a.absent.length), ' 人', a.absent.length ? '，' : ''),
+          // 每個「13號、」不拆開，只在座號之間換行
+          a.absent.length ? h('b', null, a.absent.map((n, i) => h('span', { class: 'nowrap' }, `${n}號${i < a.absent.length - 1 ? '、' : ''}`))) : null),
       ] : []));
+      fitKey = '';
     }
     function toggleAbsent(no) {
       no = +no;
@@ -297,6 +329,10 @@ export const exam = {
       const nx = st.phase === 'during' || st.phase === 'ended' ? st.next : null;
       el.next.textContent = nx ? `下一節：${nx.subject || '考試'} ${fmtHM(nx.s)} – ${fmtHM(nx.e)}` : '';
       el.setup.hidden = st.phase !== 'empty';
+      // 版面（文字內容、倒數的位數）改變時才重新縮放；每秒變動的數字用等寬字，不用每次都算
+      const layoutKey = [wrap.clientWidth, wrap.clientHeight, wrap.className, s.title, s.clock, el.subject.textContent, el.range.textContent, el.label.textContent,
+        el.time.textContent.length, el.next.textContent, el.att.textContent].join('|');
+      if (layoutKey !== fitKey) { fitKey = layoutKey; fit(); }
 
       const key = x ? `${x.id || x.subject}|${x.start}|${x.end}` : '';
       if (prev && s.sound) {
@@ -393,7 +429,7 @@ export const exam = {
     }
 
     return {
-      destroy: () => { clearInterval(t); ctx.store.removeEventListener('settings', onSettings); },
+      destroy: () => { clearInterval(t); stopObserve(); ctx.store.removeEventListener('settings', onSettings); },
       settings,
       remote: {
         view: () => { const a = attendance(); return { title: s.title, sessions: s.sessions, warn: s.warn, seats: a.seats, absent: a.absent }; },

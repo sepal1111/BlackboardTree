@@ -7,7 +7,7 @@ import { widgets, widgetList, upgradeWidget } from './widgets/index.js';
 import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
 import { RemoteHost } from './remote-host.js';
-import { rosterDialog, studentsOf, hasPhotos } from './roster.js';
+import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
 import { UPDATE_URL, RELEASES_PAGE, checkForUpdate, downloadVerified, notesSince, shouldAutoCheck, updateScript, encodePowerShell, plainNote } from './update.js';
 import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool } from './ui-prefs.js';
@@ -384,6 +384,26 @@ function addWidget(type, copyFrom, init) {
   return w;
 }
 
+// 連結班級名單的小工具：記下該班最後的狀態（存在老師的 settings.json，換電腦也看得到）
+// 操作時常常連續存檔，等 1.5 秒沒有變動再記錄
+const classToolTimers = new Map();
+function noteClassTool(w) {
+  if (!w.state?.listId) return;
+  clearTimeout(classToolTimers.get(w.id));
+  classToolTimers.set(w.id, setTimeout(() => {
+    classToolTimers.delete(w.id);
+    const st = S.store?.settings;
+    if (st && recordClassTool(st, w.type, w.state)) S.store.saveSettings();
+  }, 1500));
+}
+
+// 叫回某班使用過的小工具（帶回當時的座位、分數、分組、考試設定等）
+function reuseClassTool(t) {
+  if (!S.board || !widgets[t.type]) return;
+  addWidget(t.type, null, { state: structuredClone(t.state) });
+  toast(`已在白板加入「${widgets[t.type].title}」`);
+}
+
 function removeWidget(id) {
   if (S.maxId === id) toggleMax(null);
   if (S.remote?.poll?.id === id) S.remote.closePoll();
@@ -469,7 +489,7 @@ function mountWidget(w) {
   place(el, w);
   $('#stage').append(el);
 
-  const ctx = { state: w.state, widget: w, store: S.store, save: () => save(), push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size), boardName: () => S.board?.name || '' };
+  const ctx = { state: w.state, widget: w, store: S.store, save: () => { save(); noteClassTool(w); }, push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size), boardName: () => S.board?.name || '' };
   let inst = {};
   try { inst = def.mount(body, ctx) || {}; } catch (e) { console.error(e); body.textContent = '此小工具發生錯誤'; }
   S.mounted.set(w.id, { el, inst, w });
@@ -639,13 +659,34 @@ function settingsDialog(tab = 'board') {
     const st = S.store.settings;
     const lists = st?.classLists || [];
     main.append(sec('班級名單',
-      h('p', { class: 'muted' }, '抽籤、分組、座位表、課堂加分會使用這裡的名單。可以匯入 Excel／CSV 名單與學生照片。'),
+      h('p', { class: 'muted' }, '抽籤、分組、座位表、課堂加分、考試時間會使用這裡的名單。可以匯入 Excel／CSV 名單與學生照片。各班使用過的工具會自動記錄（包含座位、分數、分組、考試設定），點一下就能加回目前的白板。'),
       lists.length
-        ? h('div', { class: 'set-list' }, lists.map((l) => h('button', {
-          class: 'set-item', onclick: () => rosterDialog(S.store, { selectId: l.id }),
-        }, h('div', { class: 'si-main' }, h('b', null, l.name), h('small', null, `${studentsOf(l).length} 人${hasPhotos(l) ? '・有照片' : ''}`)), h('small', null, '編輯 ›'))))
+        ? h('div', { class: 'set-list' }, lists.map((l) => h('div', { class: 'class-block' },
+          h('button', {
+            class: 'set-item', onclick: () => rosterDialog(S.store, { selectId: l.id }),
+          }, h('div', { class: 'si-main' }, h('b', null, l.name), h('small', null, `${studentsOf(l).length} 人${hasPhotos(l) ? '・有照片' : ''}`)), h('small', null, '編輯 ›')),
+          classToolsRow(st, l))))
         : h('p', null, '還沒有班級名單。'),
       h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', onclick: () => rosterDialog(S.store) }, '👥 管理班級名單'))));
+  }
+
+  // 某班使用過的工具：點一下加回白板，✕ 刪除紀錄
+  function classToolsRow(st, l) {
+    const tools = classToolsOf(st, l.id).filter((t) => widgets[t.type]);
+    const day = (ms) => { const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()}`; };
+    return h('div', { class: 'class-tools' },
+      h('small', { class: 'muted' }, tools.length ? '使用過的工具：' : '還沒有使用紀錄'),
+      tools.map((t) => {
+        const def = widgets[t.type];
+        return h('span', { class: 'ct-chip' },
+          h('button', { class: 'ct-use', title: '加到目前的白板（帶回當時的設定與資料）', onclick: () => { reuseClassTool(t); dlg.close(); } },
+            toolIcon(def, 'ti'), def.title, t.usedAt ? h('small', null, day(t.usedAt)) : null),
+          h('button', {
+            class: 'ct-x', title: '刪除這筆紀錄', onclick: () => {
+              if (forgetClassTool(st, l.id, t.type)) { S.store.saveSettings(); render(); }
+            },
+          }, '✕'));
+      }));
   }
 
   function renderDockTab() {

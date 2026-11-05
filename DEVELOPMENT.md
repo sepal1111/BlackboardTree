@@ -164,6 +164,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.8.0 | 課堂加分每日紀錄（`points-log.js`，state.daily）、排行榜（累計／今天／指定區間）與匯出 CSV，歸零不清紀錄；各班使用過的工具（settings.classTools，`roster.js` 的 `recordClassTool`，設定 → 班級名單一鍵叫回）；考試時間自動縮放（`fit()` 以 em 為單位二分搜尋字體）、科目加大改深綠色 |
 | 1.7.0 | 新增「考試時間」小工具（`time.js` 的 `exam`；計算在 `util.js` 的 `examStatus`、`examAttendance`，手機遙控頁共用）：各節科目與起訖時間、自動倒數、結束前提醒、停筆提示、人數統計（應到／實到／缺考座號，可連結班級名單）、手機延長時間與點選缺考；`ui.js` 新增 24 小時制 `timePicker` |
 | 1.6.3 | 新 Logo（`static/logo.svg`）：`make-icons.mjs` 產生 exe／安裝程式／視窗／系統匣圖示，開始畫面、關於與更新、分頁圖示也用它 |
 | 1.6.2 | 第一版正式釋出：`RELEASE.md` 改寫成完整的發布說明（功能介紹、系統需求、安裝、大量部署、常見問題），最後保留「## 版本紀錄」給 `make-latest.mjs` 讀取 |
@@ -186,6 +187,7 @@ static/                     前端（桌面版、網頁版共用）
   logo.svg                  黑板樹 Logo（唯一來源：畫面上的 Logo，以及建置時產生的所有圖示）
   remote.html               手機遙控頁
   js/poll-bank.js           投票題庫、匯入題目、投票紀錄與匯出
+  js/points-log.js          課堂加分的每日紀錄（state.daily = { 日期: { 姓名: 淨分 } }）、排行榜、匯出 CSV
   vote.html                 學生投票頁（CSS、JS 都寫在檔案內，內建 relay 只要嵌入這一個檔）
   css/app.css, remote.css
   js/app.js                 主程式：儲存位置、白板清單、小工具框、放大、手機遙控（含內建 relay 控制）
@@ -230,7 +232,8 @@ start.bat, start.sh         啟動網頁版伺服器（第一次會建立 .venv�
 ```
 MyScreen/
   boards/<id>.json     {id, name, rev, created, updatedAt, data: {background, widgets: [...]}}
-  settings.json        {data: {classLists: [...], ui?, pollBank?, pollResults?}, updatedAt}
+  settings.json        {data: {classLists: [...], classTools?, ui?, pollBank?, pollResults?}, updatedAt}
+                       classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，連結班級的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
 

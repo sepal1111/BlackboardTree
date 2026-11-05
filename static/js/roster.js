@@ -2,6 +2,7 @@
 // 名單存在 settings.json 的 classLists，照片存在 MyScreen\media，抽籤、分組、座位表都直接讀取
 import { h, modal, toast, confirmDialog, promptDialog } from './ui.js';
 import { LS } from './store.js';
+import { renameInDaily } from './points-log.js';
 
 const LAST_KEY = 'ms:lastList';
 
@@ -29,6 +30,7 @@ function renameIn(state, from, to) {
   if (Array.isArray(state.groups)) state.groups = state.groups.map((g) => g.map(r));
   if (state.current === from) state.current = to;
   if (state.scores && from in state.scores) { state.scores[to] = state.scores[from]; delete state.scores[from]; }
+  if (state.daily) renameInDaily(state.daily, from, to); // 課堂加分的每日紀錄
 }
 
 export function watchRoster(ctx, onChange) {
@@ -463,4 +465,37 @@ export async function rosterDialog(store, { selectId } = {}) {
 
   render();
   return modal({ title: '👥 班級名單', body: h('div', { class: 'roster' }, side, main), wide: true, actions: [{ label: '完成', primary: true }] });
+}
+
+// ---- 各班使用過的小工具：連結班級名單的小工具（抽籤、分組、座位表、課堂加分、考試時間）
+// 自動記下該班最後一次的狀態，之後可以在任何白板一鍵叫回
+// settings.classTools = { [listId]: { [type]: { state, usedAt } } }
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+export function recordClassTool(settings, type, state, now = Date.now()) {
+  const id = state?.listId;
+  const lists = settings?.classLists || [];
+  if (!id || !type || !lists.some((l) => l.id === id)) return false;
+  const all = settings.classTools && typeof settings.classTools === 'object' ? settings.classTools : (settings.classTools = {});
+  for (const k of Object.keys(all)) if (!lists.some((l) => l.id === k)) delete all[k]; // 班級刪除後清掉紀錄
+  const mine = all[id] || (all[id] = {});
+  const snap = JSON.parse(JSON.stringify(state));
+  if (mine[type] && sameJson(mine[type].state, snap)) return false; // 沒有改變就不重寫設定檔
+  mine[type] = { state: snap, usedAt: now };
+  return true;
+}
+// 某班使用過的小工具，最近用的在前
+export function classToolsOf(settings, listId) {
+  const mine = settings?.classTools?.[listId];
+  if (!mine || typeof mine !== 'object') return [];
+  return Object.entries(mine)
+    .filter(([, v]) => v && typeof v === 'object' && v.state)
+    .map(([type, v]) => ({ type, state: v.state, usedAt: +v.usedAt || 0 }))
+    .sort((a, b) => b.usedAt - a.usedAt);
+}
+export function forgetClassTool(settings, listId, type) {
+  const mine = settings?.classTools?.[listId];
+  if (!mine || !(type in mine)) return false;
+  delete mine[type];
+  if (!Object.keys(mine).length) delete settings.classTools[listId];
+  return true;
 }

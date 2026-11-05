@@ -1,5 +1,6 @@
 // 班級經營類：抽籤、分組、座位表、課堂加分、工作模式、投票、音量計
-import { h, field, select, checkbox, promptDialog, confirmDialog, toast, setImage } from '../ui.js';
+import { h, field, select, checkbox, promptDialog, confirmDialog, toast, setImage, modal, saveTextFile } from '../ui.js';
+import { dayKey, logPoint, ensureDaily, RANGES, totalsIn, rankPeople, leaderboardCsv, rangeLabel } from '../points-log.js';
 import { shuffle, splitNames, beep, observeSize } from './util.js';
 import { studentsOf, hasPhotos, linkedList, watchRoster, photoThumb, rosterDialog, rememberList } from '../roster.js';
 import { pollLibraryDialog, makeResult, addResult, resultSig, totalVotes } from '../poll-bank.js';
@@ -654,8 +655,11 @@ export const points = {
         h('button', { class: 'btn', onclick: () => all(1) }, '全班 +1'),
         h('button', { class: 'btn', onclick: () => all(-1) }, '全班 −1'),
         total,
-        h('button', { class: 'btn', onclick: async () => { if (await confirmDialog('要把所有人的分數歸零嗎？', '歸零', true)) reset(); } }, '↺ 歸零')),
+        h('button', { class: 'btn', onclick: () => leaderboard() }, '🏆 排行榜'),
+        h('button', { class: 'btn', onclick: async () => { if (await confirmDialog('要把卡片上的分數歸零嗎？（每日紀錄會保留，排行榜與匯出不受影響）', '歸零', true)) reset(); } }, '↺ 歸零')),
       grid));
+    // 每日紀錄：舊版的課堂加分沒有，第一次開啟時把目前分數當作「先前累計」
+    if (ensureDaily(s) && Object.keys(s.daily).length) ctx.save();
     const score = (n) => s.scores[n] || 0;
     // 沒有座號時依名單順序編號
     const list = () => {
@@ -668,6 +672,7 @@ export const points = {
     function change(name, d, { quiet = false } = {}) {
       const v = score(name) + d;
       if (v) s.scores[name] = v; else delete s.scores[name];
+      logPoint(s.daily || (s.daily = {}), name, d);
       if (s.sort === 'score' && !quiet) render(); else updateCard(name);
       const c = cards.get(name);
       if (c && !quiet) {
@@ -741,6 +746,56 @@ export const points = {
       grid.style.setProperty('--cols', best);
       grid.style.setProperty('--card-w', Math.max(120, Math.floor(bestW)) + 'px');
     }
+    // 排行榜：累計、今天、指定區間，可以匯出 CSV
+    function leaderboard() {
+      ensureDaily(s);
+      let mode = 'total';
+      const today = dayKey();
+      const custom = { from: today.slice(0, 8) + '01', to: today }; // 預設：這個月
+      const box = h('div', { class: 'lb' });
+      const range = () => (mode === 'total' ? RANGES.total() : mode === 'today' ? RANGES.today() : { ...custom });
+      const medal = (p) => (p.total > 0 && p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : String(p.rank));
+      const fmt = (v) => (v > 0 ? `+${v}` : String(v));
+      function draw() {
+        const r = range();
+        const ranked = rankPeople(list(), totalsIn(s.daily, r));
+        const date = (k) => h('input', {
+          class: 'input', type: 'date', value: custom[k] || '', max: today,
+          onchange: (e) => { custom[k] = e.target.value; draw(); },
+        });
+        box.replaceChildren(...[
+          h('div', { class: 'seg lb-seg' }, [['total', '累計'], ['today', '今天'], ['range', '指定區間']].map(([v, label]) =>
+            h('button', { class: mode === v ? 'on' : '', onclick: () => { mode = v; draw(); } }, label))),
+          mode === 'range' ? h('div', { class: 'lb-range' }, date('from'), h('span', null, '～'), date('to')) : null,
+          h('div', { class: 'lb-title' }, `${rangeLabel(mode, r)}　共 ${ranked.length} 人`),
+          ranked.length
+            ? h('ol', { class: 'lb-list' }, ranked.map((p) => h('li', { class: `lb-row${p.total > 0 && p.rank <= 3 ? ' top' + p.rank : ''}` },
+              h('span', { class: 'lb-rank' }, medal(p)), h('span', { class: 'lb-no' }, `${p.no}號`),
+              h('span', { class: 'lb-name' }, p.name), h('b', { class: 'lb-total' + (p.total < 0 ? ' neg' : '') }, fmt(p.total)))))
+            : h('p', { class: 'muted' }, '請先按 ⚙ 選擇班級名單'),
+          h('small', { class: 'muted' }, '「累計」包含所有日期的加減分；卡片上的「↺ 歸零」不會清除這裡的紀錄。'),
+        ].filter(Boolean));
+      }
+      draw();
+      modal({
+        title: '🏆 課堂加分排行榜', body: box, wide: true,
+        actions: [
+          { label: '⬇ 匯出 CSV', onClick: () => { exportCsv(mode, range()); return false; } },
+          { label: '完成', primary: true },
+        ],
+      });
+    }
+    async function exportCsv(mode, r) {
+      const ps = list();
+      if (!ps.length) return toast('請先按 ⚙ 選擇班級名單');
+      const cls = linkedList(ctx)?.name || '課堂加分';
+      const name = `${cls}_課堂加分_${rangeLabel(mode, r)}`.replace(/[\\/:*?"<>|（）\s]+/g, '_').replace(/_+$/, '');
+      try {
+        const ok = await saveTextFile(`${name}.csv`, leaderboardCsv(ps, s.daily || {}, r));
+        if (ok) toast(typeof ok === 'string' ? `已匯出：${ok}` : '已匯出 CSV');
+      } catch (e) { toast('匯出失敗：' + e.message); }
+    }
+
     const unobserve = observeSize(grid, fit);
     const unwatch = watchRoster(ctx, render);
     render();
@@ -757,7 +812,15 @@ export const points = {
       settings: (c) => c.append(namesEditor(ctx, render),
         field('排列方式', select([['no', '依座號'], ['score', '依分數（高分在前）']], s.sort, (v) => { s.sort = v; ctx.save(); render(); })),
         checkbox('顯示照片', s.showPhoto, (v) => { s.showPhoto = v; ctx.save(); render(); }),
-        checkbox('加減分時播放音效', s.sound, (v) => { s.sound = v; ctx.save(); })),
+        checkbox('加減分時播放音效', s.sound, (v) => { s.sound = v; ctx.save(); }),
+        field('加分紀錄', h('div', { class: 'row-btns' },
+          h('button', { class: 'btn', onclick: () => leaderboard() }, '🏆 排行榜與匯出'),
+          h('button', {
+            class: 'btn danger', onclick: async () => {
+              if (!await confirmDialog('要清除所有的每日加分紀錄嗎？排行榜會從零開始，卡片上目前的分數不受影響。清除後無法復原。', '清除紀錄', true)) return;
+              s.daily = {}; ctx.save(); toast('已清除加分紀錄');
+            },
+          }, '清除加分紀錄')), '每次加減分都會記錄日期，排行榜可以看累計、今天或指定區間的總分。')),
     };
   },
 };
