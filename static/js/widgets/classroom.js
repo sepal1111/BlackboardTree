@@ -4,6 +4,7 @@ import { dayKey, logPoint, ensureDaily, RANGES, totalsIn, rankPeople, leaderboar
 import { shuffle, splitNames, beep, observeSize } from './util.js';
 import { studentsOf, hasPhotos, linkedList, watchRoster, photoThumb, rosterDialog, rememberList } from '../roster.js';
 import { pollLibraryDialog, makeResult, addResult, resultSig, totalVotes } from '../poll-bank.js';
+import { SEAT_TAGS, MAX_LABEL, cleanLabel, layoutsOf, saveLayout, updateLayout, findLayout, renameLayout, deleteLayout, applyLayout } from '../seat-layouts.js';
 
 // 目前的名單：連結班級名單時讀名單（含座號、照片），否則用自己輸入的名字
 function people(ctx) {
@@ -502,22 +503,140 @@ export const sound = {
   },
 };
 
+const pad2 = (n) => String(n).padStart(2, '0');
+const fmtWhen = (at) => { const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+
 // 座位表：依名單排座位，點兩個座位可以交換，也能隨機排座、隨機點名
+// 「📚 座位紀錄」：每班可以存好幾組排法並標上科目或類型（seat-layouts.js），使用中的那一組換座位時自動存回
 export const seats = {
   type: 'seats', title: '座位表', icon: '🪑', size: { w: 0.5, h: 0.55 },
-  state: () => ({ names: '', listId: '', rows: 5, cols: 6, seats: [], flip: false, highlight: -1, showPhoto: true }),
+  state: () => ({ names: '', listId: '', rows: 5, cols: 6, seats: [], flip: false, highlight: -1, showPhoto: true, layoutId: '', layoutLabel: '', layoutList: '' }),
+  // 新開座位表時沿用上次關閉前的排列（app.js 的 addWidget；上次點名的人不帶過來）
+  restoreLast: (st) => ({ ...st, highlight: -1 }),
   mount(body, ctx) {
     const s = ctx.state;
     const grid = h('div', { class: 'seats-grid' });
     const desk = h('div', { class: 'seats-desk' }, '講　台');
+    const tag = h('button', { class: 'seats-tag', title: '目前使用的座位紀錄（換座位會自動存回這一組）', onclick: () => openLayouts() });
     const wrap = h('div', { class: 'seats' },
       h('div', { class: 'seats-bar' },
         h('button', { class: 'btn primary', onclick: () => shuffleSeats() }, '🔀 隨機排座位'),
-        h('button', { class: 'btn', onclick: () => pick() }, '🎯 隨機點名')),
+        h('button', { class: 'btn', onclick: () => pick() }, '🎯 隨機點名'),
+        h('button', { class: 'btn', title: '把座位排法存起來、標上科目或類型，之後一鍵換回', onclick: () => openLayouts() }, '📚 座位紀錄'),
+        tag),
       desk, grid);
     body.append(wrap);
     let selected = -1;
     let anim = null;
+
+    // ---- 座位紀錄
+    const key = () => s.listId || '';
+    const active = () => !!s.layoutId && (s.layoutList || '') === key(); // 換了班級名單就不算在使用那一組
+    let memT = 0;
+    // 使用中的那一組：座位改變後存回（稍等一下，連續交換只寫一次設定檔）
+    function remember(now = false) {
+      clearTimeout(memT); memT = 0;
+      if (!active()) return;
+      const run = async () => {
+        memT = 0;
+        const st = await ctx.store.getSettings().catch(() => null);
+        if (!st || !active()) return;
+        if (!findLayout(st, key(), s.layoutId)) { s.layoutId = ''; s.layoutLabel = ''; ctx.save(); render(); return; } // 那一組已被刪除
+        if (updateLayout(st, key(), s.layoutId, s)) ctx.store.saveSettings();
+      };
+      if (now) run(); else memT = setTimeout(run, 800);
+    }
+    // 改變座位前先記下來，改完顯示「↶ 復原」
+    function snapshot() {
+      return JSON.parse(JSON.stringify({ rows: s.rows, cols: s.cols, seats: s.seats, flip: s.flip, highlight: s.highlight, layoutId: s.layoutId, layoutLabel: s.layoutLabel, layoutList: s.layoutList }));
+    }
+    function offerUndo(prev, text) {
+      const undo = () => {
+        remember(true); // 先把目前的存好，再換回去
+        Object.assign(s, prev); selected = -1;
+        sync(); ctx.save(); render(); remember();
+        toast('已復原');
+      };
+      toast(h('span', null, text + '　', h('button', { class: 'toast-undo', onclick: undo }, '↶ 復原')), 10000);
+    }
+    function miniGrid(l) {
+      const g = h('div', { class: 'sl-mini', style: { gridTemplateColumns: `repeat(${l.cols}, 1fr)` } });
+      for (let i = 0; i < l.rows * l.cols; i++) g.append(h('span', { class: l.seats[i] ? '' : 'empty' }, l.seats[i] || ''));
+      return g;
+    }
+    async function openLayouts() {
+      remember(true);
+      const st = await ctx.store.getSettings();
+      if (s.listId && !linkedList(ctx)) return toast('找不到這個班級名單，請按右上角 ⚙ 重新選擇');
+      if (!namesOf(ctx).length) return toast('請先按右上角 ⚙ 選擇班級名單');
+      const input = h('input', { class: 'input', placeholder: '例如：數學、考試、分組活動', maxlength: MAX_LABEL });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveNew(); });
+      const chips = h('div', { class: 'sl-tags' }, SEAT_TAGS.map((t) => h('button', { class: 'chip', onclick: () => { input.value = t; input.focus(); } }, t)));
+      const box = h('div', { class: 'tn-list' });
+      const intro = h('small', { class: 'muted' });
+      async function saveNew() {
+        const name = cleanLabel(input.value);
+        if (!name) { input.focus(); return toast('請輸入名稱，或點一個常用的名稱'); }
+        const same = layoutsOf(st, key()).find((l) => l.label === name);
+        if (same && same.id !== s.layoutId && !await confirmDialog(`已經有「${name}」的座位紀錄，要用目前的座位取代它嗎？`, '取代', true)) return;
+        const item = saveLayout(st, key(), s, name);
+        if (!item) return;
+        s.layoutId = item.id; s.layoutLabel = item.label; s.layoutList = key();
+        ctx.save(); ctx.store.saveSettings(); render(); draw();
+        input.value = '';
+        toast(`已存成「${item.label}」，之後換座位會自動存回這一組`);
+      }
+      function use(l) {
+        const prev = snapshot();
+        Object.assign(s, applyLayout(l, namesOf(ctx)), { layoutId: l.id, layoutLabel: l.label, layoutList: key(), highlight: -1 });
+        selected = -1;
+        l.at = Date.now();
+        sync(); ctx.save(); ctx.store.saveSettings(); render(); remember();
+        dlg.close();
+        offerUndo(prev, `已換成「${l.label}」的座位`);
+      }
+      function draw() {
+        const list = layoutsOf(st, key());
+        intro.textContent = active()
+          ? `目前使用「${s.layoutLabel}」：換座位會自動存回這一組。要做另一種排法，先輸入新名稱存成新的一組，再開始調整。`
+          : '把目前的座位存成一組，標上科目或類型。不同科目、考試、分組活動可以各有一種座位排法。';
+        box.replaceChildren(...(list.length ? list.map((l) => {
+          const on = active() && l.id === s.layoutId;
+          return h('div', { class: 'tn-item' + (on ? ' on' : '') },
+            h('div', { class: 'sl-head' }, h('b', null, '🏷 ' + l.label),
+              h('small', { class: 'muted' }, `${l.rows} 排 × ${l.cols} 行・${fmtWhen(l.at)}${on ? '・目前使用中' : ''}`)),
+            miniGrid(l),
+            h('div', { class: 'tn-meta' }, h('small'),
+              on ? null : h('button', { class: 'btn primary', onclick: () => use(l) }, '使用'),
+              h('button', {
+                class: 'btn', title: '改名稱', onclick: async () => {
+                  const v = await promptDialog('座位紀錄的名稱（科目或類型）', l.label);
+                  if (!v) return;
+                  if (!renameLayout(st, key(), l.id, v)) return toast('名稱不能空白，也不能和其他紀錄同名');
+                  if (on) { s.layoutLabel = l.label; ctx.save(); render(); }
+                  ctx.store.saveSettings(); draw();
+                },
+              }, '✏️'),
+              h('button', {
+                class: 'btn', title: '刪除這組紀錄', onclick: async () => {
+                  if (!await confirmDialog(`要刪除「${l.label}」的座位紀錄嗎？（座位表目前的座位不受影響）`, '刪除', true)) return;
+                  deleteLayout(st, key(), l.id);
+                  if (on) { s.layoutId = ''; s.layoutLabel = ''; ctx.save(); render(); }
+                  ctx.store.saveSettings(); draw();
+                },
+              }, '🗑')));
+        }) : [h('p', { class: 'muted' }, '還沒有座位紀錄。排好座位後，在上面輸入名稱（例如「數學」「考試」）存起來，之後就能一鍵換回。')]));
+      }
+      draw();
+      const dlg = modal({
+        title: '📚 座位紀錄', wide: true, actions: [{ label: '關閉' }],
+        body: h('div', { class: 'stack' },
+          intro,
+          h('div', { class: 'sl-new' }, input, h('button', { class: 'btn primary', onclick: saveNew }, '💾 存成新的一組')),
+          chips, box),
+      });
+      setTimeout(() => input.focus(), 50);
+    }
 
     // 名單改變時：保留原本的位置，刪掉不在名單的人，新的人補進空位
     function sync() {
@@ -540,16 +659,18 @@ export const seats = {
       const list = namesOf(ctx);
       if (!list.length) return toast('請先按右上角 ⚙ 輸入名單');
       const total = s.rows * s.cols;
+      const prev = snapshot();
       // 人數少於座位時，空位也一起打散
       s.seats = shuffle([...list, ...Array(Math.max(0, total - list.length)).fill('')]);
       s.highlight = -1; selected = -1;
-      sync(); ctx.save(); render();
+      sync(); ctx.save(); render(); remember();
+      offerUndo(prev, active() ? `已重新排座位（會存到「${s.layoutLabel}」）` : '已重新排座位');
     }
     function swap(a, b) {
       if (a === b || a < 0 || b < 0 || a >= s.seats.length || b >= s.seats.length) return;
       [s.seats[a], s.seats[b]] = [s.seats[b], s.seats[a]];
       if (s.highlight === a) s.highlight = b; else if (s.highlight === b) s.highlight = a;
-      ctx.save(); render();
+      ctx.save(); render(); remember();
     }
     function pick() {
       if (anim) return;
@@ -574,6 +695,8 @@ export const seats = {
       grid.style.setProperty('--cols', s.cols);
       grid.style.setProperty('--rows', s.rows);
       wrap.classList.toggle('flip', s.flip);
+      tag.textContent = active() ? '🏷 ' + s.layoutLabel : '';
+      tag.classList.toggle('hidden', !active());
       const order = s.seats.map((_, i) => i);
       if (s.flip) order.reverse(); // 老師視角：講台在下方，左右也相反
       if (!namesOf(ctx).length) {
@@ -596,7 +719,7 @@ export const seats = {
         }, ref ? seatPhoto(ctx, ref) : null, h('span', { class: 'seat-name' }, n)));
       }
     }
-    const unwatch = watchRoster(ctx, () => { sync(); render(); });
+    const unwatch = watchRoster(ctx, () => { sync(); render(); remember(); });
     sync();
     render();
     const resize = (dr, dc) => {
@@ -607,13 +730,13 @@ export const seats = {
       const next = Array(rows * cols).fill('');
       for (let r = 0; r < s.rows; r++) for (let c = 0; c < s.cols; c++) if (r < rows && c < cols) next[r * cols + c] = s.seats[r * s.cols + c] || '';
       s.seats = next; s.rows = rows; s.cols = cols;
-      sync(); ctx.save(); render();
+      sync(); ctx.save(); render(); remember();
     };
     return {
-      destroy: () => { clearTimeout(anim); unwatch(); },
+      destroy: () => { clearTimeout(anim); if (memT) remember(true); unwatch(); },
       remote: {
         view: () => ({
-          rows: s.rows, cols: s.cols, seats: s.seats, flip: s.flip, highlight: s.highlight, picking: !!anim,
+          rows: s.rows, cols: s.cols, seats: s.seats, flip: s.flip, highlight: s.highlight, picking: !!anim, label: active() ? s.layoutLabel : '',
           photo: !anim && s.seats[s.highlight] ? photoThumb(ctx.store, photosOf(ctx).get(s.seats[s.highlight]), ctx.push) : '',
         }),
         act(a, args = {}) {
@@ -628,10 +751,13 @@ export const seats = {
         const showSize = () => { size.textContent = `${s.rows} 排 × ${s.cols} 行（${s.rows * s.cols} 個座位）`; };
         showSize();
         const adj = (label, dr, dc) => h('button', { class: 'btn', onclick: () => { resize(dr, dc); showSize(); } }, label);
-        c.append(namesEditor(ctx, () => { sync(); render(); showSize(); }),
+        c.append(namesEditor(ctx, () => { sync(); render(); showSize(); remember(); }),
           field('座位數', h('div', { class: 'stack' }, size,
             h('div', { class: 'row-btns' }, adj('− 排', -1, 0), adj('＋ 排', 1, 0), adj('− 行', 0, -1), adj('＋ 行', 0, 1)))),
-          checkbox('老師視角（講台在下方）', s.flip, (v) => { s.flip = v; ctx.save(); render(); }),
+          checkbox('老師視角（講台在下方）', s.flip, (v) => { s.flip = v; ctx.save(); render(); remember(); }),
+          field('座位紀錄', h('div', { class: 'row-btns' },
+            h('button', { class: 'btn', onclick: () => openLayouts() }, '📚 開啟座位紀錄')),
+          '不同科目、考試、分組活動可以各存一種座位排法，一鍵換回。'),
           checkbox('顯示照片（班級名單有照片時）', s.showPhoto, (v) => { s.showPhoto = v; ctx.save(); render(); }),
           h('p', { class: 'muted' }, '在座位表上點一個座位，再點另一個座位，兩人就會交換（也可以和空位交換）。'));
       },

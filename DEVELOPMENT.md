@@ -245,8 +245,10 @@ start.bat, start.sh         啟動網頁版伺服器（第一次會建立 .venv�
 ```
 MyScreen/
   boards/<id>.json     {id, name, rev, created, updatedAt, data: {background, widgets: [...]}}
-  settings.json        {data: {classLists: [...], classTools?, textNotes?, ui?, pollBank?, pollResults?}, updatedAt}
+  settings.json        {data: {classLists: [...], classTools?, lastTools?, textNotes?, seatLayouts?, ui?, pollBank?, pollResults?}, updatedAt}
                        textNotes：文字小工具的紀錄 [{ id, html, text, at }]，最多 200 則（text-notes.js）
+                       seatLayouts：座位表的紀錄 { [班級 id，自己輸入名單是 ""]: [{ id, label, rows, cols, seats, flip, at }] }，每班最多 30 組（seat-layouts.js）；座位表的 state.layoutId 是使用中的那一組，換座位自動存回
+                       lastTools：沒有連結班級名單的小工具最後的狀態 { [type]: { state, usedAt } }；小工具定義有 restoreLast（目前是座位表）時，新開會沿用上次用的班級在 classTools 的狀態，沒有班級時用這裡的（roster.js 的 lastToolState）
                        classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，連結班級的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
@@ -390,7 +392,7 @@ export const example = {
 - 手機遙控：各小工具操作、傳送網址（YouTube／影片檔／FB／IG／Threads／TikTok／Vimeo／一般網頁）
 - 內建 relay：關閉黑板樹時結束（1.9.1 起改成需要時才啟動、每次開啟換代碼，手機要重新掃描並由老師允許）
 - 安裝程式：每位使用者安裝（不需系統管理員）、升級、解除安裝（1.2.0 起安裝時不設定遙控伺服器，也移除了 `/RELAY=` 參數）
-- 前端自動化測試：176 項（`npm test`）；relay 協定測試 49 項
+- 前端自動化測試：189 項（`npm test`）；relay 協定測試 49 項
 - 投票題庫、匯入、投票紀錄與匯出：已用瀏覽器操作過（網頁版下載 CSV）
 - 學生投票：已用瀏覽器模擬老師與兩位學生實際操作（投票、改票、改題目、結束投票），C# 與 Python 兩個 relay 都測過
 - ⚙ 總設定：白板、班級名單、工具列（位置、圖示大小、顯示的工具），已用瀏覽器實際操作過

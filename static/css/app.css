@@ -459,6 +459,15 @@ body.dragging iframe { pointer-events: none; }
 .seat.sel { outline: 3px solid var(--accent); background: #dbe4ff; }
 .seat.hl { background: #ffd43b; border-color: #f08c00; transform: scale(1.06); box-shadow: 0 0 0 3px #ffe066; z-index: 1; }
 .seats-size { font-weight: 700; }
+.seats-tag { margin-left: auto; border: 1px solid #bac8ff; background: #edf2ff; color: var(--accent); border-radius: 99px; padding: 2px 10px; font-size: 13px; font-weight: 700; cursor: pointer; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-new { display: flex; gap: 8px; }
+.sl-new .input { flex: 1; }
+.sl-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.sl-head { display: flex; align-items: baseline; gap: 10px; }
+.sl-head b { font-size: 16px; }
+.sl-mini { display: grid; grid-auto-rows: 16px; gap: 2px; max-width: 520px; }
+.sl-mini span { background: #f1f3f5; border-radius: 3px; font-size: 10px; line-height: 16px; height: 16px; text-align: center; overflow: hidden; white-space: nowrap; }
+.sl-mini span.empty { background: #fafafa; }
 .embed.social { background: #fff; }
 
 /* 班級名單 */

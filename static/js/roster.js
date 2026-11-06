@@ -3,6 +3,7 @@
 import { h, modal, toast, confirmDialog, promptDialog } from './ui.js';
 import { LS } from './store.js';
 import { renameInDaily } from './points-log.js';
+import { renameInLayouts } from './seat-layouts.js';
 
 const LAST_KEY = 'ms:lastList';
 
@@ -376,6 +377,7 @@ export async function rosterDialog(store, { selectId } = {}) {
           const from = s.name;
           s.name = v;
           store.dispatchEvent(new CustomEvent('rename', { detail: { listId: l.id, from, to: v } }));
+          renameInLayouts(store.settings, l.id, from, v); // 座位紀錄裡的名字也換
           changed();
         } }),
         h('button', { class: 'roster-del', title: '移除這位學生', onclick: () => { list.splice(i, 1); changed(); render(); } }, '✕')));
@@ -491,6 +493,21 @@ export function classToolsOf(settings, listId) {
     .filter(([, v]) => v && typeof v === 'object' && v.state)
     .map(([type, v]) => ({ type, state: v.state, usedAt: +v.usedAt || 0 }))
     .sort((a, b) => b.usedAt - a.usedAt);
+}
+// 沒有連結班級名單（自己輸入名字）的小工具：只記最後一次的狀態 settings.lastTools = { [type]: { state, usedAt } }
+export function recordLastTool(settings, type, state, now = Date.now()) {
+  if (!settings || !type || !state || state.listId) return false;
+  const all = settings.lastTools && typeof settings.lastTools === 'object' ? settings.lastTools : (settings.lastTools = {});
+  const snap = JSON.parse(JSON.stringify(state));
+  if (all[type] && sameJson(all[type].state, snap)) return false;
+  all[type] = { state: snap, usedAt: now };
+  return true;
+}
+// 新開小工具時沿用的狀態：上次用的班級在這個小工具的最後狀態；沒有這個班級時用自己輸入名單的那一次
+export function lastToolState(settings, type, listId) {
+  const lists = settings?.classLists || [];
+  const rec = listId && lists.some((l) => l.id === listId) ? settings.classTools?.[listId]?.[type] : settings?.lastTools?.[type];
+  return rec && typeof rec === 'object' && rec.state && typeof rec.state === 'object' ? JSON.parse(JSON.stringify(rec.state)) : null;
 }
 export function forgetClassTool(settings, listId, type) {
   const mine = settings?.classTools?.[listId];

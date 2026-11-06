@@ -7,7 +7,7 @@ import { widgets, widgetList, upgradeWidget } from './widgets/index.js';
 import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
 import { RemoteHost } from './remote-host.js';
-import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool } from './roster.js';
+import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool, recordLastTool, lastToolState, lastListId } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
 import { UPDATE_URL, RELEASES_PAGE, checkForUpdate, downloadVerified, notesSince, shouldAutoCheck, updateScript, encodePowerShell, plainNote } from './update.js';
 import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, GRID_SIZES, GRID_SHOW, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool, gridCell, nextGrid, snapMove, snapResize } from './ui-prefs.js';
@@ -409,6 +409,12 @@ function maxZ() { return Math.max(0, ...S.board.data.widgets.map((w) => w.z || 0
 
 function addWidget(type, copyFrom, init) {
   const def = widgets[type];
+  // 座位表等：新開時沿用上次關閉前的狀態（同一個班級）
+  let restored = false;
+  if (!copyFrom && !init && def.restoreLast && S.store?.settings) {
+    const last = lastToolState(S.store.settings, type, lastListId());
+    if (last) { init = { state: def.restoreLast(last) }; restored = true; }
+  }
   const n = S.board.data.widgets.length;
   const w = copyFrom
     ? { ...structuredClone(copyFrom), id: uid(), x: Math.min(copyFrom.x + 0.02, 1 - copyFrom.w), y: Math.min(copyFrom.y + 0.03, 0.9), z: maxZ() + 1 }
@@ -424,6 +430,7 @@ function addWidget(type, copyFrom, init) {
   mountWidget(w);
   $('#empty-hint').classList.add('hidden');
   save();
+  if (restored) toast(`已沿用上次的「${def.title}」`);
   return w;
 }
 
@@ -431,13 +438,17 @@ function addWidget(type, copyFrom, init) {
 // 操作時常常連續存檔，等 1.5 秒沒有變動再記錄
 const classToolTimers = new Map();
 function noteClassTool(w) {
-  if (!w.state?.listId) return;
+  if (!w.state?.listId && !widgets[w.type]?.restoreLast) return;
   clearTimeout(classToolTimers.get(w.id));
-  classToolTimers.set(w.id, setTimeout(() => {
-    classToolTimers.delete(w.id);
-    const st = S.store?.settings;
-    if (st && recordClassTool(st, w.type, w.state)) S.store.saveSettings();
-  }, 1500));
+  classToolTimers.set(w.id, setTimeout(() => flushClassTool(w), 1500));
+}
+function flushClassTool(w) {
+  clearTimeout(classToolTimers.get(w.id));
+  classToolTimers.delete(w.id);
+  const st = S.store?.settings;
+  if (!st) return;
+  // 沒有連結班級名單的座位表：記在 lastTools（下次新開時沿用）
+  if (w.state?.listId ? recordClassTool(st, w.type, w.state) : recordLastTool(st, w.type, w.state)) S.store.saveSettings();
 }
 
 // 叫回某班使用過的小工具（帶回當時的座位、分數、分組、考試設定等）
@@ -451,6 +462,8 @@ function removeWidget(id) {
   if (S.maxId === id) toggleMax(null);
   if (S.remote?.poll?.id === id) S.remote.closePoll();
   const m = S.mounted.get(id);
+  const gone = S.board.data.widgets.find((w) => w.id === id);
+  if (gone && classToolTimers.has(id)) flushClassTool(gone); // 關閉前的最後狀態馬上記下來
   m?.inst.destroy?.();
   m?.el.remove();
   S.mounted.delete(id);
