@@ -170,6 +170,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 2.0.0 | 以班級為主：白板有 `classId`（`store.newBoard(name, classId)`），首頁 `showClasses()` → `showBoards(classId)`；小工具的 `listId` 一律等於白板的班級（`mountWidget`）；各班資料 settings.classData（`roster.js` 的 `classData()`：pollBank、pollResults、textNotes、points），刪除班級 `dropClass()` 連同白板一起刪；題庫匯出 `bankToText()`；課堂加分 classData.points 同班共用（`saveSettings({ quiet })`）；移除 lastTools 與手動輸入名單；遙控白板清單只列同班 |
 | 1.10.0 | 座位紀錄（`seat-layouts.js`，settings.seatLayouts；座位表 state.layoutId 使用中的一組自動存回）、新開座位表沿用上次的狀態（小工具定義的 `restoreLast`、settings.lastTools、`lastToolState()`）、關閉小工具時立即記錄最後狀態 |
 | 1.9.1 | 資安：遙控要老師允許（`join-request`／`join-answer`）、代碼只在這次開啟有效（`SS`）、遙控內容加密（`remote-crypto.js`，tweetnacl）、relay 需要時才啟動、`/ws/screen` 只接受本機、連線數與逾時限制、iframe `sandbox`、`nativeAllowList` 縮小、`latest.json` 數位簽章；易用性：工具列文字依空間顯示（`fitDockLabels()`）、關閉小工具可復原（`offerUndo()`）、遙控視窗與儲存位置用語白話化 |
 | 1.9.0 | 畫布格線與對齊（`ui-prefs.js` 的 grid／gridShow、snapMove、snapResize）；文字小工具格式工具列、文字紀錄（`text-notes.js`，settings.textNotes）、排版（`textLayout()`、直式）、注音字型（vendor/fonts）、破音字（`bpmf.js` 的選擇符與 `autoReadings()`，詞庫在 tools/bpmf） |
@@ -245,12 +246,17 @@ start.bat, start.sh         啟動網頁版伺服器（第一次會建立 .venv�
 
 ```
 MyScreen/
-  boards/<id>.json     {id, name, rev, created, updatedAt, data: {background, widgets: [...]}}
-  settings.json        {data: {classLists: [...], classTools?, lastTools?, textNotes?, seatLayouts?, ui?, pollBank?, pollResults?}, updatedAt}
-                       textNotes：文字小工具的紀錄 [{ id, html, text, at }]，最多 200 則（text-notes.js）
-                       seatLayouts：座位表的紀錄 { [班級 id，自己輸入名單是 ""]: [{ id, label, rows, cols, seats, flip, at }] }，每班最多 30 組（seat-layouts.js）；座位表的 state.layoutId 是使用中的那一組，換座位自動存回
-                       lastTools：沒有連結班級名單的小工具最後的狀態 { [type]: { state, usedAt } }；小工具定義有 restoreLast（目前是座位表）時，新開會沿用上次用的班級在 classTools 的狀態，沒有班級時用這裡的（roster.js 的 lastToolState）
-                       classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，連結班級的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）
+  boards/<id>.json     {id, name, classId, rev, created, updatedAt, data: {background, widgets: [...]}}
+                       classId：白板屬於哪一班（2.0.0 起以班級為主）。沒有 classId 的舊白板不會顯示（檔案保留，不刪除）
+  settings.json        {data: {classLists: [...], classData?, classTools?, seatLayouts?, ui?}, updatedAt}
+                       classData：各班分開的資料 { [班級 id]: { pollBank?, pollResults?, textNotes?, points? } }（roster.js 的 classData()）
+                         pollBank／pollResults：投票題庫與紀錄（poll-bank.js）；題庫可匯出成文字檔（bankToText），再到別班匯入
+                         textNotes：文字小工具的紀錄 [{ id, html, text, at }]，最多 200 則（text-notes.js）
+                         points：課堂加分 { scores, daily }，這班的每個白板共用；小工具 state 的 scores／daily 是同一份的參照
+                       seatLayouts：座位表的紀錄 { [班級 id]: [{ id, label, rows, cols, seats, flip, at }] }，每班最多 30 組（seat-layouts.js）；座位表的 state.layoutId 是使用中的那一組，換座位自動存回
+                       classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，這班的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）；小工具定義有 restoreLast（目前是座位表）時，新開會沿用這班的狀態（lastToolState）
+                       刪除班級時（roster.js 的 dropClass）這班的白板、classData、classTools、seatLayouts 一起刪除
+                       1.10 以前的 pollBank、pollResults、textNotes、lastTools 放在最上層，2.0.0 起不再讀取
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
 
