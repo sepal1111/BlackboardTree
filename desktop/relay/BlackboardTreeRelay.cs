@@ -1,5 +1,6 @@
 // 黑板樹內建遙控伺服器：老師電腦開啟黑板樹時一起啟動，手機直接連到這台電腦
 // 協定與 server/relay.py 相同：教室電腦連 /ws/screen，手機連 /ws/remote?code=xxxxxx，伺服器只轉送訊息
+// 新的手機要等老師在教室電腦上按「允許」才能遙控；允許過的裝置（key）在代碼更換前重新連線不用再問
 // 學生投票：教室電腦送 vote-open 取得另一組投票代碼，學生連 /ws/vote?code=xxxxxx，只能送出投票
 // 也提供手機遙控網頁與學生投票網頁（remote.html、vote.html 等檔案編譯時嵌入）
 // 用 Windows 內建的 .NET Framework 編譯（desktop\build.ps1），不需要另外安裝任何東西
@@ -130,6 +131,18 @@ namespace BlackboardTree
         public object Poll;
         public Dictionary<string, WsConn> Voters = new Dictionary<string, WsConn>();
         public int NextVoter;
+        public HashSet<string> Allowed = new HashSet<string>();                         // 老師允許過的手機（裝置 key）
+        public Dictionary<string, JoinWait> Pending = new Dictionary<string, JoinWait>(); // 等待老師允許的手機
+        public int NextPending;
+    }
+
+    class JoinWait
+    {
+        public bool? Ok;
+        public string Reason;
+        public string Box = ""; // 手動輸入代碼的手機：用手機公鑰加密過的遙控金鑰
+        public readonly ManualResetEventSlim Done = new ManualResetEventSlim(false);
+        public void Answer(bool ok, string reason) { if (Ok == null) { Ok = ok; Reason = reason; } Done.Set(); }
     }
 
     static class Program
@@ -138,6 +151,11 @@ namespace BlackboardTree
         const int MAX_REMOTES = 8;
         const int MAX_VOTERS = 200;
         const int MAX_MSG = 256 * 1024;
+        const int MAX_PENDING = 3;      // 同時等待老師允許的手機
+        const int ASK_SEC = 60;         // 老師沒有回應時自動拒絕
+        const int MAX_CONNS = 400;      // 同時連線上限（200 位學生＋遙控），避免被大量連線拖垮
+        const int HEAD_TIMEOUT_MS = 10000;
+        static int conns;
         static readonly object gate = new object();
         static readonly Dictionary<string, Room> rooms = new Dictionary<string, Room>();
         static readonly Dictionary<string, Room> voteRooms = new Dictionary<string, Room>();
@@ -198,7 +216,13 @@ namespace BlackboardTree
             {
                 TcpClient c;
                 try { c = listener.AcceptTcpClient(); } catch { continue; }
-                new Thread(() => Handle(c)) { IsBackground = true }.Start();
+                if (Interlocked.Increment(ref conns) > MAX_CONNS)
+                {
+                    Interlocked.Decrement(ref conns);
+                    try { c.Close(); } catch { }
+                    continue;
+                }
+                new Thread(() => { try { Handle(c); } finally { Interlocked.Decrement(ref conns); } }) { IsBackground = true }.Start();
             }
         }
 
@@ -252,7 +276,9 @@ namespace BlackboardTree
         {
             c.NoDelay = true;
             var stream = c.GetStream();
-            string ip = ((IPEndPoint)c.Client.RemoteEndPoint).Address.ToString();
+            var remoteAddr = ((IPEndPoint)c.Client.RemoteEndPoint).Address;
+            string ip = remoteAddr.ToString();
+            stream.ReadTimeout = HEAD_TIMEOUT_MS; // 只連線不送資料的連線不能一直佔著
             try
             {
                 // 讀 HTTP 標頭
@@ -281,14 +307,19 @@ namespace BlackboardTree
                 string upgrade;
                 if (headers.TryGetValue("Upgrade", out upgrade) && upgrade.ToLowerInvariant() == "websocket")
                 {
+                    // 教室畫面就是這台電腦（連 127.0.0.1），其他電腦不能冒充教室畫面
+                    if (path == "/ws/screen" && !IPAddress.IsLoopback(remoteAddr)) { c.Close(); return; }
                     string key = headers.ContainsKey("Sec-WebSocket-Key") ? headers["Sec-WebSocket-Key"] : "";
                     string accept = Convert.ToBase64String(SHA1.Create().ComputeHash(Encoding.ASCII.GetBytes(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
                     var resp = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n\r\n";
                     var rb = Encoding.ASCII.GetBytes(resp);
                     stream.Write(rb, 0, rb.Length);
+                    stream.ReadTimeout = Timeout.Infinite; // 連上之後可以長時間沒有訊息
                     var ws = new WsConn { Client = c, Stream = stream, Ip = ip };
+                    string ua;
+                    headers.TryGetValue("User-Agent", out ua);
                     if (path == "/ws/screen") ScreenLoop(ws);
-                    else if (path == "/ws/remote") RemoteLoop(ws, QueryValue(query, "code"));
+                    else if (path == "/ws/remote") RemoteLoop(ws, QueryValue(query, "code"), QueryValue(query, "key"), QueryValue(query, "pk"), DeviceName(ua));
                     else if (path == "/ws/vote") VoteLoop(ws, QueryValue(query, "code"));
                     else ws.Close();
                     return;
@@ -362,6 +393,38 @@ namespace BlackboardTree
             foreach (var v in list) v.SendText(text);
         }
 
+        // 從瀏覽器的 User-Agent 猜是哪種裝置，讓老師判斷是不是自己的手機
+        static string DeviceName(string ua)
+        {
+            ua = ua ?? "";
+            if (ua.Contains("iPhone")) return "iPhone";
+            if (ua.Contains("iPad")) return "iPad";
+            if (ua.Contains("Android")) return "Android 手機／平板";
+            if (ua.Contains("Windows")) return "Windows 電腦";
+            if (ua.Contains("Macintosh")) return "Mac 或 iPad";
+            if (ua.Contains("CrOS")) return "Chromebook";
+            return "不明裝置";
+        }
+
+        // 手機自己產生的裝置 key（英數字、- _，16～64 個字）
+        static bool IsKey(string v) { return IsB64(v, 16, 64); }
+
+        // base64url 字元（金鑰、公鑰、加密資料）
+        static bool IsB64(string v, int min, int max)
+        {
+            if (v == null || v.Length < min || v.Length > max) return false;
+            foreach (var ch in v) if (!(ch < 128 && (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_'))) return false;
+            return true;
+        }
+
+        // 拒絕所有等待中的手機（換代碼、教室電腦離線時）
+        static void DenyPending(Room room, string reason)
+        {
+            JoinWait[] list;
+            lock (gate) { list = room.Pending.Values.ToArray(); room.Pending.Clear(); }
+            foreach (var p in list) p.Answer(false, reason);
+        }
+
         static bool IsCode(string v) { return v.Length == 6 && v.All(char.IsDigit); }
 
         // 結束學生投票：通知並中斷所有學生，投票代碼失效
@@ -395,6 +458,8 @@ namespace BlackboardTree
         static void Cleanup()
         {
             var now = DateTime.UtcNow;
+            foreach (var kv in joinFail.ToList())
+                if (kv.Value.All(t => (now - t).TotalSeconds >= 300)) joinFail.Remove(kv.Key);
             foreach (var kv in rooms.ToList())
             {
                 var r = kv.Value;
@@ -451,8 +516,13 @@ namespace BlackboardTree
                     }
                     else if (t == "notice")
                     {
-                        var text = Str(msg, "text");
-                        Broadcast(room, new { type = "notice", text = text.Length > 200 ? text.Substring(0, 200) : text });
+                        var box = Str(msg, "box");
+                        if (box.Length > 0) Broadcast(room, new { type = "notice", box = box.Length > 4000 ? box.Substring(0, 4000) : box }); // 加密的提示
+                        else
+                        {
+                            var text = Str(msg, "text");
+                            Broadcast(room, new { type = "notice", text = text.Length > 200 ? text.Substring(0, 200) : text });
+                        }
                     }
                     else if (t == "kick")
                     {
@@ -465,10 +535,25 @@ namespace BlackboardTree
                             rooms.Remove(room.Code);
                             room.Code = NewCode();
                             room.Secret = NewSecret();
+                            room.Allowed.Clear();
                             rooms[room.Code] = room;
                         }
+                        DenyPending(room, "老師已更換代碼，請重新掃描電視上的 QR Code");
                         foreach (var r in list) { Send(r, new { type = "kicked" }); r.Close(); }
                         Send(ws, new { type = "room", code = room.Code, secret = room.Secret, remotes = 0 });
+                    }
+                    else if (t == "join-answer")
+                    {
+                        JoinWait p = null;
+                        var pid = Str(msg, "id");
+                        lock (gate) { if (room.Pending.TryGetValue(pid, out p)) room.Pending.Remove(pid); }
+                        object ok; msg.TryGetValue("ok", out ok);
+                        var box = Str(msg, "box");
+                        if (p != null)
+                        {
+                            if (IsB64(box, 100, 200)) p.Box = box;
+                            p.Answer(ok is bool && (bool)ok, "老師沒有允許這台裝置遙控");
+                        }
                     }
                     else if (t == "vote-open")
                     {
@@ -511,6 +596,7 @@ namespace BlackboardTree
                 lock (gate) if (room.Screen == ws) { room.Screen = null; room.GoneAt = DateTime.UtcNow; gone = true; }
                 if (gone)
                 {
+                    DenyPending(room, "教室電腦目前沒有連線，請稍後再試");
                     Broadcast(room, new { type = "screen", online = false });
                     BroadcastVoters(room, new { type = "screen", online = false });
                 }
@@ -518,8 +604,10 @@ namespace BlackboardTree
             }
         }
 
-        static void RemoteLoop(WsConn ws, string code)
+        static void RemoteLoop(WsConn ws, string code, string key, string pk, string device)
         {
+            if (!IsKey(key)) key = null;
+            if (!IsB64(pk, 43, 43)) pk = null; // 手機的一次性公鑰（沒有加密金鑰時）
             Room room;
             lock (gate)
             {
@@ -535,6 +623,51 @@ namespace BlackboardTree
             }
             if (code == null) { Send(ws, new { type = "error", message = "嘗試次數過多，請 5 分鐘後再試" }); ws.Close(); return; }
             if (room == null) { Send(ws, new { type = "error", message = "代碼錯誤或已失效，請重新掃描電視上的 QR Code" }); ws.Close(); return; }
+
+            // 第一次連線的手機：請老師在教室電腦上允許（允許前看不到白板內容，也不能送指令）
+            // 沒有加密金鑰的手機（帶 pk）即使允許過也要再問一次，老師允許時才交得到金鑰
+            bool allowed;
+            string keyBox = "";
+            lock (gate) allowed = pk == null && key != null && room.Allowed.Contains(key);
+            if (!allowed)
+            {
+                JoinWait pend = null;
+                string pid = null, err = null;
+                WsConn screenNow;
+                lock (gate)
+                {
+                    screenNow = room.Screen;
+                    if (screenNow == null) err = "教室電腦目前沒有連線，請稍後再試";
+                    else if (room.Remotes.Count >= MAX_REMOTES) err = "連線的裝置太多了";
+                    else if (room.Pending.Count >= MAX_PENDING) err = "有其他裝置正在等待老師允許，請稍後再試";
+                    else
+                    {
+                        pid = (++room.NextPending).ToString();
+                        pend = new JoinWait();
+                        room.Pending[pid] = pend;
+                    }
+                }
+                if (err != null) { Send(ws, new { type = "error", message = err }); ws.Close(); return; }
+                Send(ws, new { type = "wait" });
+                Send(screenNow, new { type = "join-request", id = pid, device = device, ip = ws.Ip, pk = pk ?? "" });
+                bool answered = pend.Done.Wait(ASK_SEC * 1000);
+                lock (gate) room.Pending.Remove(pid);
+                Send(room.Screen, new { type = "join-gone", id = pid });
+                if (!answered || pend.Ok != true)
+                {
+                    lock (gate)
+                    {
+                        List<DateTime> fails;
+                        if (joinFail.TryGetValue(ws.Ip, out fails)) fails.Add(DateTime.UtcNow); // 被拒絕也算失敗，避免一直跳出詢問
+                    }
+                    Send(ws, new { type = "error", message = answered ? pend.Reason : "老師沒有回應，請再試一次" });
+                    ws.Close();
+                    return;
+                }
+                if (room.Code != code) { Send(ws, new { type = "error", message = "代碼已更換，請重新掃描電視上的 QR Code" }); ws.Close(); return; }
+                lock (gate) if (key != null) room.Allowed.Add(key);
+                keyBox = pend.Box;
+            }
             int count;
             lock (gate)
             {
@@ -542,7 +675,8 @@ namespace BlackboardTree
                 else { room.Remotes.Add(ws); count = room.Remotes.Count; }
             }
             if (count < 0) { Send(ws, new { type = "error", message = "連線的裝置太多了" }); ws.Close(); return; }
-            Send(ws, new { type = "hello", online = room.Screen != null, state = room.State });
+            if (keyBox.Length > 0) Send(ws, new { type = "hello", online = room.Screen != null, state = room.State, key = keyBox });
+            else Send(ws, new { type = "hello", online = room.Screen != null, state = room.State });
             Send(room.Screen, new { type = "remotes", count = count, joined = true });
             try
             {
@@ -552,7 +686,9 @@ namespace BlackboardTree
                     if (msg == null || Str(msg, "type") != "cmd") continue;
                     if (room.Code != code) break; // 代碼已更換（被中斷）
                     var screen = room.Screen;
-                    if (screen != null)
+                    var cbox = Str(msg, "box");
+                    if (screen != null && cbox.Length > 0) Send(screen, new { type = "cmd", box = cbox }); // 加密的指令，原樣轉送
+                    else if (screen != null)
                     {
                         object target, widgetId, action, args;
                         msg.TryGetValue("target", out target);

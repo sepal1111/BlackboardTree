@@ -142,10 +142,9 @@ body.chrome-hidden .widget:hover .w-head { opacity: 1; }
 /* 只顯示圖示（設定 → 工具列 → 工具列文字）：按鈕縮成圖示大小 */
 body[data-dock-labels="hide"] .dock-btn .dl { display: none; }
 body[data-dock-labels="hide"] .dock-btn { min-width: 0; padding: max(4px, calc(var(--dock-icon, 24px) * .3)); }
-@media (max-width: 1279px), (max-height: 799px) {
-  body[data-dock-labels="auto"] .dock-btn .dl { display: none; }
-  body[data-dock-labels="auto"] .dock-btn { min-width: 0; padding: max(4px, calc(var(--dock-icon, 24px) * .3)); }
-}
+/* 「自動」：放得下就顯示文字，放不下才只顯示圖示（app.js 的 fitDockLabels() 量過後設定 data-dock-fit） */
+body[data-dock-labels="auto"][data-dock-fit="icons"] .dock-btn .dl { display: none; }
+body[data-dock-labels="auto"][data-dock-fit="icons"] .dock-btn { min-width: 0; padding: max(4px, calc(var(--dock-icon, 24px) * .3)); }
 
 /* 工具列位置（設定 → 工具列）：body[data-dock] = bottom | top | left | right */
 body[data-dock="top"] #dock { top: 62px; bottom: auto; }
@@ -439,6 +438,7 @@ body.dragging iframe { pointer-events: none; }
 
 #toast.interactive.show { pointer-events: auto; }
 .toast-link { color: #a5d8ff; font-weight: 700; text-decoration: underline; }
+.toast-undo { background: #fff; color: #212529; border: 0; border-radius: 8px; padding: 6px 14px; font-weight: 700; font-size: 15px; margin: -4px 0; }
 .embed video { flex: 1; width: 100%; height: 100%; background: #000; object-fit: contain; }
 
 /* 座位表 */
@@ -590,6 +590,8 @@ body.has-max #topbar, body.has-max #dock, body.has-max #hide-btn { visibility: h
 .remote-ips .chip { border: 1px solid #ced4da; background: #fff; border-radius: 99px; padding: 2px 10px; font-size: 12px; }
 .remote-ips .chip.on { border-color: var(--accent); background: #edf2ff; color: var(--accent); font-weight: 700; }
 .remote-tip { font-size: 12px; max-width: 320px; }
+.remote-steps { margin: 0; padding-left: 22px; font-size: 16px; line-height: 1.6; max-width: 340px; }
+.remote-steps li + li { margin-top: 4px; }
 
 /* ---------- 總設定（⚙ 設定） */
 .modal.wide:has(.settings) { width: min(900px, 100%); }
@@ -806,3 +808,8 @@ body.dragging:not([data-grid=off]) #grid-overlay { background-image:
 .w-text .w-title { flex: none; }
 .w-head.tb-compact .text-tb .extra { display: none; }
 .w-text:is(:hover, :focus-within) .w-head.tb-compact .w-title { display: none; }
+
+/* 新裝置要求遙控 */
+.join-ask { text-align: center; }
+.join-device { font-size: 28px; font-weight: 700; margin: 4px 0 10px; }
+.join-ask p { margin: 6px 0; }

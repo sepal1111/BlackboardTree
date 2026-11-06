@@ -29,6 +29,7 @@ $static = Resolve-Path ..\static
 & $csc /nologo /target:exe /optimize+ /utf8output /codepage:65001 /out:resources\myscreen-relay.exe /r:System.Web.Extensions.dll `
   "/resource:$static\remote.html,remote.html" "/resource:$static\vote.html,vote.html" "/resource:$static\css\remote.css,css/remote.css" `
   "/resource:$static\js\remote.js,js/remote.js" "/resource:$static\js\ui.js,js/ui.js" `
+  "/resource:$static\js\remote-crypto.js,js/remote-crypto.js" "/resource:$static\vendor\nacl-fast.min.js,vendor/nacl-fast.min.js" `
   "/resource:$static\js\widgets\util.js,js/widgets/util.js" relay\BlackboardTreeRelay.cs
 if ($LASTEXITCODE -ne 0) { throw '遙控伺服器編譯失敗' }
 

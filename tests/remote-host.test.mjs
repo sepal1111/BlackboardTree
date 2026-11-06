@@ -2,7 +2,8 @@ import { resetStorage, tick } from './helpers.mjs';
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RemoteHost } from '../static/js/remote-host.js';
-import { LS } from '../static/js/store.js';
+import { LS, SS } from '../static/js/store.js';
+import { seal, open, newPair, unwrapKey, KEY_RE } from '../static/js/remote-crypto.js';
 
 // 假的 WebSocket：記錄送出的訊息，測試裡用 recv() 模擬 relay 傳來的訊息
 class FakeWs {
@@ -37,14 +38,19 @@ describe('RemoteHost：教室電腦端的遙控連線', () => {
 
     ws.recv({ type: 'room', code: '123456', secret: 's1', remotes: 0 });
     assert.equal(h.status, 'online');
-    assert.equal(h.url, 'http://192.168.1.5:52480/remote.html#123456'); // 手機用校內 IP
-    assert.deepEqual(LS.get('ms:remote'), { code: '123456', secret: 's1' });
+    assert.ok(KEY_RE.test(h.key), '每組代碼有一把加密金鑰');
+    assert.equal(h.url, 'http://192.168.1.5:52480/remote.html#123456.' + h.key); // 手機用校內 IP，金鑰放在 # 後面
+    assert.deepEqual(SS.get('ms:remote'), { code: '123456', secret: 's1', key: h.key }); // 只在這次開啟期間有效
+    assert.equal(LS.get('ms:remote'), undefined, '不能永久保存代碼');
     await wait(5);
-    assert.deepEqual(ws.last, { type: 'state', state: { board: '國語' } });
+    assert.equal(ws.last.type, 'state');
+    assert.equal(typeof ws.last.state, 'string', '白板內容要加密');
+    assert.ok(!ws.last.state.includes('國語'));
+    assert.deepEqual(open(ws.last.state, h.key), { board: '國語' });
   });
 
-  test('重新開啟時用記住的代碼連回', () => {
-    LS.set('ms:remote', { code: '654321', secret: 'abc' });
+  test('同一次開啟期間斷線時用記住的代碼連回', () => {
+    SS.set('ms:remote', { code: '654321', secret: 'abc' });
     makeHost().start();
     FakeWs.all[0].open();
     assert.deepEqual(FakeWs.all[0].sent[0], { type: 'hello', code: '654321', secret: 'abc' });
@@ -60,16 +66,27 @@ describe('RemoteHost：教室電腦端的遙控連線', () => {
     await wait(5);
     ws.sent = [];
 
-    ws.recv({ type: 'cmd', target: 'app', action: 'next' });
+    ws.recv({ type: 'cmd', box: seal({ target: 'app', action: 'next' }, h.key) });
     await tick();
     assert.equal(got[0].action, 'next');
+    assert.deepEqual(got[0].args, {});
     await wait(150); // 狀態推送會等 120ms 合併
-    assert.deepEqual(ws.sent, [{ type: 'state', state: { board: '國語' } }]);
+    assert.equal(ws.sent.length, 1);
+    assert.deepEqual(open(ws.sent[0].state, h.key), { board: '國語' });
 
     ws.sent = [];
-    ws.recv({ type: 'cmd', target: 'app', action: 'bad' });
+    ws.recv({ type: 'cmd', box: seal({ target: 'app', action: 'bad' }, h.key) });
     await tick();
-    assert.deepEqual(ws.sent[0], { type: 'notice', text: '執行失敗：不行' });
+    assert.equal(ws.sent[0].type, 'notice');
+    assert.deepEqual(open(ws.sent[0].box, h.key), { text: '執行失敗：不行' });
+
+    // 沒加密、或用別的金鑰加密的指令不理會
+    got.length = 0;
+    ws.recv({ type: 'cmd', target: 'app', action: 'next' });
+    ws.recv({ type: 'cmd', box: seal({ target: 'app', action: 'next' }, 'A'.repeat(43)) });
+    ws.recv({ type: 'cmd', box: 'garbage' });
+    await tick();
+    assert.equal(got.length, 0);
   });
 
   test('手機加入時通知畫面', () => {
@@ -180,5 +197,57 @@ describe('RemoteHost：學生投票', () => {
     assert.deepEqual(ws2.last, { type: 'vote-close' });
     assert.equal(host.poll, null);
     assert.equal(host.voteCode, '');
+  });
+});
+
+describe('新的手機要老師允許', () => {
+  test('收到 join-request 時通知畫面，回答後送出 join-answer；join-gone 時通知關閉詢問', () => {
+    const h = makeHost();
+    h.start();
+    const ws = FakeWs.all[0];
+    ws.open();
+    ws.recv({ type: 'room', code: '123456', secret: 's1' });
+    const asked = [];
+    const gone = [];
+    h.addEventListener('join-request', (e) => asked.push(e.detail));
+    h.addEventListener('join-gone', (e) => gone.push(e.detail.id));
+    ws.recv({ type: 'join-request', id: 3, device: 'iPhone', ip: '192.168.1.20' });
+    assert.deepEqual(asked, [{ id: '3', device: 'iPhone', ip: '192.168.1.20' }]);
+    h.answerJoin('3', true);
+    assert.deepEqual(ws.last, { type: 'join-answer', id: '3', ok: true });
+    h.answerJoin('4', 0);
+    assert.deepEqual(ws.last, { type: 'join-answer', id: '4', ok: false });
+    ws.recv({ type: 'join-gone', id: 3 });
+    assert.deepEqual(gone, ['3']);
+  });
+
+  test('手動輸入代碼的手機（帶公鑰）：允許時把金鑰加密交給它，拒絕時不給', () => {
+    const h = makeHost();
+    h.start();
+    const ws = FakeWs.all[0];
+    ws.open();
+    ws.recv({ type: 'room', code: '123456', secret: 's1' });
+    const phone = newPair();
+    ws.recv({ type: 'join-request', id: 5, device: 'Android 手機', ip: '192.168.1.21', pk: phone.publicKey });
+    h.answerJoin('5', true);
+    assert.equal(ws.last.ok, true);
+    assert.equal(unwrapKey(ws.last.box, phone), h.key, '手機用自己的私鑰解出金鑰');
+    assert.equal(unwrapKey(ws.last.box, newPair()), '', '別人解不開');
+    ws.recv({ type: 'join-request', id: 6, device: 'iPhone', ip: '192.168.1.22', pk: newPair().publicKey });
+    h.answerJoin('6', false);
+    assert.deepEqual(ws.last, { type: 'join-answer', id: '6', ok: false });
+  });
+
+  test('換代碼時換金鑰；同一組代碼重新連線沿用金鑰', () => {
+    const h = makeHost();
+    h.start();
+    const ws = FakeWs.all[0];
+    ws.open();
+    ws.recv({ type: 'room', code: '111111', secret: 's1' });
+    const k1 = h.key;
+    ws.recv({ type: 'room', code: '111111', secret: 's1' });
+    assert.equal(h.key, k1);
+    ws.recv({ type: 'room', code: '222222', secret: 's2' });
+    assert.notEqual(h.key, k1);
   });
 });

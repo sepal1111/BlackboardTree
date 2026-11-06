@@ -648,6 +648,8 @@ export async function openExternal(url) {
   return !!window.open(url, '_blank', 'noopener');
 }
 
+export const EMBED_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation';
+
 function youtubeSrc(info, autoplay) {
   const q = new URLSearchParams({ enablejsapi: '1', rel: '0', playsinline: '1' });
   if (autoplay) q.set('autoplay', '1');
@@ -694,7 +696,8 @@ export const embed = {
         return;
       }
       const src = info.kind === 'youtube' ? youtubeSrc(info, autoplay) : info.kind === 'social' ? info.embed : toEmbedUrl(s.url);
-      frame = h('iframe', { src, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
+      // sandbox：嵌入的網頁不能把整個黑板樹換成別的網頁（沒有 allow-top-navigation）、不能自動下載檔案
+      frame = h('iframe', { src, sandbox: EMBED_SANDBOX, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
       if (info.kind === 'youtube') {
         playing = autoplay;
         // 讓 YouTube 回報播放狀態

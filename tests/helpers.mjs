@@ -10,10 +10,12 @@ class MemoryStorage {
 }
 
 Object.defineProperty(globalThis, 'localStorage', { value: new MemoryStorage(), configurable: true, writable: true });
+Object.defineProperty(globalThis, 'sessionStorage', { value: new MemoryStorage(), configurable: true, writable: true });
 globalThis.window = globalThis;
+globalThis.self = globalThis; // static/vendor/nacl-fast.min.js 會掛在 self.nacl
 globalThis.document = { hidden: false };
 
-export const resetStorage = () => localStorage.clear();
+export const resetStorage = () => { localStorage.clear(); sessionStorage.clear(); };
 
 // 記憶體裡的資料夾，介面同 FsaAdapter／NeuAdapter（路徑以 / 分隔、相對於根資料夾）
 export class MemFs {

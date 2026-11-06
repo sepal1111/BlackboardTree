@@ -46,6 +46,25 @@ export const LS = {
   },
 };
 
+// 只在這次開啟期間有效的資料（關掉黑板樹或瀏覽器分頁就清除），例如手機遙控代碼
+const ssMem = new Map();
+export const SS = {
+  get(k, d) {
+    try {
+      const v = globalThis.sessionStorage ? sessionStorage.getItem(k) : ssMem.get(k);
+      return v ? JSON.parse(v) : d;
+    } catch { return d; }
+  },
+  set(k, v) {
+    const s = JSON.stringify(v);
+    try { if (globalThis.sessionStorage) sessionStorage.setItem(k, s); else ssMem.set(k, s); } catch { ssMem.set(k, s); }
+  },
+  del(k) {
+    ssMem.delete(k);
+    try { globalThis.sessionStorage?.removeItem(k); } catch { /* ignore */ }
+  },
+};
+
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 export class Store extends EventTarget {

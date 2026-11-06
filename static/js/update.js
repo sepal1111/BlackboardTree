@@ -1,7 +1,7 @@
 // 檢查新版本與下載更新
 // 新版本的資訊放在 GitHub 上的 desktop/out/latest.json（由 desktop\build.ps1 產生，和 exe 一起 commit）。
 // 用 raw.githubusercontent.com 讀取：允許跨網域、沒有 GitHub API 每小時 60 次的限制（全校共用一個對外 IP 時也不怕）。
-// 下載後比對 latest.json 裡的大小與 SHA-256，確認檔案完整才安裝。
+// 下載後比對 latest.json 裡的大小與 SHA-256，確認檔案完整才安裝；latest.json 本身有數位簽章（見 verifyManifest）。
 
 export const UPDATE_URL = 'https://raw.githubusercontent.com/sepal1111/BlackboardTree/main/desktop/out/latest.json';
 export const RELEASES_PAGE = 'https://github.com/sepal1111/BlackboardTree/releases';
@@ -55,8 +55,32 @@ export function notesSince(manifest, current) {
     .sort((a, b) => compareVersions(b.version, a.version));
 }
 
+// ---- 數位簽章：latest.json 由發布者的私鑰簽章（desktop/make-latest.mjs），程式內建公鑰驗證
+// 就算 GitHub 上的檔案被竄改，沒有私鑰就做不出正確的簽章，黑板樹不會下載更新
+// 公鑰：ECDSA P-256（SPKI，Base64）；私鑰放在發布者電腦的 %USERPROFILE%\.blackboardtree\update-signing-key.pem
+export const UPDATE_PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN0e2TyDZedFopHaACHHwB4GtiYZ9bMBrazejUmaAlsZE8tJxPByAy3BDZjTlXfCPTcqegh2Ojmy62XlY19iElw==';
+
+// 簽章的內容：latest.json 去掉 signature 後的精簡 JSON（欄位順序與檔案相同）
+export function signedPayload(json) {
+  const { signature, ...rest } = json || {};
+  return JSON.stringify(rest);
+}
+
+const b64bytes = (s) => Uint8Array.from(atob(String(s)), (c) => c.charCodeAt(0));
+
+export async function verifyManifest(json, publicKey = UPDATE_PUBLIC_KEY) {
+  try {
+    if (!json || typeof json.signature !== 'string') return false;
+    const subtle = globalThis.crypto.subtle;
+    const key = await subtle.importKey('spki', b64bytes(publicKey), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    return await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, b64bytes(json.signature), new TextEncoder().encode(signedPayload(json)));
+  } catch {
+    return false;
+  }
+}
+
 // 檢查是否有新版本；回傳 { current, latest, newer, manifest, url }
-export async function checkForUpdate({ current, url = UPDATE_URL, fetchFn = globalThis.fetch } = {}) {
+export async function checkForUpdate({ current, url = UPDATE_URL, fetchFn = globalThis.fetch, publicKey = UPDATE_PUBLIC_KEY } = {}) {
   const sep = url.includes('?') ? '&' : '?';
   let res;
   try {
@@ -67,6 +91,7 @@ export async function checkForUpdate({ current, url = UPDATE_URL, fetchFn = glob
   if (!res.ok) throw new Error(`無法取得版本資訊（${res.status}）`);
   let json;
   try { json = await res.json(); } catch { throw new Error('版本資訊的格式不正確'); }
+  if (!(await verifyManifest(json, publicKey))) throw new Error('版本資訊的數位簽章不正確，為了安全不會更新。請到 GitHub 下載頁面確認');
   const manifest = normalizeManifest(json);
   return { current, latest: manifest.version, newer: compareVersions(manifest.version, current) > 0, manifest, url };
 }

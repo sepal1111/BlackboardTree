@@ -3,8 +3,14 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   compareVersions, parseVersion, normalizeManifest, notesSince, checkForUpdate, downloadVerified,
-  sha256Hex, shouldAutoCheck, updateScript, encodePowerShell, plainNote,
+  sha256Hex, shouldAutoCheck, updateScript, encodePowerShell, plainNote, verifyManifest, signedPayload, UPDATE_PUBLIC_KEY,
 } from '../static/js/update.js';
+import { generateKeyPairSync, sign } from 'node:crypto';
+
+// 測試用的簽章金鑰（正式的私鑰只在發布者的電腦上）
+const { privateKey: TEST_KEY, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const TEST_PUB = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+const signed = (obj, key = TEST_KEY) => ({ ...obj, signature: sign('sha256', Buffer.from(signedPayload(obj)), { key, dsaEncoding: 'ieee-p1363' }).toString('base64') });
 
 const SHA = 'a'.repeat(64);
 const manifest = (over = {}) => ({
@@ -72,18 +78,32 @@ test('更新內容只列出比目前新的版本，新的在前', () => {
 describe('檢查更新', () => {
   test('有新版本', async () => {
     let asked = '';
-    const r = await checkForUpdate({ current: '1.4.0', url: 'https://x/latest.json', fetchFn: async (u) => { asked = u; return jsonRes(manifest()); } });
+    const r = await checkForUpdate({ current: '1.4.0', url: 'https://x/latest.json', fetchFn: async (u) => { asked = u; return jsonRes(signed(manifest())); }, publicKey: TEST_PUB });
     assert.equal(r.newer, true);
     assert.equal(r.latest, '1.5.0');
     assert.match(asked, /^https:\/\/x\/latest\.json\?t=\d+$/, '加上時間參數避開快取');
   });
   test('已經是最新版', async () => {
-    const r = await checkForUpdate({ current: '1.5.0', fetchFn: async () => jsonRes(manifest()) });
+    const r = await checkForUpdate({ current: '1.5.0', fetchFn: async () => jsonRes(signed(manifest())), publicKey: TEST_PUB });
     assert.equal(r.newer, false);
   });
   test('連不上或伺服器錯誤時給看得懂的訊息', async () => {
     await assert.rejects(checkForUpdate({ current: '1.0.0', fetchFn: async () => { throw new TypeError('Failed to fetch'); } }), /無法連線到 GitHub/);
     await assert.rejects(checkForUpdate({ current: '1.0.0', fetchFn: async () => jsonRes({}, 404) }), /404/);
+  });
+  test('數位簽章：沒有簽章、內容被改過、別人的金鑰簽的都拒絕', async () => {
+    const check = (json) => checkForUpdate({ current: '1.0.0', fetchFn: async () => jsonRes(json), publicKey: TEST_PUB });
+    await assert.rejects(check(manifest()), /數位簽章/);
+    const tampered = signed(manifest());
+    tampered.setup.sha256 = 'b'.repeat(64);
+    await assert.rejects(check(tampered), /數位簽章/);
+    const other = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey;
+    await assert.rejects(check(signed(manifest(), other)), /數位簽章/);
+    assert.equal(await verifyManifest(signed(manifest()), TEST_PUB), true);
+    assert.equal(await verifyManifest(signed(manifest())), false, '預設用程式內建的正式公鑰');
+  });
+  test('程式內建正式的公鑰（ECDSA P-256）', () => {
+    assert.match(UPDATE_PUBLIC_KEY, /^MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE[A-Za-z0-9+/]{86}==$/);
   });
 });
 

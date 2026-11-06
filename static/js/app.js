@@ -45,8 +45,8 @@ async function boot() {
     initTray();
   }
   S.config = DESKTOP ? null : await api.get('/api/config').catch(() => null);
-  // 桌面版：開啟黑板樹時一起啟動內建遙控伺服器，關閉時一起關閉
-  if (DESKTOP) startLocalRelay().catch((e) => console.warn(e));
+  // 桌面版的內建遙控伺服器：按「📱 遙控」或開放學生投票時才啟動（ensureRemote），關閉黑板樹時一起關閉
+  // 不在開啟時就啟動：沒用遙控的時候，校內網路連不到這台電腦
   let choice = LS.get(CHOICE_KEY, null);
   if (!choice && LS.get('ms:guest', false)) choice = { kind: 'local' }; // 舊版訪客模式
   if (!choice && DESKTOP) choice = { kind: 'neu', path: DESKTOP_ROOT };
@@ -108,7 +108,9 @@ async function connect(backend, choice) {
   S.ui = normalizeUi(settings.ui, TOOL_TYPES); // 工具列位置、圖示大小、顯示的工具（跟著老師）
   applyUi();
   renderStatus();
-  if (relayBase() === LOCAL) ensureRemote().catch(() => {});
+  // 遙控伺服器等老師按「📱 遙控」或開放學生投票時才啟動；舊版把代碼永久存在 LS，清掉
+  LS.del('ms:remote');
+  LS.del('ms:voteCode');
   renderRemoteBtn();
   if (S.store.remote) S.pollTimer = setInterval(() => S.store?.poll(S.board).catch(() => {}), 8000);
   showBoards();
@@ -141,7 +143,7 @@ function showStart(message) {
       status.textContent = '檢查中…';
       if (await drive.exists('')) {
         try { await connectFolder(drive, { kind: 'neu', path: DESKTOP_ROOT }); } catch (e) { fail(e); status.textContent = ''; }
-      } else status.textContent = `尚未連線 ${drive.label}，請先用「網路磁碟機」程式登入，再按「重新檢查」。`;
+      } else status.textContent = `找不到 ${drive.label}。請先登入學校的網路磁碟機，再按「重新檢查」；或按「選擇其他資料夾」。`;
     };
     options.push(h('div', { class: 'opt main' },
       h('div', { class: 'opt-title' }, `📁 我的網路磁碟機（${drive.label}）`),
@@ -194,12 +196,12 @@ function showStart(message) {
   options.push(h('div', { class: 'opt' },
     h('div', { class: 'opt-title' }, '💻 只存在這台電腦'),
     h('div', { class: 'row-btns' },
-      h('span', { class: 'opt-status grow' }, '不會同步到其他裝置'),
+      h('span', { class: 'opt-status grow' }, '換到別的教室電腦就看不到這些白板'),
       h('button', { class: 'btn', onclick: () => connect(new LocalBackend(), { kind: 'local' }) }, '使用'))));
 
   screen(h('div', { class: 'login-card wide' },
     h('div', { class: 'logo' }, h('img', { src: 'logo.svg', alt: '' }), ' 黑板樹'),
-    h('p', { class: 'muted' }, '請選擇白板要儲存在哪裡。選過一次後，下次開啟會自動讀取。'),
+    h('p', { class: 'muted' }, '請選擇白板要存放在哪裡（存在網路磁碟機，到每間教室都能打開同樣的白板）。選過一次後，下次開啟會自動讀取。'),
     options, err));
 }
 
@@ -230,11 +232,11 @@ function showBoards() {
   screen(h('div', { class: 'login-card boards' },
     h('div', { class: 'boards-head' },
       h('div', null, h('h2', null, '選擇白板'),
-        h('div', { class: 'muted' }, '儲存位置：', h('b', null, `${icon} ${store.backend.label}`),
-          store.status === 'offline' ? h('span', { class: 'warn-text' }, '（目前無法連線，顯示的是這台電腦的暫存）') : null)),
+        h('div', { class: 'muted' }, '白板存放在：', h('b', null, `${icon} ${store.backend.label}`),
+          store.status === 'offline' ? h('span', { class: 'warn-text' }, '（目前連不上網路磁碟機，先顯示這台電腦暫存的白板，連上後會自動存回去）') : null)),
       h('div', { class: 'row-btns' },
         store.remote ? h('button', { class: 'btn', onclick: async () => { await store.listBoards(); showBoards(); } }, '↻ 重新整理') : null,
-        h('button', { class: 'btn', onclick: () => leaveStorage() }, '更換儲存位置'))),
+        h('button', { class: 'btn', onclick: () => leaveStorage() }, '更換存放位置'))),
     list.length ? null : h('p', { class: 'muted' }, '這裡還沒有白板，先建立一個吧！'),
     grid));
 }
@@ -253,6 +255,7 @@ function openBoard(board) {
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
   renderBoard();
+  fitDockLabels(); // 工具列剛顯示出來，這時才量得到寬度
 }
 
 function closeBoard() {
@@ -313,11 +316,11 @@ function applyBackground() {
 function renderStatus() {
   const el = $('#sync');
   if (!S.store) return;
-  if (!S.store.remote) { el.textContent = '💻 僅存在此電腦'; el.className = 'pill warn'; el.title = '改用網路磁碟機儲存才能跨裝置使用'; return; }
+  if (!S.store.remote) { el.textContent = '💻 僅存在此電腦'; el.className = 'pill warn'; el.title = '白板只存在這台電腦，換到別的教室電腦就看不到；改存到網路磁碟機才能到處使用'; return; }
   const map = { synced: ['✔ 已儲存', 'pill ok'], saving: ['⏳ 儲存中…', 'pill'], offline: ['⚠️ 無法連線，稍後重試', 'pill warn'] };
   const [t, c] = map[S.store.status] || map.synced;
   el.textContent = t; el.className = c;
-  el.title = `儲存位置：${S.store.backend.label}`;
+  el.title = `白板存放在：${S.store.backend.label}`;
 }
 
 function renderTopbar() {
@@ -339,7 +342,24 @@ function renderDock() {
     dock.append(h('button', { class: 'dock-btn', title: def.title, onclick: () => addWidget(def.type) },
       toolIcon(def, 'di'), h('span', { class: 'dl' }, def.title)));
   }
+  fitDockLabels();
 }
+
+// 工具列文字「自動」：先顯示文字，放不下（需要捲動）才改成只顯示圖示
+// 教室觸控螢幕沒有滑鼠停留提示，看得到文字比較好找
+function fitDockLabels() {
+  const body = document.body;
+  if (S.ui.labels !== 'auto') { delete body.dataset.dockFit; return; }
+  const dock = $('#dock-items');
+  if (!dock.clientWidth) return; // 工具列還沒顯示（選擇白板畫面），開啟白板時再量
+  body.dataset.dockFit = 'labels';
+  const vertical = body.dataset.dock === 'left' || body.dataset.dock === 'right';
+  const over = vertical ? dock.scrollHeight > dock.clientHeight + 1 : dock.scrollWidth > dock.clientWidth + 1;
+  if (over) body.dataset.dockFit = 'icons';
+}
+let dockFitT = 0;
+window.addEventListener('resize', () => { cancelAnimationFrame(dockFitT); dockFitT = requestAnimationFrame(fitDockLabels); });
+document.fonts?.ready.then(() => fitDockLabels()); // 字型載入後文字寬度可能改變
 
 // 套用畫面偏好：工具列位置、圖示大小、顯示的工具
 function applyUi() {
@@ -439,6 +459,32 @@ function removeWidget(id) {
   save();
 }
 
+// 老師按 ✕（或手機遙控）關閉小工具：先移除，10 秒內可以按「復原」救回來（不小心按到時不會整個不見）
+function closeWidget(id) {
+  const w = S.board?.data.widgets.find((x) => x.id === id);
+  if (!w) return;
+  const copy = structuredClone(w);
+  removeWidget(id);
+  offerUndo([copy], `已移除「${widgets[copy.type]?.title || '小工具'}」`);
+}
+
+function offerUndo(list, text) {
+  const boardId = S.board?.id;
+  const undo = () => {
+    if (!S.board || S.board.id !== boardId) return toast('已經換到別的白板，無法復原');
+    for (const w of list) {
+      if (S.board.data.widgets.some((x) => x.id === w.id)) continue;
+      S.board.data.widgets.push(w);
+      mountWidget(w);
+    }
+    $('#empty-hint').classList.toggle('hidden', S.board.data.widgets.length > 0);
+    save();
+    S.remote?.push();
+    toast('已復原');
+  };
+  toast(h('span', null, text + '　', h('button', { class: 'toast-undo', onclick: undo }, '↶ 復原')), 10000);
+}
+
 // 把小工具放大到至少 size（佔畫面比例），並保持在畫面內
 function fitWidget(w, { w: minW = 0, h: minH = 0 } = {}) {
   if (w.w >= minW && w.h >= minH) return;
@@ -457,7 +503,7 @@ function voteApi(w) {
   const mine = () => S.remote?.poll?.id === w.id;
   return {
     async open(poll) {
-      if (relayBase() === LOCAL && !S.remote) toast('正在啟動伺服器…', 1500);
+      if (relayBase() === LOCAL && !S.remote) toast('正在開啟學生投票…', 1500);
       const r = await ensureRemote();
       if (!r) throw new Error('網頁版要用黑板樹伺服器（start.bat）開啟，才能讓學生投票');
       if (r.poll && r.poll.id !== w.id) toast('已結束另一個投票，改為開放這一題');
@@ -521,7 +567,7 @@ function mountWidget(w) {
   head.addEventListener('click', (e) => {
     const act = e.target.closest('button')?.dataset.act;
     if (act === 'max') toggleMax(w.id);
-    if (act === 'close') removeWidget(w.id);
+    if (act === 'close') closeWidget(w.id);
     if (act === 'dup') addWidget(w.type, w);
     if (act === 'settings') openSettings(w, def, inst);
   });
@@ -726,7 +772,7 @@ function settingsDialog(tab = 'board') {
         h('small', { class: 'muted' }, '螢幕解析度較低（例如筆電、投影機）時可選「迷你」或「小」；在教室大電視上可以選「大」或「特大」。')),
       sec('工具列文字',
         seg(LABEL_MODES, ui.labels, (v) => update({ ...ui, labels: v })),
-        h('small', { class: 'muted' }, '「自動」：視窗寬度小於 1280 或高度小於 800 時只顯示圖示，滑鼠移到圖示上會顯示名稱。')),
+        h('small', { class: 'muted' }, '「自動」：放得下就顯示文字，工具太多放不下時才只顯示圖示（滑鼠移到圖示上會顯示名稱）。')),
       sec('畫布格線',
         seg(GRID_SIZES, ui.grid, (v) => update({ ...ui, grid: v })),
         ui.grid !== 'off' ? seg(GRID_SHOW, ui.gridShow, (v) => update({ ...ui, gridShow: v })) : null,
@@ -802,7 +848,7 @@ function userMenu(anchor) {
     { label: `${{ folder: '📁', local: '💻' }[b.kind]} ${b.label}`, onClick: () => {} },
     ...(S.store.remote ? [{ label: '🔄 立即檢查更新', onClick: () => S.store.poll(S.board).then(() => toast("已檢查更新"), (e) => toast(e.message)) }] : []),
     '-',
-    { label: '更換儲存位置', onClick: () => leaveStorage() },
+    { label: '更換白板存放位置', onClick: () => leaveStorage() },
   ]);
 }
 
@@ -1156,9 +1202,9 @@ function onLocalIpsChanged(info) {
 let trayTimer = 0;
 function trayStatus() {
   const info = S.relayInfo;
-  if (!info) return S.localRelay ? '遙控伺服器：啟動中…' : '遙控伺服器：未啟動';
+  if (!info) return S.localRelay ? '手機遙控：開啟中…' : '手機遙控：未開啟';
   const pub = S.remote?.local ? S.remote.publicBase.replace(/^https?:\/\//, '') : `${info.ips[0] || '127.0.0.1'}:${info.port}`;
-  return `遙控伺服器：執行中（${pub}）`;
+  return `手機遙控：已開啟（${pub}）`;
 }
 function updateTray() {
   if (!DESKTOP) return;
@@ -1172,7 +1218,7 @@ function updateTray() {
       { id: 'remote', text: '手機遙控（顯示 QR Code）' },
       { id: 'show', text: '顯示黑板樹' },
       { text: '-' },
-      { id: 'quit', text: '結束黑板樹（同時關閉遙控伺服器）' },
+      { id: 'quit', text: '結束黑板樹' },
     ];
     window.Neutralino.os.setTray({ icon: '/resources/icon.png', menuItems: items }).catch(() => {});
   }, 150);
@@ -1249,7 +1295,7 @@ async function remoteCmd(m) {
     } else if (m.action === 'add' && S.board && widgets[args.type]) {
       addWidget(args.type);
     } else if (m.action === 'close' && S.board) {
-      removeWidget(args.widgetId);
+      closeWidget(args.widgetId);
     } else if (m.action === 'max' && S.board) {
       toggleMax(S.maxId === args.widgetId ? null : args.widgetId, { fromRemote: true });
     } else if (m.action === 'url') {
@@ -1320,9 +1366,27 @@ async function ensureRemote() {
     S.remote.addEventListener('vote', voteChanged);
     S.remote.addEventListener('change', voteChanged);
     S.remote.addEventListener('joined', () => toast('📱 遙控裝置已連線'));
+    S.remote.addEventListener('join-request', (e) => askJoin(S.remote, e.detail));
     S.remote.start();
   }
   return S.remote;
+}
+
+// 新的手機要求遙控：在電視上問老師（60 秒沒有回應，伺服器會自動拒絕並送 join-gone）
+function askJoin(r, { id, device }) {
+  let answered = false;
+  const answer = (ok) => { if (!answered) { answered = true; r.answerJoin(id, ok); } };
+  const onGone = (e) => { if (e.detail.id === id) { answered = true; dlg.close(); } };
+  r.addEventListener('join-gone', onGone);
+  const dlg = modal({
+    title: '📱 有裝置要求遙控這台電腦',
+    body: h('div', { class: 'join-ask' },
+      h('div', { class: 'join-device' }, device || '不明裝置'),
+      h('p', null, '是你剛剛掃描 QR Code 的手機嗎？'),
+      h('p', { class: 'muted' }, '允許後，這台裝置可以操作白板、開啟網址、加減分，也看得到班級名單。只允許老師自己的裝置；不確定就按「拒絕」。')),
+    actions: [{ label: '拒絕', onClick: () => answer(false) }, { label: '允許', primary: true, onClick: () => answer(true) }],
+    onClose: () => { answer(false); r.removeEventListener('join-gone', onGone); },
+  });
 }
 
 function renderRemoteBtn() {
@@ -1343,16 +1407,16 @@ async function remoteDialog() {
 
 async function openRemoteDialog() {
   let r;
-  if (relayBase() === LOCAL && !S.remote) toast('正在啟動遙控伺服器…', 1500);
-  try { r = await ensureRemote(); } catch (e) { return toast('無法啟動遙控伺服器：' + e.message, 5000); }
+  if (relayBase() === LOCAL && !S.remote) toast('正在開啟手機遙控…', 1500);
+  try { r = await ensureRemote(); } catch (e) { return toast('手機遙控無法開啟（' + e.message + '），請關閉黑板樹後重新開啟', 6000); }
   if (!r) return toast('網頁版要用黑板樹伺服器（start.bat）開啟，才能使用手機遙控', 5000);
   const box = h('div', { class: 'remote-box' });
   const render = () => {
     box.innerHTML = '';
     if (r.status !== 'online') {
       box.append(h('div', { class: 'remote-wait' }, r.status === 'error'
-        ? [h('div', null, `無法連線到遙控伺服器（${r.local ? '這台電腦' : r.base}），正在重試…`),
-          h('div', { class: 'muted' }, r.local ? '內建遙控伺服器沒有回應，請關閉黑板樹後重新開啟。' : '請確認黑板樹伺服器（start.bat）仍在執行。')]
+        ? [h('div', null, '手機遙控還沒準備好，正在重試…'),
+          h('div', { class: 'muted' }, r.local ? '等很久還是這樣的話，請關閉黑板樹後重新開啟。' : `請確認黑板樹伺服器（start.bat，${r.base}）仍在執行。`)]
         : '連線中…'));
       return;
     }
@@ -1366,7 +1430,7 @@ async function openRemoteDialog() {
     // 電腦有多個網路位址時（例如同時接有線和無線），可以切換 QR Code 用的位址
     const port = r.publicBase.split(':').pop();
     const ips = r.local ? (S.localIps || []) : (r.lanIps || []);
-    const ipSwitch = ips.length > 1 ? h('div', { class: 'remote-ips' }, h('span', { class: 'muted' }, '手機連不上時，可改用其他網址：'),
+    const ipSwitch = ips.length > 1 ? h('div', { class: 'remote-ips' }, h('span', { class: 'muted' }, '掃描後一直連不上？這台電腦接了好幾個網路，可以換一個試試：'),
       ips.map((ip) => h('button', { class: 'chip' + (r.publicBase.includes('//' + ip + ':') ? ' on' : ''), onclick: () => {
         LS.set('ms:remoteIp', ip); r.publicBase = r.publicBase.replace(/\/\/[^/:]+/, '//' + ip); render(); updateTray();
         window.dispatchEvent(new Event('ms-vote')); // 投票的 QR Code 也跟著換
@@ -1374,14 +1438,18 @@ async function openRemoteDialog() {
     box.append(
       qr,
       h('div', { class: 'remote-info' },
-        h('div', { class: 'muted' }, '用手機或平板掃描 QR Code，或開啟下方網址並輸入代碼'),
+        h('ol', { class: 'remote-steps' },
+          h('li', null, '手機連上學校的 Wi-Fi，用相機掃描這個 QR Code'),
+          h('li', null, '電視上跳出詢問時，確認是你的手機，按「允許」')),
+        h('div', { class: 'muted remote-tip' }, '這是老師專用的遙控，不要讓學生拍到 QR Code。每次開啟黑板樹都會換新的。'),
+        h('div', { class: 'muted' }, '手機沒辦法掃描時：用手機瀏覽器開啟下面的網址，再輸入代碼'),
         h('div', { class: 'remote-code' }, r.code.slice(0, 3) + ' ' + r.code.slice(3)),
         h('div', { class: 'remote-url' }, `${r.publicBase}/remote.html`),
         ipSwitch,
-        r.local ? h('div', { class: 'muted remote-tip' }, '由這台電腦擔任遙控伺服器：手機要連上校內網路。若一直連不上，可能被 Windows 防火牆擋住，請資訊組協助（安裝時勾選「允許手機連線」）。') : null,
+        r.local ? h('div', { class: 'muted remote-tip' }, '一直連不上時：確認手機用的是學校網路（不是 4G／5G 行動網路）；還是不行，可能是電腦的防火牆擋住了，請資訊組協助（安裝時勾選「允許手機連線」）。') : null,
         h('div', { class: 'remote-count' }, r.remotes ? `📱 目前有 ${r.remotes} 台裝置連線` : '尚無裝置連線'),
         h('div', { class: 'row-btns' },
-          h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有遙控裝置，並更換新代碼'); } }, '中斷全部並換代碼'))));
+          h('button', { class: 'btn danger', onclick: () => { r.kick(); toast('已中斷所有手機，QR Code 也換新了'); } }, '中斷所有手機並換新代碼'))));
   };
   render();
   // 手機連上後自動關閉，讓電視畫面回到白板
@@ -1403,9 +1471,12 @@ $('#user-btn').addEventListener('click', (e) => userMenu(e.currentTarget));
 $('#clear-btn').addEventListener('click', async () => {
   if (!S.board.data.widgets.length) return;
   if (await confirmDialog('要移除這個白板上的所有小工具嗎？', '全部移除', true)) {
+    const copies = structuredClone(S.board.data.widgets);
+    if (S.remote?.poll && copies.some((w) => w.id === S.remote.poll.id)) S.remote.closePoll();
     S.board.data.widgets = [];
     renderBoard();
     save();
+    offerUndo(copies, `已移除 ${copies.length} 個小工具`);
   }
 });
 $('#hide-btn').addEventListener('click', () => { document.body.classList.toggle('chrome-hidden'); S.remote?.push(); });

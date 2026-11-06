@@ -1,6 +1,7 @@
 // 黑板樹手機遙控頁：掃描電視上的 QR Code 後開啟
 import { h } from './ui.js';
 import { fmtDuration, pad, fmtHM, examStatus, fmtSeats } from './widgets/util.js';
+import { seal, open, newPair, unwrapKey, parseHash, KEY_RE } from './remote-crypto.js';
 
 const $ = (s) => document.querySelector(s);
 let ws = null;
@@ -14,10 +15,38 @@ let wasOnline = false; // 曾經連上過：教室電腦重開黑板樹時會自
 let errRetry = 0;
 const cards = new Map(); // widgetId -> { el, key }
 
+// 這台手機的識別碼：老師允許過之後，斷線重連不用再問（換代碼後要重新允許）
+function deviceKey() {
+  try {
+    let k = localStorage.getItem('bt:remoteKey');
+    if (!/^[\w-]{16,64}$/.test(k || '')) {
+      const b = crypto.getRandomValues(new Uint8Array(18));
+      k = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      localStorage.setItem('bt:remoteKey', k);
+    }
+    return k;
+  } catch { return ''; }
+}
+const myKey = deviceKey();
+let waiting = false; // 等老師允許中：不送指令
+let key = '';          // 這組代碼的加密金鑰（QR Code 網址裡，或老師允許時交換取得）
+let pair = null;       // 手動輸入代碼、沒有金鑰時的一次性金鑰對
+
+// 記住最近一組代碼的金鑰：重新整理、斷線重連時不用再交換
+function savedKey(c) {
+  try { const v = JSON.parse(localStorage.getItem('bt:remoteK') || 'null'); return v && v.code === c && KEY_RE.test(v.key || '') ? v.key : ''; } catch { return ''; }
+}
+function saveKey(c, k) {
+  try { localStorage.setItem('bt:remoteK', JSON.stringify({ code: c, key: k })); } catch { /* 無痕模式等存不了也沒關係 */ }
+}
+
 // ------------------------------------------------------------ 連線
 function start() {
-  const fromHash = decodeURIComponent(location.hash.slice(1)).replace(/\D/g, '');
-  if (fromHash.length === 6) return connect(fromHash);
+  const fromHash = parseHash(location.hash);
+  if (fromHash.code) {
+    if (fromHash.key) saveKey(fromHash.code, fromHash.key);
+    return connect(fromHash.code);
+  }
   showJoin();
 }
 
@@ -40,10 +69,13 @@ $('#join-form').addEventListener('submit', (e) => {
 
 function connect(c) {
   code = c;
+  key = savedKey(c);
+  // 沒有金鑰（手動輸入代碼）：帶一次性公鑰，老師允許時交換金鑰
+  if (!key && !pair) pair = newPair();
   $('#join').classList.add('hidden');
   $('#main').classList.remove('hidden');
   setConn('連線中…', '');
-  const sock = new WebSocket(location.origin.replace(/^http/, 'ws') + '/ws/remote?code=' + c);
+  const sock = new WebSocket(location.origin.replace(/^http/, 'ws') + '/ws/remote?code=' + c + (myKey ? '&key=' + myKey : '') + (key ? '' : '&pk=' + pair.publicKey));
   ws = sock;
   sock.onmessage = (e) => {
     let m;
@@ -53,11 +85,27 @@ function connect(c) {
       if (wasOnline && errRetry < 8) { errRetry++; setConn('等待教室電腦…', 'bad'); return; }
       stopped = true; showJoin(m.message);
     }
+    else if (m.type === 'wait') { waiting = true; setConn('請老師在電視上按「允許」…', 'wait'); }
     else if (m.type === 'kicked') { stopped = true; showJoin('老師已中斷遙控連線，請重新掃描電視上的 QR Code'); }
-    else if (m.type === 'hello') { retry = 0; errRetry = 0; wasOnline = true; online = m.online; if (m.state) setState(m.state); updateConn(); }
+    else if (m.type === 'hello') {
+      if (!key && m.key) { key = unwrapKey(m.key, pair); if (key) { saveKey(c, key); pair = null; } }
+      if (!key) { stopped = true; sock.close(); showJoin('無法建立加密連線，請掃描電視上的 QR Code'); return; }
+      waiting = false; retry = 0; errRetry = 0; wasOnline = true; online = m.online;
+      const st = m.state ? open(m.state, key) : null; // 剛換代碼時可能還是舊的內容，解不開就等下一次
+      if (st) setState(st);
+      updateConn();
+    }
     else if (m.type === 'screen') { online = m.online; updateConn(); }
-    else if (m.type === 'state') { online = true; setState(m.state); updateConn(); }
-    else if (m.type === 'notice') toast(m.text);
+    else if (m.type === 'state') {
+      const st = open(m.state, key);
+      if (!st) { setConn('無法解密，請重新掃描 QR Code', 'bad'); return; }
+      online = true; setState(st); updateConn();
+    }
+    else if (m.type === 'notice') {
+      // 教室電腦的提示有加密（box）；遙控伺服器自己的提示（例如「教室電腦目前沒有連線」）沒有
+      const text = m.box ? open(m.box, key)?.text : m.text;
+      if (text) toast(String(text));
+    }
   };
   sock.onclose = () => {
     if (ws !== sock || stopped) return;
@@ -72,7 +120,9 @@ function updateConn() { if (online) setConn('● 已連線', 'ok'); else setConn
 
 function send(target, action, args = {}, widgetId) {
   if (ws?.readyState !== 1) return toast('尚未連線');
-  ws.send(JSON.stringify({ type: 'cmd', target, action, args, widgetId }));
+  if (waiting) return toast('請先等老師在電視上按「允許」');
+  if (!key) return toast('尚未建立加密連線');
+  ws.send(JSON.stringify({ type: 'cmd', box: seal({ target, action, args, widgetId }, key) }));
   navigator.vibrate?.(8);
 }
 const wcmd = (w, action, args) => send('widget', action, args, w.id);

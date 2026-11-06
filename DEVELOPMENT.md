@@ -115,7 +115,8 @@ npm test
 |---|---|
 | `roster.test.mjs` | 名單匯入的欄位自動判斷、貼上文字解析、照片檔名比對（學號／姓名／座號）、學生改名時小工具狀態跟著改 |
 | `store.test.mjs` | `V:\MyScreen` 檔案格式、rev 與衝突（409）、兩台電腦同時修改、網路磁碟機斷線時的離線備份與補存、其他電腦的修改（poll）、舊格式名單 |
-| `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、指令、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
+| `remote-crypto.test.mjs` | 手機遙控的加密：加密／解密、金鑰不對或內容被改過時拒絕、用手機公鑰交換金鑰、解析 QR Code 網址的 # |
+| `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、加密的狀態與指令、換代碼換金鑰、允許時交換金鑰、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
 | `poll-bank.test.mjs` | 投票題目匯入（文字、Excel 貼上、Excel／CSV 的列）、題庫去除重複、投票紀錄（指紋、上限）、匯出 CSV（BOM、逗號、引號、公式開頭） |
 | `ui-prefs.test.mjs` | 畫面偏好（工具列位置、圖示大小、顯示的工具）的檢查與切換 |
 | `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
@@ -131,7 +132,7 @@ npm test
 node desktop/relay/test-relay.mjs
 ```
 
-33 項協定測試（取得代碼、指令轉送、斷線重連、中斷全部、8 台上限、學生投票、父程序結束自動關閉等）。要先建置過（測的是 `desktop/resources/myscreen-relay.exe`）。
+49 項協定測試（取得代碼、提供加密程式檔、新裝置要老師允許／拒絕、沒有金鑰的手機交換金鑰、加密的指令與提示原樣轉送、允許過的裝置重連不用再問、換代碼後要重新允許、等待允許最多 3 台、其他電腦不能連 `/ws/screen`、只連線不送資料 10 秒後斷線、指令轉送、斷線重連、中斷全部、8 台上限、學生投票、父程序結束自動關閉等）。要先建置過（測的是 `desktop/resources/myscreen-relay.exe`）。
 
 ### 版本號與發佈
 
@@ -157,6 +158,11 @@ node desktop/relay/test-relay.mjs
 
 檢查更新的運作方式（`static/js/update.js`）：
 
+- **`latest.json` 有數位簽章**（1.9.1 起）：`make-latest.mjs` 用發布者的私鑰（ECDSA P-256）簽「去掉 `signature` 的精簡 JSON」，黑板樹用內建的 `UPDATE_PUBLIC_KEY` 驗證，簽章不對就不更新。就算有人改了 GitHub 上的檔案，沒有私鑰也做不出能讓黑板樹安裝的版本
+  - 私鑰：`%USERPROFILE%\.blackboardtree\update-signing-key.pem`（可用環境變數 `BT_SIGNING_KEY` 指定別的位置），**不能放進 git，一定要備份**（例如加密的隨身碟、密碼管理器）。遺失私鑰，已安裝的黑板樹就再也無法自動更新，只能請老師手動下載新版
+  - 換電腦發布：把備份的私鑰放回上面的位置即可。沒有私鑰或私鑰和 `UPDATE_PUBLIC_KEY` 不是同一組時，`build.ps1` 的最後一步會失敗
+  - 第一次（或私鑰外洩要換一組）：`node desktop/make-latest.mjs --init-key` 產生私鑰（已存在時不會覆蓋），把印出的公鑰貼到 `update.js` 的 `UPDATE_PUBLIC_KEY`。換了公鑰之後，舊版黑板樹只認舊公鑰，必須先讓大家手動更新到含新公鑰的版本
+  - 測試假版本資訊時，`checkForUpdate({ publicKey })` 可以傳入測試用的公鑰（見 `tests/update.test.mjs`）
 - 下載的檔案和 `latest.json` 在同一個資料夾，會比對大小與 SHA-256，不符就不更新（避免 GitHub 還在更新、檔案不完整）
 - 安裝版（程式資料夾有 `unins000.exe`）：安裝程式存到 `%TEMP%`，用 PowerShell 等黑板樹結束後以 `/SILENT` 安裝，裝好後由安裝程式重新開啟（`setup.iss` 的 `IsInAppUpdate`：`/SILENT` 而不是 `/VERYSILENT` 時才開，資訊組大量部署不會開啟）；程式資料夾不能寫入（Program Files）時加 `/ALLUSERS`，會跳出 UAC
 - 免安裝版：新的 exe 先存成 `BlackboardTree.exe.new`，黑板樹結束後換掉原本的檔案並重新開啟
@@ -164,6 +170,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.9.1 | 資安：遙控要老師允許（`join-request`／`join-answer`）、代碼只在這次開啟有效（`SS`）、遙控內容加密（`remote-crypto.js`，tweetnacl）、relay 需要時才啟動、`/ws/screen` 只接受本機、連線數與逾時限制、iframe `sandbox`、`nativeAllowList` 縮小、`latest.json` 數位簽章；易用性：工具列文字依空間顯示（`fitDockLabels()`）、關閉小工具可復原（`offerUndo()`）、遙控視窗與儲存位置用語白話化 |
 | 1.9.0 | 畫布格線與對齊（`ui-prefs.js` 的 grid／gridShow、snapMove、snapResize）；文字小工具格式工具列、文字紀錄（`text-notes.js`，settings.textNotes）、排版（`textLayout()`、直式）、注音字型（vendor/fonts）、破音字（`bpmf.js` 的選擇符與 `autoReadings()`，詞庫在 tools/bpmf） |
 | 1.8.0 | 課堂加分每日紀錄（`points-log.js`，state.daily）、排行榜（累計／今天／指定區間）與匯出 CSV，歸零不清紀錄；各班使用過的工具（settings.classTools，`roster.js` 的 `recordClassTool`，設定 → 班級名單一鍵叫回）；考試時間自動縮放（`fit()` 以 em 為單位二分搜尋字體）、科目加大改深綠色 |
 | 1.7.0 | 新增「考試時間」小工具（`time.js` 的 `exam`；計算在 `util.js` 的 `examStatus`、`examAttendance`，手機遙控頁共用）：各節科目與起訖時間、自動倒數、結束前提醒、停筆提示、人數統計（應到／實到／缺考座號，可連結班級名單）、手機延長時間與點選缺考；`ui.js` 新增 24 小時制 `timePicker` |
@@ -198,6 +205,7 @@ static/                     前端（桌面版、網頁版共用）
   js/roster.js              班級名單：匯入 Excel/CSV/貼上、欄位對應、照片比對
   js/remote-host.js         教室電腦端的遙控連線（RemoteHost）
   js/remote.js              手機遙控頁的程式（各小工具的手機卡片 RENDER）
+  js/remote-crypto.js       手機遙控的加密（教室電腦與手機共用；vendor/nacl-fast.min.js）
   js/ui.js                  h()、modal、toast、選擇圖片等共用 UI
   js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具、畫布格線 grid／gridShow 與對齊計算 snapMove、snapResize）
   js/update.js              檢查新版本、下載並驗證、產生更新用的 PowerShell 指令
@@ -289,7 +297,8 @@ export const example = {
 
 - `app.js` 的 `settingsDialog(tab)`：分頁 `board`（白板）、`roster`（班級名單）、`dock`（工具列）、`poll`（投票）、`about`（關於與更新）。要加新分頁：在 `SETTING_TABS` 加一項，並在 `render()` 的對照表加上畫面函式
 - 白板操作（`switchBoard`、`newBoardAction`、`renameBoardAction`、`copyBoardAction`、`deleteBoardAction`）由上方白板選單與設定畫面共用
-- 工具列偏好：`setUi()` 立即套用（`applyUi()` 設定 `body[data-dock]`、`body[data-dock-labels]` 與 CSS 變數 `--dock-icon`）並存進 settings.json；位置的版面在 `app.css` 的 `body[data-dock=...]` 規則；工具列文字「自動」用 media query（寬度小於 1280 或高度小於 800 時隱藏），按鈕與工具列的內距跟著 `--dock-icon` 縮放
+- 工具列偏好：`setUi()` 立即套用（`applyUi()` 設定 `body[data-dock]`、`body[data-dock-labels]` 與 CSS 變數 `--dock-icon`）並存進 settings.json；位置的版面在 `app.css` 的 `body[data-dock=...]` 規則；工具列文字「自動」由 `fitDockLabels()` 量測：先顯示文字，工具列放不下（需要捲動）才設 `body[data-dock-fit=icons]` 只顯示圖示（1.9.1 以前是寬度小於 1280 或高度小於 800 就隱藏，1366×768 的教室螢幕會看不到文字；觸控螢幕沒有滑鼠停留提示）。視窗大小改變、開啟白板時重新量測（選擇白板畫面時工具列沒有顯示，量不到）。按鈕與工具列的內距跟著 `--dock-icon` 縮放
+- 關閉小工具：老師按 ✕、手機遙控關閉、「全部移除」都走 `closeWidget()`／`offerUndo()`，提示列顯示「↶ 復原」10 秒（換了白板就不能復原）。程式內部取代小工具（例如手機送來新影片）直接用 `removeWidget()`，不提供復原
 - 需要班級名單的小工具：參考 `classroom.js` 的 `people(ctx)`、`namesEditor()`、`watchRoster()`（設定變更時自動重畫、學生改名時更新狀態）
 - 大小改變時要重排版面：用 `widgets/util.js` 的 `observeSize()`，不要直接用 ResizeObserver（會出現 ResizeObserver loop 警告）
 - 小工具內的文字大小用容器單位（`cqw`、`cqh`、`cqmin`），放大到全螢幕時會自動放大
@@ -302,15 +311,32 @@ export const example = {
 ```
 
 - relay 只轉送 JSON，不存資料。訊息：
-  - 教室電腦送出：`hello{code,secret}`、`state`、`notice`、`kick`
-  - 教室電腦收到：`room{code,secret}`、`remotes`、`cmd`、`replaced`
-  - 手機送出：`cmd{target:'app'|'widget', action, args, widgetId}`
-  - 手機收到：`hello`、`state`、`screen`、`notice`、`kicked`、`error`
+  - 教室電腦送出：`hello{code,secret}`、`state{state:<密文>}`、`notice{box}`、`kick`、`join-answer{id, ok, box?}`
+  - 教室電腦收到：`room{code,secret}`、`remotes`、`cmd{box}`、`join-request{id, device, ip, pk}`、`join-gone`、`replaced`
+  - 手機送出：`cmd{box}`，`box` 解密後是 `{target:'app'|'widget', action, args, widgetId}`
+  - 手機收到：`wait`、`hello{online, state, key?}`、`state`、`screen`、`notice{box}`（relay 自己的提示是 `notice{text}`）、`kicked`、`error`
+- **加密**（`static/js/remote-crypto.js`，用 `static/vendor/nacl-fast.min.js`，tweetnacl 1.0.3）：遙控網頁是 HTTP（區網沒有憑證，HTTPS 會出現警示），同一個網路的人可能側錄封包，所以白板內容、指令、提示都在手機和教室電腦之間加密，relay 只轉送看不懂的資料（HTTP 網頁不能用瀏覽器內建的 `crypto.subtle`，所以自帶程式庫）
+  - 每組代碼一把隨機金鑰（`RemoteHost.key`，存在 `SS ms:remote`），換代碼就換金鑰。內容用 `seal()`／`open()`（XSalsa20-Poly1305，nonce 24 bytes 放在密文前面，base64url）
+  - 掃 QR Code：金鑰在網址的 `#<代碼>.<金鑰>`，瀏覽器不會把 `#` 後面送到網路上
+  - 手動輸入代碼：手機產生一次性金鑰對，連線帶 `&pk=<公鑰>`；relay 遇到 `pk` 一律詢問老師（即使裝置允許過），`join-request` 帶 `pk`；老師允許時 `answerJoin()` 用 `wrapKey()`（X25519 + XSalsa20-Poly1305）把金鑰加密成 `box`，relay 放在 `hello.key` 交給手機，手機用 `unwrapKey()` 解出
+  - 手機把金鑰記在 localStorage `bt:remoteK`（`{code, key}`，只記最近一組），重新整理、斷線重連時不用再交換
+  - 教室電腦只接受用這組金鑰加密的指令；沒加密、金鑰不對的 `cmd` 一律不理會
+  - 擋得住側錄，擋不住假冒路由器竄改網頁程式的主動攻擊（要 HTTPS 才擋得住）；這部分靠「老師允許」把關
+  - relay 的限制：`pk` 必須是 43 字 base64url、`join-answer.box` 100–200 字、加密提示最多 4000 字；`state` 加密後是 base64，比原本大約 1.33 倍，仍受單一訊息 256 KB 的限制
+  - 內建 relay 要嵌入 `js/remote-crypto.js`、`vendor/nacl-fast.min.js`（`build.ps1` 的 `/resource`）；手機頁新增其他 JS 檔時也要加進去
+- **新裝置要老師允許**：手機連線帶 `&key=<裝置金鑰>`（`remote.js` 的 `deviceKey()`，存在手機的 localStorage `bt:remoteKey`，16–64 字的 `[A-Za-z0-9_-]`）。這個代碼還沒允許過的金鑰：
+  - relay 送手機 `wait`（手機顯示「請老師在電視上按『允許』」，這段期間 `send()` 不送指令），送教室電腦 `join-request{id, device, ip}`（`device` 由 User-Agent 判斷，例如「iPhone」「Android 手機」）
+  - 教室電腦跳出「有裝置要求遙控這台電腦」（`app.js` 的 `askJoin()`），回 `join-answer{id, ok}`；relay 處理完送 `join-gone{id}` 讓對話框自己關閉
+  - 允許：金鑰加入這個代碼的允許清單，之後重新整理、斷線重連都不用再問；拒絕或 60 秒沒回應：手機收到 `error`，算一次錯誤（「5 分鐘 20 次」限制）
+  - 同時等待允許最多 3 台；「中斷全部並換代碼」（`kick`）會清空允許清單並拒絕等待中的裝置；教室電腦斷線也會拒絕等待中的裝置
+  - 允許前手機收不到白板內容（學生照片、名單），也不能送指令
+- **代碼只在這次開啟有效**：遙控代碼、投票代碼存在 `store.js` 的 `SS`（sessionStorage，桌面版重開就是新的 session），每次開啟黑板樹都換新代碼；開啟時會刪掉舊版存在 localStorage 的 `ms:remote`、`ms:voteCode`
+- relay 的保護：`/ws/screen` 只接受本機（127.0.0.1）連線，校內其他電腦無法冒充教室畫面；C# 版連線 10 秒內沒送完 HTTP 標頭就斷線、同時最多 400 個連線
 - 學生投票（另一組代碼，只能投票，不能遙控）：
   ```
   學生 vote.html ──WebSocket /ws/vote?code=<投票代碼>──► relay ◄──/ws/screen── 教室電腦 RemoteHost
   ```
-  - 教室電腦送出：`vote-open{code?, poll}`（開放或更新題目；`code` 指定沿用上次的投票代碼，存在 `LS ms:voteCode`）、`vote-close`、`vote-ack{to, ok, text, choice}`
+  - 教室電腦送出：`vote-open{code?, poll}`（開放或更新題目；`code` 指定沿用上次的投票代碼，存在 `SS ms:voteCode`）、`vote-close`、`vote-ack{to, ok, text, choice}`
   - 教室電腦收到：`vote-room{code, voters}`（`code` 為空代表已結束）、`voters{count}`、`vote{from, name, choice}`
   - 學生送出：`vote{name, choice}`（其他訊息一律忽略）；學生收到：`poll{poll, online}`、`ack`、`screen`、`closed`、`error`
   - relay 把名字截到 20 字、`choice` 轉成整數，每個投票最多 200 人；錯誤代碼與遙控共用「5 分鐘 20 次」的限制
@@ -323,10 +349,16 @@ export const example = {
   - `server/relay.py`：網頁版（`server/app.py`）
   - `desktop/relay/BlackboardTreeRelay.cs`：桌面版內建（約 64 KB，連接埠 52480 起，啟動時印 `LISTEN <port> <ip,...>`，之後每 5 秒檢查網路，IP 變了就印 `IPS <ip,...>`；`--parent <PID>` 讓主程式結束時自動關閉，也提供手機頁與學生投票頁共 6 個檔案）
 - 使用哪個 relay（`app.js` 的 `relayBase()`）：桌面版一律用**內建 relay**；網頁版用提供網頁的 `server/app.py`（只放 `static/` 時沒有遙控）
-- 內建 relay：黑板樹開啟時啟動（`startLocalRelay()`），關閉時結束（`windowClose` 或系統匣「結束」→ `quitApp()` → `stopLocalRelay()`）。收到 `IPS` 時 `onLocalIpsChanged()` 更新 QR Code 的網址
+- 內建 relay：按「📱 遙控」、系統匣「手機遙控」或開放學生投票時才啟動（`ensureRemote()` → `startLocalRelay()`；1.9.1 以前是開啟黑板樹就啟動），關閉時結束（`windowClose` 或系統匣「結束」→ `quitApp()` → `stopLocalRelay()`）。收到 `IPS` 時 `onLocalIpsChanged()` 更新 QR Code 的網址
 - 系統匣（`initTray()`／`updateTray()`，Neutralino `os.setTray`）：顯示 relay 狀態、手機連線數，選單可開 QR Code、結束程式。狀態有變化時（`renderRemoteBtn()`、relay 啟動／結束）呼叫 `updateTray()` 重設整個選單。Neutralino 的系統匣沒有滑鼠停留提示文字，狀態只能放在停用的選單項目裡
 - 安裝版與免安裝版的 relay 位置：安裝版在程式資料夾；免安裝版內嵌在 exe 的 resources，執行時用 `Neutralino.resources.extractFile` 解出
-- 手機要能連到教室電腦的校內 IP（學校確認手機、平板都在校內網域），且 Windows 防火牆要允許 `myscreen-relay.exe`（安裝程式的「允許手機連線」選項）
+- 手機要能連到教室電腦的校內 IP（學校確認手機、平板都在校內網域），且 Windows 防火牆要允許 `myscreen-relay.exe`（安裝程式的「允許手機連線」選項）。防火牆規則刻意不限網路類型（`profile=any`）：學校網路常被 Windows 歸類為「公用」，限制成私人網路會讓遙控失效；安全性靠老師允許、每次開啟換代碼、需要時才啟動
+- 遙控是 HTTP（區網沒有憑證，無法用 HTTPS），所以內容另外加密（見上面「加密」），而且允許前不送任何白板內容
+
+### 桌面版權限與內嵌網頁
+
+- `desktop/neutralino.config.json` 的 `nativeAllowList` 只列出用到的 Neutralino 函式（不用 `os.*`、`filesystem.*` 萬用字元）。**新增用到的原生函式時要加進清單**，否則桌面版會出現權限錯誤（網頁版測不出來）
+- 網址小工具的 iframe 有 `sandbox`（`media.js` 的 `EMBED_SANDBOX`）：可以執行網頁、全螢幕、開新視窗，但不能把整個黑板樹導到別的網址、不能自動下載
 
 ---
 
@@ -356,9 +388,9 @@ export const example = {
 - 16 種小工具（含座位表、課堂加分；1.2.0 移除紅綠燈、骰子，時鐘與日期合併），小工具放大到全螢幕
 - 班級名單：Excel／CSV（含 Big5）／貼上匯入、欄位自動判斷與手動對應、學號／姓名／座號比對照片
 - 手機遙控：各小工具操作、傳送網址（YouTube／影片檔／FB／IG／Threads／TikTok／Vimeo／一般網頁）
-- 內建 relay：開啟黑板樹時啟動、關閉時結束、重開後手機自動連回
+- 內建 relay：關閉黑板樹時結束（1.9.1 起改成需要時才啟動、每次開啟換代碼，手機要重新掃描並由老師允許）
 - 安裝程式：每位使用者安裝（不需系統管理員）、升級、解除安裝（1.2.0 起安裝時不設定遙控伺服器，也移除了 `/RELAY=` 參數）
-- 前端自動化測試：94 項（`npm test`）；relay 協定測試 33 項
+- 前端自動化測試：176 項（`npm test`）；relay 協定測試 49 項
 - 投票題庫、匯入、投票紀錄與匯出：已用瀏覽器操作過（網頁版下載 CSV）
 - 學生投票：已用瀏覽器模擬老師與兩位學生實際操作（投票、改票、改題目、結束投票），C# 與 Python 兩個 relay 都測過
 - ⚙ 總設定：白板、班級名單、工具列（位置、圖示大小、顯示的工具），已用瀏覽器實際操作過
