@@ -7,7 +7,7 @@ import { widgets, widgetList, upgradeWidget } from './widgets/index.js';
 import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
 import { RemoteHost } from './remote-host.js';
-import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool, recordLastTool, lastToolState, lastListId } from './roster.js';
+import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool, lastToolState, lastListId, rememberList, classData } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
 import { UPDATE_URL, RELEASES_PAGE, checkForUpdate, downloadVerified, notesSince, shouldAutoCheck, updateScript, encodePowerShell, plainNote } from './update.js';
 import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, GRID_SIZES, GRID_SHOW, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool, gridCell, nextGrid, snapMove, snapResize } from './ui-prefs.js';
@@ -87,7 +87,13 @@ async function connect(backend, choice) {
   S.store.addEventListener('index', () => {
     renderTopbar();
     S.remote?.push();
-    if (!S.board && document.querySelector('.boards-grid')) showBoards();
+    refreshHome();
+  });
+  S.store.addEventListener('settings', () => { refreshHome(); renderTopbar(); }); // 名單畫面新增、改名班級後更新首頁與標題
+  S.store.addEventListener('class-deleted', (e) => {
+    if (S.board?.classId === e.detail.id) { S.settingsModal?.close(); closeBoard(); }
+    if (S.classId === e.detail.id) S.classId = '';
+    if (!S.board) showClasses();
   });
   S.store.addEventListener('error', (e) => toast(e.detail, 4000));
   S.store.addEventListener('remote', (e) => {
@@ -113,8 +119,14 @@ async function connect(backend, choice) {
   LS.del('ms:voteCode');
   renderRemoteBtn();
   if (S.store.remote) S.pollTimer = setInterval(() => S.store?.poll(S.board).catch(() => {}), 8000);
-  showBoards();
+  showClasses();
   return true;
+}
+
+// 首頁（班級或白板清單）顯示中時，資料改變就重畫
+function refreshHome() {
+  if (S.board || !document.querySelector('.boards-grid')) return;
+  if (S.home === 'boards') showBoards(); else showClasses();
 }
 
 function stopPolling() { clearInterval(S.pollTimer); S.pollTimer = null; }
@@ -213,31 +225,81 @@ const fmtTime = (t) => {
   return today ? `今天 ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}` : `${d.getMonth() + 1}月${d.getDate()}日`;
 };
 
-function showBoards() {
+// 以班級為主：先選班級，再選這班的白板。白板、學生名單與各班的資料只在這一班使用
+const classLists = () => S.store?.settings?.classLists || [];
+const classOf = (id) => classLists().find((l) => l.id === id) || null;
+const boardsOf = (classId) => (S.store?.index || []).filter((b) => b.classId && b.classId === classId);
+
+function storageLine(store) {
+  const icon = { folder: '📁', local: '💻' }[store.backend.kind];
+  return h('div', { class: 'muted' }, '資料存放在：', h('b', null, `${icon} ${store.backend.label}`),
+    store.status === 'offline' ? h('span', { class: 'warn-text' }, '（目前連不上網路磁碟機，先顯示這台電腦暫存的白板，連上後會自動存回去）') : null);
+}
+
+// 新增班級：取名後打開名單畫面匯入學生，關掉後進入這班的白板
+async function newClassAction() {
+  const name = await promptDialog('班級名稱（例如：三年二班）');
+  if (!name) return;
+  const st = await S.store.getSettings();
+  const l = { id: Date.now().toString(36), name, students: [] };
+  st.classLists.push(l);
+  S.store.saveSettings();
+  showBoards(l.id);
+  rosterDialog(S.store, { selectId: l.id });
+}
+
+function showClasses() {
   const store = S.store;
+  S.home = 'classes';
+  const last = lastListId();
+  const grid = h('div', { class: 'boards-grid' });
+  for (const l of classLists()) {
+    const n = boardsOf(l.id).length;
+    grid.append(h('button', { class: 'board-card class-card' + (l.id === last ? ' last' : ''), onclick: () => showBoards(l.id) },
+      h('div', { class: 'bc-name' }, '👥 ' + l.name),
+      h('div', { class: 'bc-time' }, `${studentsOf(l).length} 位學生・${n} 個白板` + (l.id === last ? '・上次使用' : ''))));
+  }
+  grid.append(h('button', { class: 'board-card new', onclick: newClassAction }, h('div', { class: 'bc-plus' }, '＋'), h('div', null, '新增班級')));
+  screen(h('div', { class: 'login-card boards' },
+    h('div', { class: 'boards-head' },
+      h('div', null, h('h2', null, '選擇班級'), storageLine(store)),
+      h('div', { class: 'row-btns' },
+        classLists().length ? h('button', { class: 'btn', onclick: () => rosterDialog(store) }, '👥 管理班級名單') : null,
+        store.remote ? h('button', { class: 'btn', onclick: async () => { await store.listBoards(); await store.getSettings(); showClasses(); } }, '↻ 重新整理') : null,
+        h('button', { class: 'btn', onclick: () => leaveStorage() }, '更換存放位置'))),
+    classLists().length ? null : h('p', { class: 'muted' }, '先建立你任教的班級，匯入學生名單後，就可以在班級裡建立上課用的白板。每個班級的白板、名單、座位、加分、投票都分開存放。'),
+    grid));
+}
+
+function showBoards(classId = S.classId) {
+  const store = S.store;
+  const cls = classOf(classId);
+  if (!cls) return showClasses();
+  S.home = 'boards';
+  S.classId = cls.id;
+  rememberList(cls.id);
   const last = LS.get(store.key('last'), null);
   const grid = h('div', { class: 'boards-grid' });
-  const list = [...store.index].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const list = boardsOf(cls.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   for (const b of list) {
     grid.append(h('button', { class: 'board-card' + (b.id === last ? ' last' : ''), onclick: () => openBoardById(b.id) },
       h('div', { class: 'bc-name' }, b.name),
       h('div', { class: 'bc-time' }, (b.id === last ? '上次使用・' : '') + fmtTime(b.updatedAt))));
   }
   grid.append(h('button', { class: 'board-card new', onclick: async () => {
-    const n = await promptDialog('新白板名稱（例如：三年二班、數學課）', list.length ? '新白板' : '我的白板');
-    if (n) openBoard(store.newBoard(n));
+    const n = await promptDialog('新白板名稱（例如：第一課、段考複習）', list.length ? '新白板' : '上課白板');
+    if (n) openBoard(store.newBoard(n, cls.id));
   } }, h('div', { class: 'bc-plus' }, '＋'), h('div', null, '新增白板')));
 
-  const icon = { folder: '📁', local: '💻' }[store.backend.kind];
   screen(h('div', { class: 'login-card boards' },
     h('div', { class: 'boards-head' },
-      h('div', null, h('h2', null, '選擇白板'),
-        h('div', { class: 'muted' }, '白板存放在：', h('b', null, `${icon} ${store.backend.label}`),
-          store.status === 'offline' ? h('span', { class: 'warn-text' }, '（目前連不上網路磁碟機，先顯示這台電腦暫存的白板，連上後會自動存回去）') : null)),
+      h('div', null,
+        h('button', { class: 'btn small back-btn', onclick: () => showClasses() }, '← 所有班級'),
+        h('h2', null, `👥 ${cls.name} 的白板`), storageLine(store)),
       h('div', { class: 'row-btns' },
-        store.remote ? h('button', { class: 'btn', onclick: async () => { await store.listBoards(); showBoards(); } }, '↻ 重新整理') : null,
-        h('button', { class: 'btn', onclick: () => leaveStorage() }, '更換存放位置'))),
-    list.length ? null : h('p', { class: 'muted' }, '這裡還沒有白板，先建立一個吧！'),
+        h('button', { class: 'btn', onclick: () => rosterDialog(store, { selectId: cls.id }) }, '👥 學生名單'),
+        store.remote ? h('button', { class: 'btn', onclick: async () => { await store.listBoards(); showBoards(cls.id); } }, '↻ 重新整理') : null)),
+    list.length ? null : h('p', { class: 'muted' }, `${cls.name}還沒有白板，先建立一個吧！可以依單元或用途建立多個白板。`),
     grid));
 }
 
@@ -248,6 +310,9 @@ async function openBoardById(id) {
 }
 
 function openBoard(board) {
+  if (!classOf(board.classId)) { toast('找不到這個白板的班級'); return showClasses(); }
+  S.classId = board.classId;
+  rememberList(board.classId);
   S.board = board;
   board.data ||= {};
   board.data.widgets = (board.data.widgets || []).map(upgradeWidget).filter(Boolean);
@@ -324,7 +389,8 @@ function renderStatus() {
 }
 
 function renderTopbar() {
-  $('#board-name').textContent = S.board?.name || '';
+  const cls = S.board && classOf(S.board.classId);
+  $('#board-name').textContent = S.board ? (cls ? `${cls.name}｜` : '') + S.board.name : '';
 }
 
 // 工具圖示：有圖檔用圖檔，圖檔載入失敗時改回 emoji
@@ -412,7 +478,7 @@ function addWidget(type, copyFrom, init) {
   // 座位表等：新開時沿用上次關閉前的狀態（同一個班級）
   let restored = false;
   if (!copyFrom && !init && def.restoreLast && S.store?.settings) {
-    const last = lastToolState(S.store.settings, type, lastListId());
+    const last = lastToolState(S.store.settings, type, S.board.classId);
     if (last) { init = { state: def.restoreLast(last) }; restored = true; }
   }
   const n = S.board.data.widgets.length;
@@ -438,7 +504,7 @@ function addWidget(type, copyFrom, init) {
 // 操作時常常連續存檔，等 1.5 秒沒有變動再記錄
 const classToolTimers = new Map();
 function noteClassTool(w) {
-  if (!w.state?.listId && !widgets[w.type]?.restoreLast) return;
+  if (!w.state?.listId) return;
   clearTimeout(classToolTimers.get(w.id));
   classToolTimers.set(w.id, setTimeout(() => flushClassTool(w), 1500));
 }
@@ -446,9 +512,7 @@ function flushClassTool(w) {
   clearTimeout(classToolTimers.get(w.id));
   classToolTimers.delete(w.id);
   const st = S.store?.settings;
-  if (!st) return;
-  // 沒有連結班級名單的座位表：記在 lastTools（下次新開時沿用）
-  if (w.state?.listId ? recordClassTool(st, w.type, w.state) : recordLastTool(st, w.type, w.state)) S.store.saveSettings();
+  if (st && recordClassTool(st, w.type, w.state)) S.store.saveSettings();
 }
 
 // 叫回某班使用過的小工具（帶回當時的座位、分數、分組、考試設定等）
@@ -558,6 +622,8 @@ function mountWidget(w) {
   const def = widgets[w.type];
   if (!def) return;
   w.state = { ...def.state(), ...(w.state || {}) };
+  // 用到學生名單的小工具（state 有 listId）一律使用白板所屬班級的名單
+  if ('listId' in w.state) w.state.listId = S.board.classId;
   const body = h('div', { class: 'w-body' });
   const head = h('div', { class: 'w-head' },
     h('span', { class: 'w-title' }, def.icon + ' ' + def.title),
@@ -571,7 +637,7 @@ function mountWidget(w) {
   place(el, w);
   $('#stage').append(el);
 
-  const ctx = { state: w.state, widget: w, store: S.store, save: () => { save(); noteClassTool(w); }, push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size), boardName: () => S.board?.name || '' };
+  const ctx = { state: w.state, widget: w, store: S.store, classId: S.board.classId, save: () => { save(); noteClassTool(w); }, push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size), boardName: () => S.board?.name || '' };
   let inst = {};
   try { inst = def.mount(body, ctx) || {}; } catch (e) { console.error(e); body.textContent = '此小工具發生錯誤'; }
   S.mounted.set(w.id, { el, inst, w });
@@ -649,7 +715,7 @@ async function switchBoard(id) {
 async function newBoardAction() {
   const n = await promptDialog('新白板名稱', '新白板');
   if (!n) return false;
-  openBoard(S.store.newBoard(n));
+  openBoard(S.store.newBoard(n, S.board.classId)); // 新白板屬於同一班
   return true;
 }
 async function renameBoardAction() {
@@ -659,7 +725,7 @@ async function renameBoardAction() {
   return true;
 }
 function copyBoardAction() {
-  const b = S.store.newBoard(S.board.name + '（副本）');
+  const b = S.store.newBoard(S.board.name + '（副本）', S.board.classId);
   b.data = structuredClone(S.board.data);
   S.store.saveBoard(b, true);
   openBoard(b);
@@ -673,12 +739,15 @@ async function deleteBoardAction() {
 }
 
 function boardMenu(anchor) {
-  const items = S.store.index.map((b) => ({
+  const cls = classOf(S.board.classId);
+  const items = boardsOf(S.board.classId).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).map((b) => ({
     label: (b.id === S.board.id ? '● ' : '　') + b.name,
     active: b.id === S.board.id,
     onClick: () => switchBoard(b.id),
   }));
-  menu(anchor, [{ label: '📋 所有白板…', onClick: () => showBoards() }, '-', ...items, '-',
+  menu(anchor, [
+    { label: '🏫 所有班級…', onClick: () => showClasses() },
+    { label: `📋 ${cls?.name || '這班'}的白板…`, onClick: () => showBoards(S.board.classId) }, '-', ...items, '-',
     { label: '＋ 新增白板', onClick: newBoardAction },
     { label: '✎ 重新命名', onClick: renameBoardAction },
     { label: '⧉ 複製這個白板', onClick: copyBoardAction },
@@ -691,7 +760,7 @@ function boardMenu(anchor) {
 // ------------------------------------------------------------ 總設定：白板、班級名單、工具列
 const SETTING_TABS = [
   { id: 'board', label: '🗂 白板' },
-  { id: 'roster', label: '👥 班級名單' },
+  { id: 'roster', label: '👥 學生名單' },
   { id: 'dock', label: '🧰 工具列' },
   { id: 'poll', label: '📊 投票' },
   { id: 'about', label: 'ℹ 關於與更新' },
@@ -706,7 +775,7 @@ function settingsDialog(tab = 'board') {
     h('button', { class: o.value === value ? 'on' : '', onclick: () => onPick(o.value) }, o.label)));
 
   function renderBoardTab() {
-    const list = [...S.store.index].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const list = boardsOf(S.board.classId).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     main.append(
       sec('目前的白板',
         h('div', { class: 'set-item on' }, h('div', { class: 'si-main' }, h('b', null, S.board.name), h('small', null, `${S.board.data.widgets.length} 個小工具`))),
@@ -715,7 +784,7 @@ function settingsDialog(tab = 'board') {
           h('button', { class: 'btn', onclick: () => { copyBoardAction(); render(); } }, '⧉ 複製'),
           h('button', { class: 'btn', onclick: () => { dlg.close(); backgroundDialog(); } }, '🎨 背景'),
           h('button', { class: 'btn danger', onclick: async () => { if (await deleteBoardAction()) dlg.close(); } }, '🗑 刪除'))),
-      sec('更換白板',
+      sec(`更換白板（${classOf(S.board.classId)?.name || ''}）`,
         h('div', { class: 'set-list' }, list.map((b) => h('button', {
           class: 'set-item' + (b.id === S.board.id ? ' on' : ''),
           onclick: async () => { if (await switchBoard(b.id)) render(); },
@@ -727,10 +796,11 @@ function settingsDialog(tab = 'board') {
 
   function renderPollTab() {
     const box = h('div', { class: 'poll-lib' });
-    main.append(sec('投票題庫與紀錄',
+    main.append(sec(`投票題庫與紀錄（${classOf(S.board.classId)?.name || ''}）`,
       h('p', { class: 'muted' }, '常用的題目可以存在題庫重複使用，也可以從 Excel、文字一次匯入。學生投票結束時會自動記錄結果，可匯出成 Excel。'),
       box));
     renderPollLibrary(box, S.store, {
+      classId: S.board.classId,
       useLabel: '加到白板',
       onUse: (it) => {
         addWidget('poll', null, { state: { question: it.question, options: it.options.map((label) => ({ label, votes: 0 })), ballots: {} } });
@@ -742,17 +812,17 @@ function settingsDialog(tab = 'board') {
 
   function renderRosterTab() {
     const st = S.store.settings;
-    const lists = st?.classLists || [];
-    main.append(sec('班級名單',
-      h('p', { class: 'muted' }, '抽籤、分組、座位表、課堂加分、考試時間會使用這裡的名單。可以匯入 Excel／CSV 名單與學生照片。各班使用過的工具會自動記錄（包含座位、分數、分組、考試設定），點一下就能加回目前的白板。'),
+    const lists = (st?.classLists || []).filter((l) => l.id === S.board.classId); // 只看這個白板的班級
+    main.append(sec('這一班的學生名單',
+      h('p', { class: 'muted' }, '抽籤、分組、座位表、課堂加分、考試時間都使用這一班的名單。可以匯入 Excel／CSV 名單與學生照片。這班使用過的工具會自動記錄（包含座位、分數、分組、考試設定），點一下就能加回目前的白板。'),
       lists.length
         ? h('div', { class: 'set-list' }, lists.map((l) => h('div', { class: 'class-block' },
           h('button', {
             class: 'set-item', onclick: () => rosterDialog(S.store, { selectId: l.id }),
           }, h('div', { class: 'si-main' }, h('b', null, l.name), h('small', null, `${studentsOf(l).length} 人${hasPhotos(l) ? '・有照片' : ''}`)), h('small', null, '編輯 ›')),
           classToolsRow(st, l))))
-        : h('p', null, '還沒有班級名單。'),
-      h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', onclick: () => rosterDialog(S.store) }, '👥 管理班級名單'))));
+        : h('p', null, '找不到這個白板的班級。'),
+      h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', onclick: () => rosterDialog(S.store, { selectId: S.board.classId }) }, '👥 編輯學生名單'))));
   }
 
   // 某班使用過的工具：點一下加回白板，✕ 刪除紀錄
@@ -1282,7 +1352,7 @@ function remoteState() {
   return {
     now: Date.now(),
     board: b ? { id: b.id, name: b.name } : null,
-    boards: (S.store?.index || []).map((x) => ({ id: x.id, name: x.name })),
+    boards: (S.board ? boardsOf(S.board.classId) : []).map((x) => ({ id: x.id, name: x.name })),
     chromeHidden: document.body.classList.contains('chrome-hidden'),
     addable: visibleTools(widgetList, S.ui).filter((d) => ['timer', 'stopwatch', 'names', 'groups', 'seats', 'points', 'text', 'work', 'poll', 'clock'].includes(d.type))
       .map((d) => ({ type: d.type, title: d.title, icon: d.icon })),
@@ -1299,7 +1369,7 @@ function remoteState() {
 async function remoteCmd(m) {
   const args = m.args || {};
   if (m.target === 'app') {
-    if (m.action === 'board' && S.store?.index.some((b) => b.id === args.id)) {
+    if (m.action === 'board' && S.board && boardsOf(S.board.classId).some((b) => b.id === args.id)) {
       if (S.board?.id !== args.id) await openBoardById(args.id);
     } else if (m.action === 'chrome') {
       document.body.classList.toggle('chrome-hidden');
@@ -1476,7 +1546,7 @@ async function openRemoteDialog() {
 
 // ------------------------------------------------------------ 綁定
 $('#board-btn').addEventListener('click', (e) => boardMenu(e.currentTarget));
-$('#roster-btn').addEventListener('click', () => S.store && rosterDialog(S.store));
+$('#roster-btn').addEventListener('click', () => S.store && rosterDialog(S.store, { selectId: S.board?.classId }));
 $('#settings-btn').addEventListener('click', () => settingsDialog());
 $('#bg-btn').addEventListener('click', backgroundDialog);
 $('#fs-btn').addEventListener('click', toggleFullscreen);

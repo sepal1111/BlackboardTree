@@ -13,7 +13,7 @@ function conflict(current) {
 }
 
 const parse = (t) => { try { return t ? JSON.parse(t) : null; } catch { return null; } };
-const meta = (b) => ({ id: b.id, name: b.name, rev: b.rev, created: b.created, updatedAt: b.updatedAt });
+const meta = (b) => ({ id: b.id, name: b.name, classId: b.classId || '', rev: b.rev, created: b.created, updatedAt: b.updatedAt });
 const extOf = (name) => { const m = /\.([a-z0-9]{1,6})$/i.exec(name || ''); return m ? m[1].toLowerCase() : 'png'; };
 const mediaName = (name) => `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 10)}.${extOf(name)}`;
 
@@ -75,11 +75,11 @@ export class FolderBackend {
     return b;
   }
 
-  async putBoard({ id, name, data }, baseRev, force = false) {
+  async putBoard({ id, name, classId, data }, baseRev, force = false) {
     const cur = await this.getBoard(id);
     if (cur && !force && baseRev != null && cur.rev !== baseRev) throw conflict(cur);
     const now = Date.now();
-    const board = { id, name, rev: (cur?.rev || 0) + 1, created: cur?.created || now, updatedAt: now, data };
+    const board = { id, name, classId: classId || '', rev: (cur?.rev || 0) + 1, created: cur?.created || now, updatedAt: now, data };
     await this.fs.write(this.d('boards', id + '.json'), JSON.stringify(board));
     this.cache.delete(id);
     return { rev: board.rev, updatedAt: now };
@@ -142,10 +142,10 @@ export class LocalBackend {
   async check() {}
   async listBoards() { return LSX.get(this.p + 'index', []); }
   async getBoard(id) { return LSX.get(this.p + 'board:' + id, null); }
-  async putBoard({ id, name, data, created }) {
+  async putBoard({ id, name, classId, data, created }) {
     const cur = LSX.get(this.p + 'board:' + id, null);
     const now = Date.now();
-    const board = { id, name, rev: (cur?.rev || 0) + 1, created: cur?.created || created || now, updatedAt: now, data };
+    const board = { id, name, classId: classId || '', rev: (cur?.rev || 0) + 1, created: cur?.created || created || now, updatedAt: now, data };
     try {
       LSX.set(this.p + 'board:' + id, board);
     } catch {

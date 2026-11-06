@@ -1,7 +1,7 @@
 import './helpers.mjs';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { recordClassTool, classToolsOf, forgetClassTool, recordLastTool, lastToolState } from '../static/js/roster.js';
+import { recordClassTool, classToolsOf, forgetClassTool, lastToolState, classData, dropClass } from '../static/js/roster.js';
 
 const settings = () => ({ classLists: [{ id: 'c1', name: '三年二班', students: [] }, { id: 'c2', name: '三年三班', students: [] }] });
 
@@ -76,13 +76,38 @@ describe('新開小工具時沿用上次的狀態', () => {
     lastToolState(st, 'seats', 'c1').seats[0] = '乙';
     assert.equal(lastToolState(st, 'seats', 'c1').seats[0], '甲');
   });
-  test('沒有班級（自己輸入名單）：記在 lastTools，沒有上次的班級時沿用', () => {
+  test('沒有班級或班級已刪除：不沿用', () => {
     const st = settings();
-    assert.equal(recordLastTool(st, 'seats', { listId: '', names: '甲,乙', seats: ['乙', '甲'] }, 1), true);
-    assert.equal(recordLastTool(st, 'seats', { listId: '', names: '甲,乙', seats: ['乙', '甲'] }, 2), false);
-    assert.equal(recordLastTool(st, 'seats', { listId: 'c1', seats: [] }), false); // 有班級的不記在這裡
-    assert.deepEqual(lastToolState(st, 'seats', '').seats, ['乙', '甲']);
-    assert.deepEqual(lastToolState(st, 'seats', 'gone').seats, ['乙', '甲']); // 上次的班級已刪除
-    assert.equal(lastToolState({}, 'seats', ''), null);
+    recordClassTool(st, 'seats', { listId: 'c1', seats: ['甲'] });
+    assert.equal(lastToolState(st, 'seats', ''), null);
+    assert.equal(lastToolState(st, 'seats', 'gone'), null);
+    assert.equal(lastToolState({}, 'seats', 'c1'), null);
+  });
+});
+
+describe('各班分開的資料', () => {
+  test('classData：每班一份，沒有就建立，沒有班級時不存', () => {
+    const st = settings();
+    classData(st, 'c1').pollBank = [{ id: 'q', question: '題', options: ['a', 'b'] }];
+    assert.equal(classData(st, 'c1').pollBank.length, 1);
+    assert.deepEqual(classData(st, 'c2'), {});
+    assert.deepEqual(classData(st, ''), {});
+    assert.equal('' in st.classData, false);
+    st.classData = [];
+    assert.deepEqual(classData(st, 'c1'), {}); // 壞掉的資料重設
+  });
+  test('刪除班級：名單、資料、使用紀錄、座位紀錄一起清掉，別班不受影響', () => {
+    const st = settings();
+    classData(st, 'c1').points = { scores: { 甲: 2 } };
+    classData(st, 'c2').points = { scores: { 丙: 1 } };
+    recordClassTool(st, 'seats', { listId: 'c1', seats: [] });
+    st.seatLayouts = { c1: [], c2: [] };
+    assert.equal(dropClass(st, 'c1'), true);
+    assert.deepEqual(st.classLists.map((l) => l.id), ['c2']);
+    assert.equal('c1' in st.classData, false);
+    assert.equal('c1' in (st.classTools || {}), false);
+    assert.equal('c1' in st.seatLayouts, false);
+    assert.equal(classData(st, 'c2').points.scores.丙, 1);
+    assert.equal(dropClass(st, 'nope'), false);
   });
 });

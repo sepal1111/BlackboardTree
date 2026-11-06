@@ -1,9 +1,10 @@
-// 投票題庫與投票紀錄：存在老師的 settings.json（pollBank、pollResults），換電腦也能用
+// 投票題庫與投票紀錄：各班分開，存在老師的 settings.json（classData[班級 id].pollBank、pollResults），換電腦也能用
+// 題庫可以匯出成文字檔，再匯入到其他班
 //   pollBank：[{ id, question, options: [文字], at }]
 //   pollResults：[{ id, at, board, question, options: [{ label, votes }], ballots: [{ name, label }] }]（新的在前）
 import { h, modal, toast, confirmDialog, saveTextFile } from './ui.js';
 import { uid } from './store.js';
-import { fileToRows } from './roster.js';
+import { fileToRows, classData } from './roster.js';
 
 export const MAX_RESULTS = 500;  // 紀錄太多時刪掉最舊的，避免 settings.json 太大
 export const MAX_OPTIONS = 20;
@@ -128,7 +129,7 @@ async function readPollFile(file) {
 }
 
 // 匯入題目：貼上文字或選擇檔案，預覽後加入題庫
-export function importDialog(store, onDone) {
+export function importDialog(store, onDone, classId) {
   let parsed = { items: [], skipped: [] };
   const info = h('div', { class: 'muted' });
   const text = h('textarea', {
@@ -154,7 +155,7 @@ export function importDialog(store, onDone) {
   modal({
     title: '📥 匯入投票題目',
     body: h('div', { class: 'poll-import' },
-      h('p', { class: 'muted' }, '每題一段：第一行是題目，下面每行一個選項，題目之間空一行。也可以從 Excel 複製貼上（每列一題：題目、選項1、選項2…），或選擇 Excel／CSV／文字檔。'),
+      h('p', { class: 'muted' }, '題目會加到這一班的題庫。每題一段：第一行是題目，下面每行一個選項，題目之間空一行。也可以從 Excel 複製貼上（每列一題：題目、選項1、選項2…），或選擇 Excel／CSV／文字檔。'),
       h('div', { class: 'row-btns' }, h('button', { class: 'btn', onclick: () => file.click() }, '📄 選擇檔案…'), file),
       text, info),
     actions: [
@@ -162,7 +163,9 @@ export function importDialog(store, onDone) {
       {
         label: '匯入', primary: true, onClick: () => {
           if (!parsed.items.length) { toast('沒有可以匯入的題目'); return false; }
-          store.getSettings().then((st) => {
+          store.getSettings().then((all) => {
+            if (!classId) { toast('找不到這個白板的班級'); return; }
+            const st = classData(all, classId);
             st.pollBank ||= [];
             const n = addToBank(st.pollBank, parsed.items);
             store.saveSettings();
@@ -182,7 +185,7 @@ export function renderPollLibrary(box, store, opts = {}) {
   let tab = opts.tab || 'bank';
   let open = '';
   const render = async () => {
-    const st = await store.getSettings();
+    const st = classData(await store.getSettings(), opts.classId); // 這一班的題庫與紀錄
     const bank = st.pollBank || [];
     const results = st.pollResults || [];
     box.innerHTML = '';
@@ -204,9 +207,10 @@ export function renderPollLibrary(box, store, opts = {}) {
           save();
         },
       }, '＋ 存目前題目') : null,
-      h('button', { class: 'btn', onclick: () => importDialog(store, render) }, '📥 匯入題目…')));
+      h('button', { class: 'btn', onclick: () => importDialog(store, render, opts.classId) }, '📥 匯入題目…'),
+      bank.length ? h('button', { class: 'btn', title: '存成文字檔，可以在其他班按「匯入題目」放進去', onclick: () => exportBank(bank) }, '📤 匯出題庫') : null));
     if (!bank.length) {
-      box.append(h('p', { class: 'muted' }, '題庫是空的。可以把常用的題目存起來重複使用，或從 Excel、文字一次匯入多題。'));
+      box.append(h('p', { class: 'muted' }, '這一班的題庫是空的。可以把常用的題目存起來重複使用，或從 Excel、文字一次匯入多題（其他班匯出的題庫也可以）。'));
       return;
     }
     box.append(h('div', { class: 'set-list poll-bank' }, bank.map((it) => h('div', { class: 'set-item' },
@@ -276,6 +280,19 @@ export function renderPollLibrary(box, store, opts = {}) {
 
   render();
   return render;
+}
+
+// 題庫匯出成文字（格式和匯入相同：每題一段，第一行題目、下面每行一個選項）
+export function bankToText(bank) {
+  const NL = '\r\n'; // Windows 記事本也能正常顯示
+  return (bank || []).map((it) => [it.question, ...it.options].join(NL)).join(NL + NL) + NL;
+}
+
+async function exportBank(bank) {
+  try {
+    const ok = await saveTextFile('投票題庫.txt', '\ufeff' + bankToText(bank), 'text/plain');
+    if (ok) toast(typeof ok === 'string' ? '已匯出：' + ok : '已匯出題庫，到其他班按「📥 匯入題目」選這個檔案');
+  } catch (e) { toast('匯出失敗：' + e.message); }
 }
 
 async function exportResults(records, name) {

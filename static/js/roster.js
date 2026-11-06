@@ -40,13 +40,7 @@ export function watchRoster(ctx, onChange) {
   const onRename = (e) => { if (e.detail.listId === s.listId) { renameIn(s, e.detail.from, e.detail.to); ctx.save(); } };
   ctx.store.addEventListener('settings', handler);
   ctx.store.addEventListener('rename', onRename);
-  ctx.store.getSettings().then((st) => {
-    if (!s.listId && !String(s.names || '').trim()) {
-      const last = lastListId();
-      if (st.classLists.some((l) => l.id === last)) { s.listId = last; ctx.save(); }
-    }
-    onChange();
-  });
+  ctx.store.getSettings().then(() => onChange()); // 班級由白板決定（app.js 的 mountWidget）
   return () => { ctx.store.removeEventListener('settings', handler); ctx.store.removeEventListener('rename', onRename); };
 }
 
@@ -349,8 +343,11 @@ export async function rosterDialog(store, { selectId } = {}) {
     main.append(
       h('div', { class: 'roster-head' }, nameInput,
         h('button', { class: 'btn danger', onclick: async () => {
-          if (!(await confirmDialog(`確定要刪除「${l.name}」嗎？使用這份名單的小工具會改回空白名單。`))) return;
-          st.classLists = st.classLists.filter((x) => x !== l); cur = st.classLists[0] || null; changed(); render();
+          const boards = (store.index || []).filter((b) => b.classId === l.id);
+          if (!(await confirmDialog(`確定要刪除「${l.name}」嗎？這一班的${boards.length ? ` ${boards.length} 個白板、` : ''}學生名單、課堂加分、座位紀錄、投票題庫與紀錄、文字紀錄都會一起刪除，無法復原。`, '刪除班級', true))) return;
+          for (const b of boards) await store.deleteBoard(b.id);
+          dropClass(st, l.id); cur = st.classLists[0] || null; changed(); render();
+          store.dispatchEvent(new CustomEvent('class-deleted', { detail: { id: l.id } }));
         } }, '刪除班級')),
       h('div', { class: 'roster-actions' },
         h('button', { class: 'btn primary', onclick: () => importFile(l) }, '📥 匯入名單（Excel／CSV）'),
@@ -378,6 +375,8 @@ export async function rosterDialog(store, { selectId } = {}) {
           s.name = v;
           store.dispatchEvent(new CustomEvent('rename', { detail: { listId: l.id, from, to: v } }));
           renameInLayouts(store.settings, l.id, from, v); // 座位紀錄裡的名字也換
+          const pts = classData(store.settings, l.id).points;
+          if (pts) renameIn(pts, from, v); // 這班的課堂加分
           changed();
         } }),
         h('button', { class: 'roster-del', title: '移除這位學生', onclick: () => { list.splice(i, 1); changed(); render(); } }, '✕')));
@@ -494,20 +493,28 @@ export function classToolsOf(settings, listId) {
     .map(([type, v]) => ({ type, state: v.state, usedAt: +v.usedAt || 0 }))
     .sort((a, b) => b.usedAt - a.usedAt);
 }
-// 沒有連結班級名單（自己輸入名字）的小工具：只記最後一次的狀態 settings.lastTools = { [type]: { state, usedAt } }
-export function recordLastTool(settings, type, state, now = Date.now()) {
-  if (!settings || !type || !state || state.listId) return false;
-  const all = settings.lastTools && typeof settings.lastTools === 'object' ? settings.lastTools : (settings.lastTools = {});
-  const snap = JSON.parse(JSON.stringify(state));
-  if (all[type] && sameJson(all[type].state, snap)) return false;
-  all[type] = { state: snap, usedAt: now };
-  return true;
-}
-// 新開小工具時沿用的狀態：上次用的班級在這個小工具的最後狀態；沒有這個班級時用自己輸入名單的那一次
+// 新開小工具時沿用的狀態：這一班在這個小工具最後的狀態
 export function lastToolState(settings, type, listId) {
   const lists = settings?.classLists || [];
-  const rec = listId && lists.some((l) => l.id === listId) ? settings.classTools?.[listId]?.[type] : settings?.lastTools?.[type];
+  const rec = listId && lists.some((l) => l.id === listId) ? settings.classTools?.[listId]?.[type] : null;
   return rec && typeof rec === 'object' && rec.state && typeof rec.state === 'object' ? JSON.parse(JSON.stringify(rec.state)) : null;
+}
+
+// ---- 各班自己的資料：投票題庫與紀錄、文字紀錄、課堂加分（只在這一班的白板出現）
+// settings.classData = { [班級 id]: { pollBank?, pollResults?, textNotes?, points? } }
+export function classData(settings, classId) {
+  if (!settings || !classId) return {}; // 沒有班級時給一個用完就丟的物件（不會存進設定檔）
+  if (!settings.classData || typeof settings.classData !== 'object' || Array.isArray(settings.classData)) settings.classData = {};
+  const d = settings.classData[classId];
+  return d && typeof d === 'object' && !Array.isArray(d) ? d : (settings.classData[classId] = {});
+}
+// 刪除班級：名單、各班資料、使用過的工具、座位紀錄都清掉（白板由呼叫的地方刪除）
+export function dropClass(settings, classId) {
+  if (!settings || !classId) return false;
+  const before = (settings.classLists || []).length;
+  settings.classLists = (settings.classLists || []).filter((l) => l.id !== classId);
+  for (const k of ['classData', 'classTools', 'seatLayouts']) if (settings[k] && typeof settings[k] === 'object') delete settings[k][classId];
+  return settings.classLists.length !== before;
 }
 export function forgetClassTool(settings, listId, type) {
   const mine = settings?.classTools?.[listId];

@@ -2,6 +2,7 @@
 import { h, field, select, checkbox, pickImage, setImage, toast, modal, confirmDialog } from '../ui.js';
 import { htmlToText, upsertNote, deleteNote, searchNotes, newNoteId } from '../text-notes.js';
 import { observeSize } from './util.js';
+import { classData } from '../roster.js';
 import { hanChars, readingsOf, setReading, stripVS, withReading, autoReadings, loadBpmfData, vsOfIndex, indexOfVs } from '../bpmf.js';
 
 const COLORS = ['#1f2937', '#ffffff', '#ef4444', '#f97316', '#eab308', '#22c55e', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899'];
@@ -18,7 +19,7 @@ function colorRow(value, onPick) {
 }
 
 // 文字：小工具上方有格式工具列（大小、顏色、粗體；選取文字時只改選取的部分）
-// 寫過的內容自動存成紀錄（settings.textNotes，見 text-notes.js），可以「新的一頁」或從「📚 紀錄」叫回
+// 寫過的內容自動存成紀錄（settings.classData[班級].textNotes，各班分開，見 text-notes.js），可以「新的一頁」或從「📚 紀錄」叫回
 const TEXT_COLORS = ['#1f2937', '#e03131', '#1971c2', '#2f9e44', '#f08c00', '#7048e8'];
 const pad2 = (n) => String(n).padStart(2, '0');
 // 螢幕上的水平／垂直位置 → CSS。文字框是直向的 flex 容器：justify-content 管「區塊方向」，text-align 管「行內方向」
@@ -328,8 +329,9 @@ export const text = {
     async function saveNote() {
       clearTimeout(noteTimer); noteTimer = 0;
       if (!htmlToText(s.html)) return;
-      const st = await ctx.store.getSettings().catch(() => null);
-      if (!st) return;
+      const all = await ctx.store.getSettings().catch(() => null);
+      if (!all || !ctx.classId) return;
+      const st = classData(all, ctx.classId); // 文字紀錄各班分開
       if (!s.noteId) { s.noteId = newNoteId(); ctx.save(); }
       if (!Array.isArray(st.textNotes)) st.textNotes = [];
       if (upsertNote(st.textNotes, { id: s.noteId, html: s.html })) ctx.store.saveSettings();
@@ -347,7 +349,7 @@ export const text = {
     }
     async function openNotes() {
       await saveNote();
-      const st = await ctx.store.getSettings();
+      const st = classData(await ctx.store.getSettings(), ctx.classId);
       if (!Array.isArray(st.textNotes)) st.textNotes = [];
       const list = st.textNotes;
       const q = h('input', { class: 'input', placeholder: '搜尋紀錄（例如：作業）', oninput: () => draw() });
@@ -372,7 +374,7 @@ export const text = {
       draw();
       const dlg = modal({
         title: '📚 文字紀錄', wide: true, actions: [{ label: '關閉' }],
-        body: h('div', { class: 'stack' }, h('small', { class: 'muted' }, '寫過的內容會自動存在這裡（存在你的資料夾，換電腦也找得到）。按「使用」換成那則內容；文字框目前的內容也已經存好。'), q, box),
+        body: h('div', { class: 'stack' }, h('small', { class: 'muted' }, '這一班寫過的內容會自動存在這裡（存在你的資料夾，換電腦也找得到）。按「使用」換成那則內容；文字框目前的內容也已經存好。'), q, box),
       });
       setTimeout(() => q.focus(), 50);
     }
@@ -415,7 +417,7 @@ export const text = {
         field('文字紀錄', h('div', { class: 'row-btns' },
           h('button', { class: 'btn', onclick: () => openNotes() }, '📚 開啟紀錄'),
           h('button', { class: 'btn', onclick: () => newPage() }, '📄 新的一頁')),
-          '寫過的內容會自動存成紀錄，換電腦、換白板都能叫回。'),
+          '寫過的內容會自動存成這一班的紀錄，換電腦、在這班的其他白板都能叫回。'),
         field('破音字（注音字型）', h('div', { class: 'stack' },
           checkbox('自動判斷常用詞的讀音（例如：銀行、音樂、睡覺、目的）', pyAuto(), (v) => { s.pyAuto = v; ctx.save(); runAuto({ reset: !v }); }),
           checkbox('「一」「不」標示變調（課本的標法，例如：一個、不是）', s.pySandhi !== false, (v) => { s.pySandhi = v; ctx.save(); runAuto(); })),

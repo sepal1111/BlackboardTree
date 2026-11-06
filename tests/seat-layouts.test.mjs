@@ -31,10 +31,10 @@ describe('座位表的紀錄', () => {
     assert.equal(saveLayout(s, 'nope', st([]), '數學'), null);
     assert.equal(cleanLabel('一二三四五六七八九十一二三四五六七八九十多'), '一二三四五六七八九十一二三四五六七八九十');
   });
-  test('自己輸入名單的座位表（沒有班級）也能存', () => {
+  test('沒有班級的座位表不存', () => {
     const s = settings();
-    assert.ok(saveLayout(s, '', st(['甲']), '社團'));
-    assert.equal(layoutsOf(s, '')[0].label, '社團');
+    assert.equal(saveLayout(s, '', st(['甲']), '社團'), null);
+    assert.deepEqual(layoutsOf(s, ''), []);
   });
   test('使用中的那一組：座位改變才存回', () => {
     const s = settings();

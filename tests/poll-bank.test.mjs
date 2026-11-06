@@ -2,6 +2,7 @@ import './helpers.mjs';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  bankToText,
   parsePollText, parsePollRows, addToBank, itemFromPoll, makeResult, addResult, resultSig, resultsToCsv, fmtTime, totalVotes,
 } from '../static/js/poll-bank.js';
 
@@ -90,5 +91,14 @@ describe('投票紀錄', () => {
     assert.equal(lines[1], `${fmtTime(at)},班級,"喜歡, 還是不喜歡？",'=1+1,1,100%,"王""小""明"`);
     assert.equal(lines[2], `${fmtTime(at)},班級,"喜歡, 還是不喜歡？",B,0,0%,`);
     assert.equal(fmtTime(at), '2026/11/02 09:05');
+  });
+});
+
+describe('題庫匯出', () => {
+  test('匯出的文字可以再匯入到其他班', () => {
+    const bank = [{ id: 'a', question: '午餐想吃什麼？', options: ['麵', '飯'] }, { id: 'b', question: '季節', options: ['春', '夏', '秋'] }];
+    const back = parsePollText(bankToText(bank));
+    assert.deepEqual(back.items.map((it) => [it.question, ...it.options]), [['午餐想吃什麼？', '麵', '飯'], ['季節', '春', '夏', '秋']]);
+    assert.deepEqual(back.skipped, []);
   });
 });

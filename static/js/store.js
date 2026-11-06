@@ -111,7 +111,7 @@ export class Store extends EventTarget {
   }
 
   touchIndex(board) {
-    const entry = { id: board.id, name: board.name, rev: board.rev, created: board.created, updatedAt: board.updatedAt };
+    const entry = { id: board.id, name: board.name, classId: board.classId || '', rev: board.rev, created: board.created, updatedAt: board.updatedAt };
     const i = this.index.findIndex((b) => b.id === board.id);
     if (i >= 0) this.index[i] = entry; else this.index.push(entry);
     if (this.remote) LS.set(this.key('index'), this.index);
@@ -131,9 +131,10 @@ export class Store extends EventTarget {
     }
   }
 
-  newBoard(name) {
+  // 白板屬於某個班級（classId）；沒有班級的舊白板不會顯示
+  newBoard(name, classId) {
     const now = Date.now();
-    const board = { id: uid(), name, rev: 0, created: now, updatedAt: now, data: { background: { type: 'preset', value: 'sky' }, widgets: [] } };
+    const board = { id: uid(), name, classId, rev: 0, created: now, updatedAt: now, data: { background: { type: 'preset', value: 'sky' }, widgets: [] } };
     this.saveBoard(board, true);
     return board;
   }
@@ -232,10 +233,11 @@ export class Store extends EventTarget {
     return this.settings;
   }
 
-  saveSettings() {
+  // quiet：只存檔、不通知其他畫面重畫（例如課堂加分每按一次）
+  saveSettings({ quiet = false } = {}) {
     // names 給舊版程式讀；students 才有座號、照片
     for (const l of this.settings.classLists) l.names = l.students.map((x) => x.name);
-    this.dispatchEvent(new Event('settings'));
+    if (!quiet) this.dispatchEvent(new Event('settings'));
     if (this.remote) LS.set(this.key('settings'), this.settings);
     clearTimeout(this.settingsTimer);
     this.settingsTimer = setTimeout(() => this.backend.putSettings(this.settings).catch(() => {}), 500);

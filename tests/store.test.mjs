@@ -38,7 +38,7 @@ describe('FolderBackend：V:\\MyScreen 的檔案格式', () => {
     const r1 = await b.putBoard({ id: 'b1', name: '國語', data: { widgets: [] } }, null);
     assert.equal(r1.rev, 1);
     const saved = fs.json('MyScreen/boards/b1.json');
-    assert.deepEqual({ ...saved, created: 0, updatedAt: 0 }, { id: 'b1', name: '國語', rev: 1, created: 0, updatedAt: 0, data: { widgets: [] } });
+    assert.deepEqual({ ...saved, created: 0, updatedAt: 0 }, { id: 'b1', name: '國語', classId: '', rev: 1, created: 0, updatedAt: 0, data: { widgets: [] } });
     const r2 = await b.putBoard({ id: 'b1', name: '國語', data: {} }, 1);
     assert.equal(r2.rev, 2);
     assert.equal(fs.json('MyScreen/boards/b1.json').created, saved.created); // 建立時間不變

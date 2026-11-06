@@ -1,7 +1,7 @@
 // 時間類：時鐘日期、計時器、碼錶、考試時間
 import { h, field, select, checkbox, promptDialog, timePicker } from '../ui.js';
 import { beep, pad, fmtDuration, parseDuration, WEEKDAYS, parseHM, fmtHM, examSchedule, examStatus, examAttendance, seatNumbersOf, fmtSeats, fmtAttendance, observeSize } from './util.js';
-import { studentsOf, lastListId, rememberList } from '../roster.js';
+import { studentsOf } from '../roster.js';
 
 // 時鐘日期：時間（數字／指針／不顯示）＋日期（一行／月曆／不顯示）
 export const clock = {
@@ -299,12 +299,7 @@ export const exam = {
     const onSettings = () => { drawAtt(); ctx.push?.(); };
     ctx.store.addEventListener('settings', onSettings);
     ctx.store.getSettings().then((st) => {
-      if (s.listId == null) {
-        const last = lastListId();
-        s.listId = st.classLists.some((l) => l.id === last) ? last : '';
-        ctx.save();
-      }
-      onSettings();
+      onSettings(); // 班級由白板決定（app.js 的 mountWidget）
     }).catch(() => {});
 
     let prev = null; // 上一次畫面的狀態：用來判斷「剛進入提醒時間」「剛結束」才響鈴，開啟白板時不會亂響
@@ -390,16 +385,13 @@ export const exam = {
     function attSettings() {
       const box = h('div', { class: 'field exam-att-set' });
       async function draw() {
-        const st = await ctx.store.getSettings().catch(() => ({ classLists: [] }));
-        const lists = st.classLists || [];
+        await ctx.store.getSettings().catch(() => null);
         const linked = classList();
         const a = attendance();
         const sum = fmtAttendance(a);
         box.replaceChildren(...[ // replaceChildren 會把 null 變成文字「null」，所以先濾掉
           h('span', null, '人數統計'),
-          select([['', '✏️ 自己輸入應到人數'], ...lists.map((l) => [l.id, `👥 ${l.name}（${studentsOf(l).length} 人）`])], linked ? linked.id : '', (v) => {
-            s.listId = v; s.absent = []; rememberList(v); changed(); draw(); // 換班級時缺考重新點選
-          }),
+          linked ? h('b', null, `👥 ${linked.name}（${studentsOf(linked).length} 人）`) : null,
           linked ? null : h('label', { class: 'row-btns att-row' }, '應到',
             h('input', {
               class: 'input att-num', type: 'number', min: 0, max: 99, value: s.expected || '', placeholder: '人數',

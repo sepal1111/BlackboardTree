@@ -1,5 +1,5 @@
 // 座位表的紀錄：每班可以存好幾組座位排法，各自標上科目或類型（例如「數學」「考試」「分組活動」）
-// 存在老師的 settings.json：settings.seatLayouts = { [班級 id 或 '' (自己輸入的名單)]: [{ id, label, rows, cols, seats, flip, at }] }
+// 存在老師的 settings.json：settings.seatLayouts = { [班級 id]: [{ id, label, rows, cols, seats, flip, at }] }
 // 座位表正在使用某一組時（state.layoutId），換座位會自動存回那一組
 
 export const MAX_LAYOUTS = 30;   // 每班最多幾組，太多時刪掉最久沒用的
@@ -17,11 +17,11 @@ function bucket(settings, listId, create) {
     settings.seatLayouts = {};
   }
   const all = settings.seatLayouts;
-  // 班級刪除後清掉它的紀錄（'' 是自己輸入名單的座位表，保留）
+  // 班級刪除後清掉它的紀錄
   const lists = Array.isArray(settings.classLists) ? settings.classLists : [];
-  for (const k of Object.keys(all)) if (k && !lists.some((l) => l.id === k)) delete all[k];
+  for (const k of Object.keys(all)) if (!lists.some((l) => l.id === k)) delete all[k];
   const key = String(listId || '');
-  if (key && !lists.some((l) => l.id === key)) return null;
+  if (!key || !lists.some((l) => l.id === key)) return null;
   if (!Array.isArray(all[key])) { if (!create) return null; all[key] = []; }
   return all[key];
 }

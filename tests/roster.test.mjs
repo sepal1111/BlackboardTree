@@ -179,24 +179,16 @@ describe('watchRoster：小工具跟著名單變化', () => {
     assert.equal(ctx.saves, 1);
   });
 
-  test('新的小工具自動連結上次用的班級', async () => {
+  test('班級由白板決定：不會自己換班，名單載入、變更時重畫', async () => {
     rememberList('L2');
-    const state = {};
+    const state = { listId: 'L1' };
     const ctx = fakeCtx(state, [{ id: 'L1' }, { id: 'L2' }]);
     let changes = 0;
     watchRoster(ctx, () => { changes++; });
     await tick();
-    assert.equal(state.listId, 'L2');
+    assert.equal(state.listId, 'L1');
     assert.equal(changes, 1);
     ctx.store.dispatchEvent(new Event('settings'));
     assert.equal(changes, 2);
-  });
-
-  test('已經手動輸入名字的小工具不會自動連結', async () => {
-    rememberList('L1');
-    const state = { names: '王小明\n陳美麗' };
-    watchRoster(fakeCtx(state), () => {});
-    await tick();
-    assert.equal(state.listId, undefined);
   });
 });
