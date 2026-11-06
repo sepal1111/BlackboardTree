@@ -164,6 +164,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.9.0 | 畫布格線與對齊（`ui-prefs.js` 的 grid／gridShow、snapMove、snapResize）；文字小工具格式工具列、文字紀錄（`text-notes.js`，settings.textNotes）、排版（`textLayout()`、直式）、注音字型（vendor/fonts）、破音字（`bpmf.js` 的選擇符與 `autoReadings()`，詞庫在 tools/bpmf） |
 | 1.8.0 | 課堂加分每日紀錄（`points-log.js`，state.daily）、排行榜（累計／今天／指定區間）與匯出 CSV，歸零不清紀錄；各班使用過的工具（settings.classTools，`roster.js` 的 `recordClassTool`，設定 → 班級名單一鍵叫回）；考試時間自動縮放（`fit()` 以 em 為單位二分搜尋字體）、科目加大改深綠色 |
 | 1.7.0 | 新增「考試時間」小工具（`time.js` 的 `exam`；計算在 `util.js` 的 `examStatus`、`examAttendance`，手機遙控頁共用）：各節科目與起訖時間、自動倒數、結束前提醒、停筆提示、人數統計（應到／實到／缺考座號，可連結班級名單）、手機延長時間與點選缺考；`ui.js` 新增 24 小時制 `timePicker` |
 | 1.6.3 | 新 Logo（`static/logo.svg`）：`make-icons.mjs` 產生 exe／安裝程式／視窗／系統匣圖示，開始畫面、關於與更新、分頁圖示也用它 |
@@ -198,11 +199,14 @@ static/                     前端（桌面版、網頁版共用）
   js/remote-host.js         教室電腦端的遙控連線（RemoteHost）
   js/remote.js              手機遙控頁的程式（各小工具的手機卡片 RENDER）
   js/ui.js                  h()、modal、toast、選擇圖片等共用 UI
-  js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具）
+  js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具、畫布格線 grid／gridShow 與對齊計算 snapMove、snapResize）
   js/update.js              檢查新版本、下載並驗證、產生更新用的 PowerShell 指令
   js/widgets/               小工具：time.js、classroom.js、media.js、util.js、index.js（清單與順序）；考試時間的計算 examStatus() 在 util.js（手機遙控頁共用，內建 relay 也有嵌入）
   vendor/qrcode.js          QR Code
   vendor/xlsx.mini.min.js   SheetJS 0.20.3（讀 Excel，用到時才載入）
+  js/bpmf.js                注音字型的破音字（讀音選擇符、自動判斷 autoReadings）
+  js/bpmf-data.js           破音字資料（由 tools/bpmf/build.mjs 產生，不要手改）
+  vendor/fonts/             注音字型（ButTaiwan bpmfvs，OFL-1.1，取自 @fontsource/bpmf-* 5.3.1 的 woff2 分塊）：注音楷體 bpmf-zihi-kai-std、注音圓體 bpmf-huninn；文字小工具用到時才載入 CSS，瀏覽器依 unicode-range 只下載用到的分塊
 server/
   app.py                    網頁版伺服器（FastAPI）：靜態網頁、relay、/api/config（校內 IP）
   relay.py                  手機遙控、學生投票轉送（網頁版用；桌面版用 C# 版）
@@ -218,6 +222,7 @@ desktop/
   installer/ChineseTraditional.isl, icon.ico
   out/                      建置產出（安裝程式、免安裝版、latest.json，有放進 git）
 tests/                      前端自動化測試（npm test）
+tools/bpmf/                 破音字詞庫：words.txt（常用詞，可編輯）、phonic_table_Z.txt（字型的讀音順序，Apache 2.0，見 NOTICE.txt）、build.mjs（產生 static/js/bpmf-data.js）
 package.json                只有測試指令，沒有相依套件
 config.example.json         網頁版伺服器設定範例：host、port、HTTPS 憑證（複製成 config.json，已被 .gitignore 排除）
 start.bat, start.sh         啟動網頁版伺服器（第一次會建立 .venv）
@@ -232,7 +237,8 @@ start.bat, start.sh         啟動網頁版伺服器（第一次會建立 .venv�
 ```
 MyScreen/
   boards/<id>.json     {id, name, rev, created, updatedAt, data: {background, widgets: [...]}}
-  settings.json        {data: {classLists: [...], classTools?, ui?, pollBank?, pollResults?}, updatedAt}
+  settings.json        {data: {classLists: [...], classTools?, textNotes?, ui?, pollBank?, pollResults?}, updatedAt}
+                       textNotes：文字小工具的紀錄 [{ id, html, text, at }]，最多 200 則（text-notes.js）
                        classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，連結班級的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
@@ -287,6 +293,7 @@ export const example = {
 - 需要班級名單的小工具：參考 `classroom.js` 的 `people(ctx)`、`namesEditor()`、`watchRoster()`（設定變更時自動重畫、學生改名時更新狀態）
 - 大小改變時要重排版面：用 `widgets/util.js` 的 `observeSize()`，不要直接用 ResizeObserver（會出現 ResizeObserver loop 警告）
 - 小工具內的文字大小用容器單位（`cqw`、`cqh`、`cqmin`），放大到全螢幕時會自動放大
+- 文字小工具的排版：狀態用螢幕方向記錄（`align` 水平、`valign` 垂直、`vertical` 直式），`media.js` 的 `textLayout()` 換算成 CSS。`.text-ed` 是直向 flex 容器，`justify-content` 管區塊方向、`text-align` 管行內方向；直式（`writing-mode: vertical-rl`，`text-orientation: upright` 讓英數字直立）時兩者對調。注音字型的 `vert` 功能會把英數字換成轉向的字形，而直排標點也靠 `vert`，不能關掉；所以直式時 `fontFamilyOf()` 在最前面加上只涵蓋英數字的 `BT Upright Serif／Sans`（`app.css` 的 `@font-face`，用 `local()` 系統字型）。破音字在 `bpmf.js`：注音 IVS 規格，字後加 U+E01E1… 是第 2…種讀音、U+E01E0 是不標注音；`readingsOf()` 把各選擇符畫到 canvas 和預設讀音比對，就知道字型裡有幾種讀音（不需要讀音資料庫）；`htmlToText()`／遙控畫面會拿掉選擇符。自動判斷在 `autoReadings()`：先套 `bpmf-data.js` 的常用詞（長詞優先），再套規則（得、地、了，以及「一」「不」變調，可在設定關閉）；老師在「音」對話框指定的字會包成 `<span class="py-m">`，自動判斷不會改它，在它後面打字時 `tidyManual()` 會把新字移出來。字型清單在 `TEXT_FONTS`（`font` 狀態；ㄅ 按鈕用 `plainFont`／`bpmfFont` 記住切換前後的字型）。置中用 `safe`，內容超過框時才捲得到開頭
 
 ### 手機遙控
 
@@ -335,6 +342,8 @@ export const example = {
 | 網頁版的全螢幕與彈出視窗 | 瀏覽器只允許使用者點擊時進入全螢幕、開新視窗；從手機遙控觸發時會失敗（桌面版沒有這個限制），程式已處理成退而求其次 |
 | 防火牆詢問 | 每個新位置的 `myscreen-relay.exe` 第一次監聽時 Windows 都會詢問；一般帳號無法允許。開發機上測試時會留下多筆規則，可在「Windows 安全性 → 防火牆 → 允許應用程式」清掉 |
 | SheetJS | 只用 `xlsx.mini.min.js`（讀寫 xlsx／csv）；舊版 npm 上的 0.18 有安全性問題，請從 cdn.sheetjs.com 取得新版 |
+| 注音字型 | 更新時用 `npm pack @fontsource/bpmf-huninn`（或 bpmf-zihi-kai-std），只複製 `400.css` 用到的 woff2，並把 CSS 裡的 woff 備援拿掉；每個資料夾要保留 LICENSE（OFL） |
+| 破音字詞庫 | 改 `tools/bpmf/words.txt`（格式：`詞 字=讀音 …`），再執行 `node tools/bpmf/build.mjs`；讀音寫錯或不是多音字會報錯。測試會檢查 bpmf-data.js 是否和 words.txt 一致 |
 | 社群網站嵌入 | Facebook／Instagram／Threads 只能嵌入公開貼文，播放器不開放外部控制 |
 
 ---

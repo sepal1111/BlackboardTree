@@ -10,7 +10,7 @@ import { RemoteHost } from './remote-host.js';
 import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
 import { UPDATE_URL, RELEASES_PAGE, checkForUpdate, downloadVerified, notesSince, shouldAutoCheck, updateScript, encodePowerShell, plainNote } from './update.js';
-import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool } from './ui-prefs.js';
+import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, GRID_SIZES, GRID_SHOW, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool, gridCell, nextGrid, snapMove, snapResize } from './ui-prefs.js';
 
 const TOOL_TYPES = widgetList.map((d) => d.type);
 
@@ -289,6 +289,8 @@ function renderBoard() {
   if (S.remote?.poll && !S.mounted.has(S.remote.poll.id)) S.remote.closePoll();
   renderTopbar();
   $('#empty-hint').classList.toggle('hidden', S.board.data.widgets.length > 0);
+  requestAnimationFrame(layoutGrid); // 畫布顯示出來後才量得到寬度
+  setTimeout(layoutGrid, 50);
   S.remote?.push();
 }
 
@@ -345,9 +347,30 @@ function applyUi() {
   document.body.dataset.dock = pos.value;
   document.body.dataset.dockLabels = S.ui.labels;
   document.documentElement.style.setProperty('--dock-icon', iconPx(S.ui) + 'px');
+  document.body.dataset.grid = S.ui.grid;
+  document.body.dataset.gridShow = S.ui.gridShow;
+  layoutGrid();
   $('#eh-icon').textContent = pos.arrow;
   $('#eh-text').textContent = `從${pos.where}工具列加入計時器、抽籤、文字等小工具`;
   renderDock();
+}
+
+// 畫布格線：格子大小跟著畫布寬度（視窗大小改變時重算）
+function layoutGrid() {
+  const cell = gridCell(S.ui, $('#stage').clientWidth);
+  $('#grid-overlay').style.setProperty('--grid', cell ? cell + 'px' : '0px');
+}
+window.addEventListener('resize', layoutGrid);
+
+// 拖曳時對齊格線（按住 Alt 暫時不對齊，方便微調）
+function snapBox(w, kind, ev) {
+  if (ev?.altKey) return;
+  const st = $('#stage');
+  const W = st.clientWidth, H = st.clientHeight;
+  const cell = gridCell(S.ui, W);
+  if (!cell) return;
+  if (kind === 'move') Object.assign(w, snapMove(w, cell, W, H));
+  else Object.assign(w, snapResize(w, cell, W, H, 150, 110));
 }
 
 // 修改畫面偏好：立即套用，存到老師的 settings.json
@@ -510,14 +533,17 @@ function mountWidget(w) {
     if ((w.z || 0) < maxZ()) { w.z = maxZ() + 1; place(el, w); save(); }
   }, true);
 
-  dragHandler(head, el, w, (dx, dy, o) => {
+  dragHandler(head, el, w, (dx, dy, o, ev) => {
     w.x = clamp(o.x + dx, -w.w + 0.05, 0.95);
     w.y = clamp(o.y + dy, 0, 0.95);
+    snapBox(w, 'move', ev);
+    w.y = Math.max(0, w.y);
   });
-  dragHandler(grip, el, w, (dx, dy, o) => {
+  dragHandler(grip, el, w, (dx, dy, o, ev) => {
     const r = $('#stage').getBoundingClientRect();
     w.w = clamp(o.w + dx, 150 / r.width, 1);
     w.h = clamp(o.h + dy, 110 / r.height, 1);
+    snapBox(w, 'resize', ev);
   });
 }
 
@@ -532,7 +558,7 @@ function dragHandler(handle, el, w, apply) {
     const o = { x: w.x, y: w.y, w: w.w, h: w.h };
     handle.setPointerCapture(e.pointerId);
     document.body.classList.add('dragging');
-    const move = (ev) => { apply((ev.clientX - sx) / r.width, (ev.clientY - sy) / r.height, o); place(el, w); };
+    const move = (ev) => { apply((ev.clientX - sx) / r.width, (ev.clientY - sy) / r.height, o, ev); place(el, w); };
     const up = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', up);
@@ -701,6 +727,10 @@ function settingsDialog(tab = 'board') {
       sec('工具列文字',
         seg(LABEL_MODES, ui.labels, (v) => update({ ...ui, labels: v })),
         h('small', { class: 'muted' }, '「自動」：視窗寬度小於 1280 或高度小於 800 時只顯示圖示，滑鼠移到圖示上會顯示名稱。')),
+      sec('畫布格線',
+        seg(GRID_SIZES, ui.grid, (v) => update({ ...ui, grid: v })),
+        ui.grid !== 'off' ? seg(GRID_SHOW, ui.gridShow, (v) => update({ ...ui, gridShow: v })) : null,
+        h('small', { class: 'muted' }, '開啟後，移動小工具時左上角、調整大小時右下角會自動對齊格線，排版更整齊；按住 Alt 拖曳可以暫時不對齊。快捷鍵 G 可以快速切換格線大小。')),
       sec(`要顯示的工具（${shown} / ${TOOL_TYPES.length}）`,
         h('small', { class: 'muted' }, '點一下切換顯示或隱藏。隱藏的工具不會出現在工具列與手機遙控，已經放在白板上的不受影響。'),
         h('div', { class: 'tool-grid' }, widgetList.map((d) => {
@@ -1382,9 +1412,14 @@ $('#hide-btn').addEventListener('click', () => { document.body.classList.toggle(
 $('#remote-btn').addEventListener('click', remoteDialog);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && S.maxId && !document.querySelector('#modal-root .m-wrap')) { toggleMax(null); return; }
-  if (e.target.closest('input,textarea,[contenteditable]')) return;
+  if (e.target.closest?.('input,textarea,[contenteditable]')) return;
   if (e.key === 'h' || e.key === 'H') { document.body.classList.toggle('chrome-hidden'); S.remote?.push(); }
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  if ((e.key === 'g' || e.key === 'G') && S.board && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const grid = nextGrid(S.ui.grid);
+    setUi({ ...S.ui, grid });
+    toast(grid === 'off' ? '格線：關閉' : `格線：${GRID_SIZES.find((g) => g.value === grid).label}（拖曳小工具時自動對齊，按住 Alt 不對齊）`);
+  }
 });
 window.addEventListener('beforeunload', (e) => {
   if (S.store?.pending.size) { e.preventDefault(); e.returnValue = ''; }

@@ -382,7 +382,25 @@ body.dragging iframe { pointer-events: none; }
 .snd-msg { font-weight: 700; min-height: 1.2em; font-size: min(6cqw, 18px); }
 
 /* 文字 */
-.text-ed { padding: 4cqmin 5cqmin; outline: none; overflow: auto; line-height: 1.4; word-break: break-word; cursor: text; }
+.text-ed { padding: 4cqmin 5cqmin; outline: none; overflow: auto; line-height: 1.4; word-break: break-word; cursor: text; display: flex; flex-direction: column; }
+/* 注音字型直式時的英數字：注音字型會把英數字轉向，改用系統英文字型（只涵蓋英數字與半形符號），才會直立 */
+@font-face { font-family: 'BT Upright Serif'; src: local('Times New Roman'), local('TimesNewRomanPSMT'), local('Georgia'), local('Noto Serif'), local('DejaVu Serif'), local('Liberation Serif'); unicode-range: U+0021-007E, U+00A0-00FF; }
+@font-face { font-family: 'BT Upright Sans'; src: local('Segoe UI'), local('SegoeUI'), local('Arial'), local('ArialMT'), local('Helvetica'), local('Roboto'), local('Noto Sans'), local('DejaVu Sans'), local('Liberation Sans'); unicode-range: U+0021-007E, U+00A0-00FF; }
+/* 破音字讀音視窗 */
+.py-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow: auto; }
+.py-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid #e9ecef; border-radius: 12px; }
+.py-ctx { min-width: 9em; font-size: 20px; color: #868e96; }
+.py-ctx b { font-size: 32px; color: #1f2937; font-weight: 400; margin: 0 2px; }
+.py-opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.py-opt { min-width: 64px; height: 58px; font-size: 34px; line-height: 1; border: 2px solid #dee2e6; border-radius: 10px; background: #fff; color: #1f2937; cursor: pointer; }
+.py-opt:hover { border-color: #91a7ff; background: #f3f6ff; }
+.py-opt.on { border-color: #4c6ef5; background: #edf2ff; box-shadow: 0 0 0 2px #bac8ff; }
+.py-row.manual { border-color: #ffd8a8; background: #fff9f0; }
+.py-state { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.py-tag { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #fff0db; color: #d9480f; }
+.py-tag.auto { background: #e7f5ff; color: #1971c2; }
+/* 直式：由上往下、由右往左；英文與數字也直立（一個字一格，像課本的直排） */
+.text-ed.vert { writing-mode: vertical-rl; text-orientation: upright; line-height: 1.6; }
 .text-ed:empty::before { content: attr(data-ph); color: #adb5bd; }
 
 /* 畫板 */
@@ -736,3 +754,55 @@ button.set-item:hover { border-color: #bac8ff; background: #f8f9ff; }
 .lb-row.top2 { background: #f8f9fa; border-color: #adb5bd; }
 .lb-row.top3 { background: #fff4e6; border-color: #ffa94d; }
 .lb-row.top1 .lb-rank, .lb-row.top2 .lb-rank, .lb-row.top3 .lb-rank { font-size: 26px; }
+
+/* 畫布格線：拖曳小工具時顯示（或設定成一直顯示）；深淺兩色疊在一起，淺色與深色背景都看得到 */
+#grid-overlay {
+  position: absolute; inset: 0; pointer-events: none; z-index: 1; display: none;
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, .16) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, .16) 1px, transparent 1px),
+    linear-gradient(to right, rgba(255, 255, 255, .28) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, .28) 1px, transparent 1px);
+  background-size: var(--grid) var(--grid);
+  background-position: 0 0, 0 0, 1px 0, 0 1px;
+}
+body:not([data-grid=off])[data-grid-show=always] #grid-overlay,
+body:not([data-grid=off]).dragging #grid-overlay { display: block; }
+body.dragging:not([data-grid=off]) #grid-overlay { background-image:
+    linear-gradient(to right, rgba(66, 99, 235, .35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(66, 99, 235, .35) 1px, transparent 1px),
+    linear-gradient(to right, rgba(255, 255, 255, .35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, .35) 1px, transparent 1px); }
+
+/* 文字：格式工具列（滑鼠移到文字框上或正在輸入時才出現，投影時不擋內容） */
+.text-body { position: relative; }
+.text-tb { position: absolute; top: 6px; right: 6px; z-index: 2; display: flex; align-items: center; gap: 3px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, .95); box-shadow: 0 4px 14px rgba(15, 23, 42, .18); opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity .15s, transform .15s; flex-wrap: wrap; max-width: calc(100% - 12px); }
+.w-text:hover .text-tb, .text-body:focus-within .text-tb { opacity: 1; pointer-events: auto; transform: none; }
+.text-tb button { border: 1px solid transparent; background: none; border-radius: 8px; min-width: 30px; height: 30px; padding: 0 6px; font-size: 14px; font-weight: 800; color: #343a40; }
+.text-tb button:hover { background: #edf2ff; border-color: #bac8ff; }
+.text-tb .tb-color { min-width: 20px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #ced4da; }
+.text-tb .tb-color:hover { transform: scale(1.15); box-shadow: 0 0 0 2px #91a7ff; }
+.text-tb .tb-b { font-family: Georgia, serif; }
+.text-tb .tb-ic { display: inline-flex; align-items: center; justify-content: center; }
+.text-tb .tb-ic.on { background: #dbe4ff; border-color: #748ffc; color: #364fc7; }
+.text-tb .tb-w { font-weight: 900; }
+.text-tb button[hidden] { display: none; }
+.text-tb .tb-sep { width: 1px; height: 20px; background: #dee2e6; margin: 0 3px; }
+.w-text.maximized .text-tb { top: 10px; right: 10px; }
+
+/* 文字紀錄清單 */
+.tn-list { display: flex; flex-direction: column; gap: 8px; max-height: 56vh; overflow: auto; }
+.tn-item { border: 1px solid #e9ecef; border-radius: 12px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+.tn-item.on { border-color: var(--accent); background: #f3f6ff; }
+.tn-text { white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-size: 15px; line-height: 1.45; }
+.tn-meta { display: flex; align-items: center; gap: 6px; }
+.tn-meta small { flex: 1; color: var(--muted); }
+/* 工具列放在標題列裡：滑鼠移到文字小工具上或正在輸入時出現 */
+.w-head .text-tb { position: static; transform: none; box-shadow: none; background: none; padding: 0; margin-left: auto; margin-right: 6px; gap: 2px; flex-wrap: nowrap; max-width: none; overflow: hidden; }
+.w-text:hover .w-head .text-tb, .w-text:focus-within .w-head .text-tb { opacity: 1; pointer-events: auto; }
+.w-head .text-tb button { min-width: 24px; height: 22px; font-size: 12.5px; padding: 0 4px; border-radius: 6px; }
+.w-head .text-tb .tb-color { min-width: 15px; width: 15px; height: 15px; }
+.w-head .text-tb .tb-sep { height: 14px; margin: 0 2px; }
+.w-text .w-title { flex: none; }
+.w-head.tb-compact .text-tb .extra { display: none; }
+.w-text:is(:hover, :focus-within) .w-head.tb-compact .w-title { display: none; }
