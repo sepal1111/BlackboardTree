@@ -170,6 +170,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 1.10.0 | 座位紀錄（`seat-layouts.js`，settings.seatLayouts；座位表 state.layoutId 使用中的一組自動存回）、新開座位表沿用上次的狀態（小工具定義的 `restoreLast`、settings.lastTools、`lastToolState()`）、關閉小工具時立即記錄最後狀態 |
 | 1.9.1 | 資安：遙控要老師允許（`join-request`／`join-answer`）、代碼只在這次開啟有效（`SS`）、遙控內容加密（`remote-crypto.js`，tweetnacl）、relay 需要時才啟動、`/ws/screen` 只接受本機、連線數與逾時限制、iframe `sandbox`、`nativeAllowList` 縮小、`latest.json` 數位簽章；易用性：工具列文字依空間顯示（`fitDockLabels()`）、關閉小工具可復原（`offerUndo()`）、遙控視窗與儲存位置用語白話化 |
 | 1.9.0 | 畫布格線與對齊（`ui-prefs.js` 的 grid／gridShow、snapMove、snapResize）；文字小工具格式工具列、文字紀錄（`text-notes.js`，settings.textNotes）、排版（`textLayout()`、直式）、注音字型（vendor/fonts）、破音字（`bpmf.js` 的選擇符與 `autoReadings()`，詞庫在 tools/bpmf） |
 | 1.8.0 | 課堂加分每日紀錄（`points-log.js`，state.daily）、排行榜（累計／今天／指定區間）與匯出 CSV，歸零不清紀錄；各班使用過的工具（settings.classTools，`roster.js` 的 `recordClassTool`，設定 → 班級名單一鍵叫回）；考試時間自動縮放（`fit()` 以 em 為單位二分搜尋字體）、科目加大改深綠色 |
