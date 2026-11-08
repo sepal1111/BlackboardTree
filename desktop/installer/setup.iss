@@ -72,6 +72,8 @@ Type: files; Name: "{autodesktop}\MyScreen 教室白板.lnk"
 ; Neutralino 執行時產生的暫存檔（白板資料存在 V:\MyScreen，不會被刪除）
 Type: filesandordirs; Name: "{app}\.tmp"
 Type: files; Name: "{app}\neutralinojs.log"
+; 資訊組安裝時設定的學校共用資料夾（/SCHOOLDIR）
+Type: files; Name: "{app}\school.json"
 ; 1.4 以前資訊組可能放的學校預設遙控伺服器設定（已不再使用），解除安裝時一併清掉
 Type: files; Name: "{app}\myscreen.json"
 
@@ -134,7 +136,27 @@ begin
   end;
 end;
 
+// ---- 學校共用資料夾：資訊組大量部署時加上 /SCHOOLDIR="\\fileserver\公告"，寫進程式資料夾的 school.json
+// 沒有加這個參數時（一般安裝、程式內更新）不動原本的 school.json
+procedure WriteSchoolConfig();
+var
+  Dir: String;
+  Lines: TArrayOfString;
+begin
+  Dir := Trim(ExpandConstant('{param:SCHOOLDIR}'));
+  if Dir = '' then Exit;
+  StringChangeEx(Dir, '"', '', True);
+  StringChangeEx(Dir, '\', '\\', True);
+  SetArrayLength(Lines, 1);
+  Lines[0] := '{"dir": "' + Dir + '"}';
+  SaveStringsToUTF8File(ExpandConstant('{app}\school.json'), Lines, False);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if (CurStep = ssPostInstall) and WizardIsTaskSelected('firewall') then AddFirewallRule();
+  if CurStep = ssPostInstall then
+  begin
+    WriteSchoolConfig();
+    if WizardIsTaskSelected('firewall') then AddFirewallRule();
+  end;
 end;

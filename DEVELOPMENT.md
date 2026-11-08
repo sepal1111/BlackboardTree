@@ -119,7 +119,8 @@ npm test
 | `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、加密的狀態與指令、換代碼換金鑰、允許時交換金鑰、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
 | `poll-bank.test.mjs` | 投票題目匯入（文字、Excel 貼上、Excel／CSV 的列）、題庫去除重複、投票紀錄（指紋、上限）、匯出 CSV（BOM、逗號、引號、公式開頭） |
 | `ui-prefs.test.mjs` | 畫面偏好（工具列位置、圖示大小、顯示的工具）的檢查與切換 |
-| `link-list.test.mjs` | 網址清單：分類標題、名稱與網址、CSV／Tab、說明行、檔名當分類（排除 Windows 的「 (1)」「 - 複製」）、Big5 編碼、重複的清單、搜尋與分組；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed） |
+| `link-list.test.mjs` | 網址清單：分類標題、名稱與網址、CSV／Tab、說明行、檔名當分類（排除 Windows 的「 (1)」「 - 複製」）、搜尋與分組；試卷釋疑的學校共用資料夾（`loadSchoolLinks()`：子資料夾當分類、PDF／圖片／Word／文字檔變成 `school:` 網址、排除 `~$` 暫存檔與其他檔案、讀不到時的錯誤）、`docKind()`、`linkify()`、`school.json`（`parseSchoolConfig()`）；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed） |
+| `docx.test.mjs` | Word 轉 HTML（測試裡自己做 ZIP）：ZIP 壓縮／不壓縮、XML 實體字元、粗體／顏色／字大小（em）／置中／上下標、標題、換行與定位點、文字跳脫、超連結只接受 http(s)、編號（一、(1)）與數字格式、表格合併儲存格、圖片、追蹤修訂與隱藏文字、不是 Word 檔時的錯誤 |
 | `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
 
 - `tests/helpers.mjs` 模擬瀏覽器環境（`localStorage`、`window`、`document`），並提供記憶體裡的資料夾 `MemFs`（介面同 `FsaAdapter`／`NeuAdapter`，`failing = true` 可模擬斷線）
@@ -171,6 +172,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 2.2.0 | 試卷釋疑（`widgets/exam-doc.js`）：讀取學校共用資料夾（`school.js`：school.json／安裝程式 `/SCHOOLDIR`、`ms:schoolDir`）的 PDF、圖片、Word、文字檔、網址清單（`link-list.js` 的 `loadSchoolLinks()`）；Word 轉 HTML（`docx.js`）；每分鐘比對檔案大小與修改時間自動更新；設定頁「🏫 學校共用資料夾」；網頁／影片恢復成 2.0.0（移除白板資料夾的網址清單） |
 | 2.1.0 | 網址清單（`link-list.js`）：讀取白板資料夾的「網址清單*.txt」／`links*.txt`，解析分類、名稱、網址（CSV／Tab、Big5），搜尋與分組；網頁／影片小工具「📋 從網址清單選擇」、記住上次的分類、標題列顯示名稱；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed）；↻ 重新載入與自動重新載入 |
 | 2.0.0 | 以班級為主：白板有 `classId`（`store.newBoard(name, classId)`），首頁 `showClasses()` → `showBoards(classId)`；小工具的 `listId` 一律等於白板的班級（`mountWidget`）；各班資料 settings.classData（`roster.js` 的 `classData()`：pollBank、pollResults、textNotes、points），刪除班級 `dropClass()` 連同白板一起刪；題庫匯出 `bankToText()`；課堂加分 classData.points 同班共用（`saveSettings({ quiet })`）；移除 lastTools 與手動輸入名單；遙控白板清單只列同班 |
 | 1.10.0 | 座位紀錄（`seat-layouts.js`，settings.seatLayouts；座位表 state.layoutId 使用中的一組自動存回）、新開座位表沿用上次的狀態（小工具定義的 `restoreLast`、settings.lastTools、`lastToolState()`）、關閉小工具時立即記錄最後狀態 |
@@ -199,7 +201,9 @@ static/                     前端（桌面版、網頁版共用）
   logo.svg                  黑板樹 Logo（唯一來源：畫面上的 Logo，以及建置時產生的所有圖示）
   remote.html               手機遙控頁
   js/poll-bank.js           投票題庫、匯入題目、投票紀錄與匯出
-  js/link-list.js           網址清單：讀取白板資料夾的「網址清單*.txt」、解析分類／名稱／網址、搜尋（網頁／影片小工具的「📋 從網址清單選擇」）
+  js/link-list.js           試卷釋疑的檔案清單：讀取學校共用資料夾（`loadSchoolLinks()`，子資料夾當分類）的 PDF、圖片、Word、文字檔（`school:` 網址、`docKind()`）與「網址清單*.txt」（解析分類／名稱／網址）、搜尋與分組、`toEmbedUrl()`、`linkify()`
+  js/docx.js                Word（.docx）轉 HTML，不用外部套件：ZIP（DecompressionStream）、XML、樣式、編號、表格、圖片、超連結；文字一律跳脫
+  js/school.js              學校共用資料夾的設定：程式資料夾的 school.json（安裝程式 /SCHOOLDIR 寫入）、這台電腦的 ms:schoolDir（⚙ 設定 → 🏫 學校共用資料夾）；只有桌面版
   js/points-log.js          課堂加分的每日紀錄（state.daily = { 日期: { 姓名: 淨分 } }）、排行榜、匯出 CSV
   vote.html                 學生投票頁（CSS、JS 都寫在檔案內，內建 relay 只要嵌入這一個檔）
   css/app.css, remote.css
@@ -214,7 +218,7 @@ static/                     前端（桌面版、網頁版共用）
   js/ui.js                  h()、modal、toast、選擇圖片等共用 UI
   js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具、畫布格線 grid／gridShow 與對齊計算 snapMove、snapResize）
   js/update.js              檢查新版本、下載並驗證、產生更新用的 PowerShell 指令
-  js/widgets/               小工具：time.js、classroom.js、media.js、util.js、index.js（清單與順序）；考試時間的計算 examStatus() 在 util.js（手機遙控頁共用，內建 relay 也有嵌入）
+  js/widgets/               小工具：time.js、classroom.js、media.js、exam-doc.js（試卷釋疑）、util.js、index.js（清單與順序）；考試時間的計算 examStatus() 在 util.js（手機遙控頁共用，內建 relay 也有嵌入）
   vendor/qrcode.js          QR Code
   vendor/xlsx.mini.min.js   SheetJS 0.20.3（讀 Excel，用到時才載入）
   js/bpmf.js                注音字型的破音字（讀音選擇符、自動判斷 autoReadings）
@@ -260,7 +264,6 @@ MyScreen/
                        classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，這班的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）；小工具定義有 restoreLast（目前是座位表）時，新開會沿用這班的狀態（lastToolState）
                        刪除班級時（roster.js 的 dropClass）這班的白板、classData、classTools、seatLayouts 一起刪除
                        1.10 以前的 pollBank、pollResults、textNotes、lastTools 放在最上層，2.0.0 起不再讀取
-  網址清單*.txt        學校發給各班的網址清單（老師自己放進來，黑板樹只讀不寫；links*.txt 也可以），格式見 link-list.js 開頭與 README
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
 

@@ -1,6 +1,8 @@
-// 網址清單：學校（教務處）先把各年級、各科的網址寫成文字檔，各班導師放進白板資料夾（V:\MyScreen），
-// 老師在「網頁／影片」小工具就能直接挑選，不用自己貼網址。例如段考時的試題疑義、更正說明（Google 簡報、Canva 公開檢視連結）。
+// 試卷釋疑：學校（教務處）把段考的試題疑義、更正說明放在學校共用資料夾，
+// 老師在「試卷釋疑」小工具直接挑選顯示。可以放 PDF、圖片、Word（.docx）、文字檔，
+// 或是寫一份網址清單（Google 簡報、Canva 公開檢視連結）。
 //
+// 網址清單
 // 檔名：網址清單.txt，或「網址清單」開頭的 .txt（例如 網址清單-七年級.txt），可以放好幾個檔案
 // 格式（記事本或 Excel 另存 CSV 都可以，UTF-8 或 Big5）：
 //   [七年級]                                  ← 沒有網址的一行是分類標題（[ ]、【 】可加可不加）
@@ -63,28 +65,105 @@ export async function decodeText(blob) {
   try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch { return new TextDecoder('big5').decode(buf); }
 }
 
-// 讀取白板資料夾裡所有的網址清單 → { files: [檔名], items: [{ group, name, url, file }] }
-// backend 要是 FolderBackend（只存在這台電腦時沒有資料夾可以放檔案）
-export async function loadLinkLists(backend) {
-  if (!backend?.fs) return { files: [], items: [] };
-  const dir = backend.d();
-  const files = (await backend.fs.list(dir))
-    .filter((f) => !f.dir && LINK_FILE_RE.test(f.name))
-    .map((f) => f.name)
-    .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+// 試卷釋疑：學校共用資料夾裡的檔案。網址清單裡的網址照原樣，其他檔案的網址寫成「school:相對路徑」
+export const SCHOOL_PREFIX = 'school:';
+export const isSchoolUrl = (u) => String(u || '').startsWith(SCHOOL_PREFIX);
+export const schoolPath = (u) => String(u || '').slice(SCHOOL_PREFIX.length);
+// 檔案類型 → 'pdf' | 'image' | 'text' | 'word' | 'doc' | ''（不顯示）
+export function docKind(name) {
+  const n = String(name || '');
+  if (/^~\$|^\./.test(n)) return ''; // Word 開啟中的暫存檔、隱藏檔
+  if (/\.pdf$/i.test(n)) return 'pdf';
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n)) return 'image';
+  if (/\.docx$/i.test(n)) return 'word';
+  if (/\.doc$/i.test(n)) return 'doc';
+  if (/\.txt$/i.test(n) && !LINK_FILE_RE.test(n)) return 'text';
+  return '';
+}
+export const DOC_ICON = { pdf: '📕', image: '🖼️', text: '📝', word: '📘', doc: '📘', web: '🌐' };
+const byName = (a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true });
+
+// 讀取一個資料夾 → { files: [相對路徑], items: [{ group, name, url, file, doc }] }
+//   doc：'web'（網址清單裡的網址）或 docKind 的類型
+//   depth：往下讀幾層子資料夾，子資料夾的名稱當作分類（例如 七年級\數學更正.pdf）
+export async function scanLinkFolder(fs, dir = '', { depth = 0 } = {}, group = '') {
+  const files = [];
   const items = [];
-  const seen = new Set();
-  for (const name of files) {
-    const blob = await backend.fs.readBlob(dir ? `${dir}/${name}` : name);
+  const entries = (await fs.list(dir)).sort((a, b) => byName(a.name, b.name));
+  const rel = (name) => (dir ? `${dir}/${name}` : name);
+  for (const f of entries) {
+    if (f.dir || !LINK_FILE_RE.test(f.name)) continue;
+    const blob = await fs.readBlob(rel(f.name));
     if (!blob) continue;
-    for (const it of parseLinkList(await decodeText(blob), fileGroup(name))) {
-      const key = `${it.group}\n${it.name}\n${it.url}`;
-      if (seen.has(key)) continue; // 同一份清單放了兩次
-      seen.add(key);
-      items.push({ ...it, file: name });
+    files.push(rel(f.name));
+    for (const it of parseLinkList(await decodeText(blob), fileGroup(f.name) || group)) items.push({ ...it, file: rel(f.name), doc: 'web' });
+  }
+  for (const f of entries) {
+    const doc = f.dir ? '' : docKind(f.name);
+    if (!doc) continue;
+    files.push(rel(f.name));
+    items.push({ group, name: f.name.replace(/\.[^.]+$/, ''), url: SCHOOL_PREFIX + rel(f.name), file: rel(f.name), doc });
+  }
+  if (depth > 0) {
+    for (const f of entries) {
+      if (!f.dir || /^[.~$]/.test(f.name)) continue;
+      const sub = await scanLinkFolder(fs, rel(f.name), { depth: depth - 1 }, clean(f.name));
+      files.push(...sub.files);
+      items.push(...sub.items);
     }
   }
   return { files, items };
+}
+
+// 同一份清單放了兩次時不重複
+function dedupe(items) {
+  const seen = new Set();
+  return items.filter((it) => {
+    const key = `${it.group}\n${it.name}\n${it.url}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// 學校共用資料夾：網址清單、PDF、圖片、文字檔、Word，子資料夾讀一層（資料夾名稱當分類）
+// 讀不到資料夾（沒有連線、沒有權限）時丟出錯誤
+export async function loadSchoolLinks(fs) {
+  if (!(await fs.exists(''))) throw new Error(`讀不到 ${fs.label}，請確認這台電腦連得到學校的共用資料夾`);
+  const r = await scanLinkFolder(fs, '', { depth: 1 });
+  return { files: r.files, items: dedupe(r.items) };
+}
+
+// 轉成可以放進網頁框的網址：Google 文件／簡報／雲端硬碟檔案用 /preview，Canva 公開檢視連結加上 ?embed
+export function toEmbedUrl(url) {
+  let u;
+  try { u = new URL(String(url).trim()); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol)) return null;
+  const host = u.hostname;
+  if ((host === 'docs.google.com' || (host === 'drive.google.com' && /^\/file\//.test(u.pathname))) && /\/(edit|view|present)$/.test(u.pathname)) {
+    return `${u.origin}${u.pathname.replace(/\/(edit|view|present)$/, '/preview')}`;
+  }
+  if (/(^|\.)canva\.com$/.test(host) && /^\/design\/.+\/view$/.test(u.pathname) && !u.searchParams.has('embed')) {
+    return `${u.origin}${u.pathname}?embed`;
+  }
+  return u.href;
+}
+
+// 文字檔裡的網址變成可以點的連結 → [{ text } | { url }]
+export function linkify(text) {
+  const out = [];
+  const re = /https?:\/\/[^\s"'<>，、；。）」』]+/gi;
+  let last = 0, m;
+  const s = String(text || '');
+  while ((m = re.exec(s))) {
+    const url = trimUrl(m[0]);
+    if (m.index > last) out.push({ text: s.slice(last, m.index) });
+    out.push({ url });
+    last = m.index + url.length;
+    re.lastIndex = last;
+  }
+  if (last < s.length) out.push({ text: s.slice(last) });
+  return out;
 }
 
 // 搜尋：空白分開的每個字都要出現在分類或名稱裡（例如「七 數學」）
@@ -109,7 +188,7 @@ export function groupLinks(items) {
 
 // 範例檔（給學校編寫網址清單時參考）
 export const LINK_SAMPLE = `# 黑板樹網址清單
-# 把這個檔案放進白板資料夾（例如 V:\\MyScreen），在「網頁／影片」小工具按「📋 從網址清單選擇」就能挑選
+# 把這個檔案放進學校共用資料夾（或裡面的年級資料夾），在「試卷釋疑」小工具就能挑選
 # 檔名要是「網址清單.txt」，或「網址清單」開頭的 .txt（例如 網址清單-七年級.txt），可以放好幾個檔案
 # 寫法：
 #   沒有網址的一行是分類（例如年級），[ ] 可加可不加

@@ -1,7 +1,5 @@
 // 內容類：文字、畫板、圖片、QR Code、嵌入網頁、視訊鏡頭
-import { h, field, select, checkbox, pickImage, setImage, toast, modal, confirmDialog, saveTextFile } from '../ui.js';
-import { loadLinkLists, filterLinks, groupLinks, LINK_FILE, LINK_SAMPLE } from '../link-list.js';
-import { LS } from '../store.js';
+import { h, field, select, checkbox, pickImage, setImage, toast, modal, confirmDialog } from '../ui.js';
 import { htmlToText, upsertNote, deleteNote, searchNotes, newNoteId } from '../text-notes.js';
 import { observeSize } from './util.js';
 import { classData } from '../roster.js';
@@ -662,150 +660,30 @@ function youtubeSrc(info, autoplay) {
   return `https://www.youtube-nocookie.com/embed/${info.id || 'videoseries'}?${q}`;
 }
 
-// 轉成可以放進網頁框的網址：Google 文件／簡報／雲端硬碟檔案用 /preview，Canva 公開檢視連結加上 ?embed
-export function toEmbedUrl(url) {
-  const info = classifyUrl(url);
-  if (!info) return null;
-  let u;
-  try { u = new URL(info.href); } catch { return info.href; }
-  const host = u.hostname;
-  if ((host === 'docs.google.com' || (host === 'drive.google.com' && /^\/file\//.test(u.pathname))) && /\/(edit|view|present)$/.test(u.pathname)) {
-    return `${u.origin}${u.pathname.replace(/\/(edit|view|present)$/, '/preview')}`;
-  }
-  if (/(^|\.)canva\.com$/.test(host) && /^\/design\/.+\/view$/.test(u.pathname) && !u.searchParams.has('embed')) {
-    return `${u.origin}${u.pathname}?embed`;
-  }
-  return info.href;
-}
-
-// 從白板資料夾的「網址清單.txt」挑選網址 → { name, url, group } 或 null
-export function pickLink(store) {
-  return new Promise((resolve) => {
-    let result = null;
-    let all = [];
-    let group = LS.get('ms:linkGroup', '');
-    const backend = store.backend;
-    const where = backend.label ? `${backend.label}\\${LINK_FILE}` : LINK_FILE;
-    const search = h('input', { class: 'input', type: 'search', placeholder: '搜尋，例如：七年級 數學' });
-    const chips = h('div', { class: 'lp-groups' });
-    const list = h('div', { class: 'lp-list' });
-    const foot = h('div', { class: 'lp-foot muted' });
-    const sample = h('button', { class: 'btn small', onclick: () => saveTextFile(LINK_FILE, LINK_SAMPLE, 'text/plain').catch((e) => toast('無法存檔：' + e.message)) }, '📄 下載範例檔');
-    let m;
-
-    function renderGroups() {
-      const groups = [...new Set(all.map((it) => it.group))];
-      if (group && !groups.includes(group)) group = '';
-      chips.replaceChildren();
-      if (groups.length < 2) return;
-      for (const g of ['', ...groups]) {
-        chips.append(h('button', {
-          class: 'chip' + (g === group ? ' on' : ''),
-          onclick: () => { group = g; LS.set('ms:linkGroup', g); renderGroups(); renderList(); },
-        }, g || '全部'));
-      }
-    }
-
-    function renderList() {
-      list.replaceChildren();
-      const shown = filterLinks(group ? all.filter((it) => it.group === group) : all, search.value);
-      if (!shown.length) { list.append(h('div', { class: 'fp-empty' }, '找不到符合的網址')); return; }
-      for (const g of groupLinks(shown)) {
-        if (g.group) list.append(h('div', { class: 'lp-head' }, g.group));
-        for (const it of g.items) {
-          let host = '';
-          try { host = new URL(it.url).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
-          list.append(h('button', { class: 'lp-item', title: it.url, onclick: () => { result = it; m.close(); } },
-            h('span', { class: 'lp-name' }, it.name), h('small', { class: 'muted' }, host)));
-        }
-      }
-    }
-
-    function showEmpty(msg) {
-      list.replaceChildren(h('div', { class: 'lp-empty' }, ...msg));
-      chips.replaceChildren();
-    }
-
-    async function load() {
-      if (!backend.fs) {
-        search.disabled = true;
-        showEmpty([h('p', null, '目前白板只存在這台電腦，沒有可以放網址清單的資料夾。'), h('p', { class: 'muted' }, '改用網路磁碟機（或資料夾）儲存後，就能使用網址清單。')]);
-        return;
-      }
-      list.replaceChildren(h('div', { class: 'fp-empty' }, '讀取中…'));
-      try {
-        const r = await loadLinkLists(backend);
-        all = r.items;
-        foot.replaceChildren(r.files.length
-          ? `讀取自 ${backend.label}：${r.files.join('、')}（共 ${all.length} 個網址）`
-          : '', sample);
-        if (!r.files.length) {
-          search.disabled = true;
-          showEmpty([
-            h('p', null, '白板資料夾裡還沒有網址清單。'),
-            h('p', null, '請把學校提供的 ', h('b', null, LINK_FILE), ' 放到：'),
-            h('p', null, h('code', null, where)),
-            h('p', { class: 'muted' }, '檔名也可以是「網址清單」開頭，例如 網址清單-七年級.txt，可以放好幾個檔案。放好後按「🔄 重新讀取」。'),
-          ]);
-          return;
-        }
-        search.disabled = false;
-        if (!all.length) { showEmpty([h('p', null, '網址清單裡沒有網址，請確認每一行都有 https:// 開頭的網址。')]); return; }
-        renderGroups();
-        renderList();
-      } catch (e) {
-        showEmpty([h('p', null, '無法讀取網址清單：' + e.message)]);
-      }
-    }
-
-    search.addEventListener('input', renderList);
-    search.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      const first = list.querySelector('.lp-item');
-      if (first) first.click();
-    });
-    const body = h('div', { class: 'lp' },
-      h('div', { class: 'fp-bar' }, search, h('button', { class: 'btn', onclick: load }, '🔄 重新讀取')),
-      chips, list, foot);
-    m = modal({ title: '📋 從網址清單選擇', body, wide: true, onClose: () => resolve(result) });
-    load();
-  });
+function toEmbedUrl(url) {
+  if (/docs\.google\.com/.test(url) && /\/(edit|view)/.test(url)) return url.replace(/\/(edit|view)[^/]*$/, '/preview');
+  return classifyUrl(url)?.href || null;
 }
 
 export const embed = {
   type: 'embed', title: '網頁／影片', icon: '🌐', size: { w: 0.45, h: 0.45 },
-  // name：從網址清單挑選時的名稱（顯示在標題列）；reload：每幾分鐘自動重新載入（0 = 不要）
-  state: () => ({ url: '', autoplay: false, name: '', reload: 0 }),
+  state: () => ({ url: '', autoplay: false }),
   mount(body, ctx) {
     const s = ctx.state;
     const wrap = h('div', { class: 'embed' });
     body.append(wrap);
     const input = h('input', { class: 'input', placeholder: 'YouTube、影片檔、Google 簡報或其他網址', value: s.url });
-    let frame = null, video = null, info = null, playing = false, muted = false, reloadTimer = null;
-    const setUrl = (url, name = '') => {
-      s.url = url; s.name = name; input.value = url;
-      ctx.setTitle?.(name);
-      render(); ctx.save();
-    };
-    async function chooseFromList() {
-      const it = await pickLink(ctx.store);
-      if (it) setUrl(it.url, it.name);
-    }
-    ctx.setTitle?.(s.name);
+    let frame = null, video = null, info = null, playing = false, muted = false;
     const yt = (func, args = []) => frame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
     function render() {
       wrap.innerHTML = '';
       wrap.classList.remove('social');
-      clearInterval(reloadTimer);
       frame = video = null; playing = false;
       info = s.url ? classifyUrl(s.url) : null;
       if (!info) {
         const inline = h('input', { class: 'input', placeholder: '貼上 YouTube、影片或網頁網址後按 Enter' });
-        inline.addEventListener('keydown', (e) => { if (e.key === 'Enter') setUrl(inline.value.trim()); });
-        wrap.append(h('div', { class: 'embed-empty' },
-          inline,
-          ctx.store.backend.fs ? h('button', { class: 'btn', onclick: chooseFromList }, '📋 從網址清單選擇') : null,
-          h('small', { class: 'muted' }, '部分網站不允許被嵌入，會顯示空白。')));
+        inline.addEventListener('keydown', (e) => { if (e.key === 'Enter') { s.url = inline.value.trim(); input.value = s.url; render(); ctx.save(); } });
+        wrap.append(h('div', { class: 'embed-empty' }, inline, h('small', { class: 'muted' }, '部分網站不允許被嵌入，會顯示空白。')));
         return;
       }
       const autoplay = s.autoplay;
@@ -829,11 +707,6 @@ export const embed = {
       }
       wrap.append(frame);
       if (info.kind === 'social') wrap.classList.add('social');
-      if (info.kind !== 'youtube') {
-        wrap.append(h('button', { class: 'embed-reload', title: '重新載入（看最新的內容）', onclick: () => render() }, '↻'));
-        // 例如考試時的試題更正：簡報更新後，白板也會自動顯示最新的版本
-        if (s.reload > 0) reloadTimer = setInterval(() => { if (frame) frame.src = src; }, s.reload * 60000);
-      }
     }
     const onMsg = (e) => {
       if (!frame || e.source !== frame.contentWindow) return;
@@ -843,12 +716,12 @@ export const embed = {
       if (typeof d?.info?.muted === 'boolean') muted = d.info.muted;
     };
     window.addEventListener('message', onMsg);
-    input.addEventListener('change', () => setUrl(input.value.trim()));
+    input.addEventListener('change', () => { s.url = input.value.trim(); render(); ctx.save(); });
     render();
     return {
-      destroy: () => { window.removeEventListener('message', onMsg); clearInterval(reloadTimer); },
+      destroy: () => window.removeEventListener('message', onMsg),
       remote: {
-        view: () => ({ kind: info?.kind || '', platform: info?.platform || '', url: s.url, name: s.name || '', playing, muted: video ? video.muted : muted }),
+        view: () => ({ kind: info?.kind || '', platform: info?.platform || '', url: s.url, playing, muted: video ? video.muted : muted }),
         act(a) {
           if (video) {
             if (a === 'play') video.play().catch(() => {});
@@ -870,11 +743,7 @@ export const embed = {
           ctx.push?.();
         },
       },
-      settings: (c) => c.append(
-        field('網址', input, s.name ? `來自網址清單：${s.name}` : null),
-        ctx.store.backend.fs ? h('button', { class: 'btn', onclick: chooseFromList }, '📋 從網址清單選擇') : null,
-        field('自動重新載入', select([[0, '不要'], [1, '每 1 分鐘'], [3, '每 3 分鐘'], [5, '每 5 分鐘'], [10, '每 10 分鐘']], s.reload || 0,
-          (v) => { s.reload = +v; render(); ctx.save(); }), '網頁內容會更新時使用，例如考試時的試題疑義、更正說明')),
+      settings: (c) => c.append(field('網址', input)),
     };
   },
 };

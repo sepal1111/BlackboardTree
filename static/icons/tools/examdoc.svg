@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 試卷釋疑：考卷＋問號對話框 -->
+  <g stroke="#1f2b4d" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 考卷 -->
+    <path d="M86 62h196l74 74v290a24 24 0 0 1-24 24H86a24 24 0 0 1-24-24V86a24 24 0 0 1 24-24z" fill="#fff8e7"/>
+    <path d="M282 62v58a16 16 0 0 0 16 16h58" fill="#ffe2a8"/>
+    <path d="M108 132h120M108 196h150M108 252h110M108 308h80M108 364h100" fill="none" stroke="#9db3d6" stroke-width="16"/>
+    <!-- 紅筆圈出的題目 -->
+    <ellipse cx="180" cy="252" rx="90" ry="30" fill="none" stroke="#e03131" stroke-width="10"/>
+    <!-- 對話框 -->
+    <path d="M300 230h150a30 30 0 0 1 30 30v100a30 30 0 0 1-30 30h-82l-46 40v-40h-22a30 30 0 0 1-30-30V260a30 30 0 0 1 30-30z" fill="#4a90e2"/>
+    <!-- 問號 -->
+    <path d="M350 286a26 26 0 1 1 38 22c-8 4-13 10-13 18v6" fill="none" stroke="#ffffff" stroke-width="16"/>
+    <circle cx="375" cy="360" r="5" fill="#ffffff" stroke="#ffffff" stroke-width="10"/>
+  </g>
+  <!-- 星星 -->
+  <path d="M452 120l6 14 14 6-14 6-6 14-6-14-14-6 14-6z" fill="#1f2b4d"/>
+  <circle cx="420" cy="180" r="8" fill="#f7a531"/>
+</svg>

@@ -9,6 +9,8 @@ import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from '.
 import { RemoteHost } from './remote-host.js';
 import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool, lastToolState, lastListId, rememberList, classData } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
+import { initSchoolDir, schoolDir, setSchoolDir, deployedSchoolDir, schoolFs, schoolSupported } from './school.js';
+import { loadSchoolLinks } from './link-list.js';
 import { UPDATE_URL, RELEASES_PAGE, checkForUpdate, downloadVerified, notesSince, shouldAutoCheck, updateScript, encodePowerShell, plainNote } from './update.js';
 import { DOCK_POSITIONS, ICON_SIZES, LABEL_MODES, GRID_SIZES, GRID_SHOW, DEFAULT_UI, normalizeUi, iconPx, dockInfo, visibleTools, toggleTool, gridCell, nextGrid, snapMove, snapResize } from './ui-prefs.js';
 
@@ -41,6 +43,7 @@ async function boot() {
   if (DESKTOP) {
     window.Neutralino.init();
     await initLocalPrefs(); // 讀取這台電腦上的設定（遙控代碼、離線備份等），要在其他步驟之前
+    await initSchoolDir(); // 資訊組安裝時設定的學校共用資料夾
     window.Neutralino.events.on('windowClose', quitApp);
     initTray();
   }
@@ -765,6 +768,7 @@ const SETTING_TABS = [
   { id: 'roster', label: '👥 學生名單' },
   { id: 'dock', label: '🧰 工具列' },
   { id: 'poll', label: '📊 投票' },
+  { id: 'school', label: '🏫 學校共用資料夾', desktop: true },
   { id: 'about', label: 'ℹ 關於與更新' },
 ];
 
@@ -882,13 +886,47 @@ function settingsDialog(tab = 'board') {
 
   function update(next) { setUi(next); render(); }
 
+  // 學校共用資料夾：「試卷釋疑」小工具從這裡讀學校發的 PDF、圖片、Word、文字檔、網址清單
+  function renderSchoolTab() {
+    const cur = schoolDir();
+    const dep = deployedSchoolDir();
+    const input = h('input', { class: 'input', value: cur, placeholder: '例如 \\\\fileserver\\公告　或　S:\\教務處\\公告' });
+    const status = h('div', { class: 'school-status' });
+    const apply = (v) => { setSchoolDir(v); render(); };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(input.value); });
+    main.append(sec('學校共用資料夾',
+      h('p', { class: 'muted' }, '教務處把試題疑義、更正說明（PDF、圖片、Word、文字檔，或網址清單.txt）放在全校教室電腦都讀得到的資料夾，在「📑 試卷釋疑」小工具就能挑選顯示；教務處更新檔案後，白板會自動顯示新的內容。'),
+      h('div', { class: 'row school-row' }, input,
+        h('button', { class: 'btn', onclick: async () => {
+          const p = await window.Neutralino.os.showFolderDialog('選擇學校共用資料夾').catch(() => '');
+          if (p) apply(p.replace(/\//g, '\\'));
+        } }, '📁 選擇資料夾'),
+        h('button', { class: 'btn primary', onclick: () => apply(input.value) }, '儲存')),
+      h('small', { class: 'muted' }, '可以子資料夾分類，例如「七年級」資料夾裡放七年級的檔案，資料夾名稱會當作分類。這個設定只影響這台電腦。'),
+      dep ? h('p', { class: 'muted' }, `資訊組安裝時設定：${dep}`,
+        cur !== dep ? h('button', { class: 'linkbtn', onclick: () => apply(null) }, '　改回這個設定') : null) : null,
+      cur ? h('div', { class: 'row-btns' }, h('button', { class: 'btn', onclick: () => apply('') }, '這台電腦不使用')) : null,
+      status));
+    const fs = schoolFs();
+    if (!fs) { status.append(h('p', { class: 'muted' }, '目前沒有設定學校共用資料夾。')); return; }
+    status.append(h('p', { class: 'muted' }, '正在讀取…'));
+    loadSchoolLinks(fs).then((r) => {
+      const web = r.items.filter((it) => it.doc === 'web').length;
+      status.replaceChildren(h('p', { class: 'ok' }, r.items.length
+        ? `✔ 已連線：${r.items.length - web} 個檔案、${web} 個網址`
+        : '✔ 已連線，但資料夾裡還沒有試卷釋疑的檔案'));
+    }, (e) => status.replaceChildren(h('p', { class: 'err' }, '✖ ' + e.message)));
+  }
+
   function render() {
     side.innerHTML = '';
+    if (SETTING_TABS.find((t) => t.id === tab)?.desktop && !schoolSupported()) tab = 'board';
     for (const t of SETTING_TABS) {
+      if (t.desktop && !schoolSupported()) continue;
       side.append(h('button', { class: 'set-tab' + (t.id === tab ? ' on' : ''), onclick: () => { tab = t.id; render(); } }, t.label));
     }
     main.innerHTML = '';
-    ({ board: renderBoardTab, roster: renderRosterTab, dock: renderDockTab, poll: renderPollTab, about: () => main.append(updatePanel()) })[tab]();
+    ({ board: renderBoardTab, roster: renderRosterTab, dock: renderDockTab, poll: renderPollTab, school: renderSchoolTab, about: () => main.append(updatePanel()) })[tab]();
   }
 
   // 名單在名單管理畫面修改後，這裡的人數跟著更新

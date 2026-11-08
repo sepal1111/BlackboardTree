@@ -363,7 +363,7 @@ const RENDER = {
     const SOCIAL = { facebook: '📘 Facebook', instagram: '📸 Instagram', threads: '🧵 Threads', tiktok: '🎵 TikTok', vimeo: '🎞️ Vimeo' };
     const label = v.kind === 'social' ? SOCIAL[v.platform] || '社群影片'
       : { youtube: '▶️ YouTube 影片', video: '🎬 影片', web: '🌐 網頁' }[v.kind] || '尚未設定網址';
-    const out = [h('div', { class: 'card-title' }, v.name ? `📋 ${v.name}` : label), h('div', { class: 'muted url-text' }, v.url || '')];
+    const out = [h('div', { class: 'card-title' }, label), h('div', { class: 'muted url-text' }, v.url || '')];
     if (v.kind === 'youtube' || v.kind === 'video') {
       out.push(h('div', { class: 'row' },
         ...(v.kind === 'video' ? [btn('⏪ 10 秒', () => wcmd(w, 'back'))] : []),
@@ -375,6 +375,18 @@ const RENDER = {
       out.push(h('div', { class: 'muted' }, '社群網站的影片無法從手機控制，請在電視上點播放。若顯示「無法觀看」，可能是非公開貼文，可改用瀏覽器開啟。'),
         h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload')), btn('🌐 改用瀏覽器開啟', () => wcmd(w, 'browser'))));
     } else if (v.kind === 'web') out.push(h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload'))));
+    return out;
+  },
+  examdoc(w) {
+    const v = w.view || {};
+    const ICON = { pdf: '📕', image: '🖼️', text: '📝', word: '📘', doc: '📘', web: '🌐' };
+    if (!v.name) return [h('div', { class: 'muted' }, '尚未選擇檔案，請在電視上按「📂 選擇試卷釋疑」')];
+    const out = [h('div', { class: 'card-title' }, (ICON[v.doc] || '📄') + ' ' + v.name)];
+    if (v.scroll) out.push(h('div', { class: 'row' }, btn('▲ 上一頁', () => wcmd(w, 'up')), btn('▼ 下一頁', () => wcmd(w, 'down'), 'primary')));
+    const chips = [];
+    if (v.doc === 'text' || v.doc === 'word') chips.push(btn('A− 字變小', () => wcmd(w, 'smaller')), btn('A+ 字變大', () => wcmd(w, 'bigger')));
+    chips.push(btn('🔄 重新載入', () => wcmd(w, 'reload')));
+    out.push(h('div', { class: 'chips' }, ...chips));
     return out;
   },
   points(w) {

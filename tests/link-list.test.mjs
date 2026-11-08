@@ -1,9 +1,8 @@
 import { MemFs } from './helpers.mjs';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseLinkList, fileGroup, loadLinkLists, filterLinks, groupLinks, LINK_SAMPLE } from '../static/js/link-list.js';
-import { FolderBackend, LocalBackend } from '../static/js/backends/index.js';
-import { toEmbedUrl } from '../static/js/widgets/media.js';
+import { parseLinkList, fileGroup, loadSchoolLinks, isSchoolUrl, schoolPath, docKind, linkify, toEmbedUrl, filterLinks, groupLinks, LINK_SAMPLE } from '../static/js/link-list.js';
+import { parseSchoolConfig } from '../static/js/school.js';
 
 describe('parseLinkList：網址清單的寫法', () => {
   it('分類標題、名稱與網址、說明行', () => {
@@ -53,36 +52,6 @@ describe('parseLinkList：網址清單的寫法', () => {
   });
 });
 
-describe('loadLinkLists：讀取白板資料夾裡的網址清單', () => {
-  it('讀取「網址清單」開頭的 .txt，其他檔案不讀', async () => {
-    const fs = new MemFs();
-    await fs.write('MyScreen/網址清單.txt', '[七年級]\n國文 https://a.com/1\n');
-    await fs.write('MyScreen/網址清單-八年級.txt', '數學 https://a.com/2\n');
-    await fs.write('MyScreen/筆記.txt', '不要 https://a.com/3\n');
-    await fs.write('MyScreen/boards/x.json', '{}');
-    const r = await loadLinkLists(new FolderBackend(fs));
-    assert.deepEqual(r.files, ['網址清單-八年級.txt', '網址清單.txt']);
-    assert.deepEqual(r.items.map((i) => [i.group, i.name]), [['八年級', '數學'], ['七年級', '國文']]);
-  });
-
-  it('Big5 編碼（舊版記事本）也看得懂', async () => {
-    const fs = new MemFs();
-    // 「國文 https://a.com」的 Big5
-    const big5 = new Uint8Array([0xb0, 0xea, 0xa4, 0xe5, 0x20, ...Buffer.from('https://a.com')]);
-    await fs.write('網址清單.txt', big5);
-    const r = await loadLinkLists(new FolderBackend(fs, { dataDir: '' }));
-    assert.deepEqual(r.items[0], { group: '', name: '國文', url: 'https://a.com', file: '網址清單.txt' });
-  });
-
-  it('同一份清單放兩次不會重複；只存在這台電腦時沒有清單', async () => {
-    const fs = new MemFs();
-    await fs.write('MyScreen/網址清單.txt', '國文 https://a.com\n');
-    await fs.write('MyScreen/網址清單 (1).txt', '國文 https://a.com\n');
-    assert.equal((await loadLinkLists(new FolderBackend(fs))).items.length, 1);
-    assert.deepEqual(await loadLinkLists(new LocalBackend()), { files: [], items: [] });
-  });
-});
-
 describe('搜尋與分組', () => {
   const items = parseLinkList('[七年級]\n國文 https://a.com/1\n數學 https://a.com/2\n[八年級]\n數學 https://a.com/3');
   it('每個字都要符合', () => {
@@ -109,5 +78,58 @@ describe('toEmbedUrl：放進網頁框的網址', () => {
   it('其他網址不變', () => {
     assert.equal(toEmbedUrl('https://example.com/a'), 'https://example.com/a');
     assert.equal(toEmbedUrl('not a url'), null);
+  });
+});
+
+describe('試卷釋疑：學校共用資料夾', () => {
+  it('網址清單、PDF、圖片、Word、文字檔都列出來；子資料夾的名稱當分類，其他檔案不讀', async () => {
+    const fs = new MemFs('\\\\fileserver\\公告');
+    await fs.write('網址清單.txt', '全校 段考說明 https://a.com/1\n');
+    await fs.write('七年級/數學更正.pdf', '%PDF');
+    await fs.write('七年級/網址清單.txt', '國文 https://a.com/2\n');
+    await fs.write('八年級/英語更正.PNG', 'png');
+    await fs.write('八年級/自然更正.docx', 'x');
+    await fs.write('八年級/~$自然更正.docx', 'x');
+    await fs.write('八年級/社會更正.txt', '第 3 題答案改為 B');
+    await fs.write('八年級/舊檔.doc', 'x');
+    await fs.write('八年級/成績.xlsx', 'x');
+    await fs.write('八年級/更深/不讀.pdf', 'x');
+    const r = await loadSchoolLinks(fs);
+    assert.deepEqual(r.items.map((i) => [i.group, i.name, i.url, i.doc]), [
+      ['', '全校 段考說明', 'https://a.com/1', 'web'],
+      ['七年級', '國文', 'https://a.com/2', 'web'],
+      ['七年級', '數學更正', 'school:七年級/數學更正.pdf', 'pdf'],
+      ['八年級', '自然更正', 'school:八年級/自然更正.docx', 'word'],
+      ['八年級', '社會更正', 'school:八年級/社會更正.txt', 'text'],
+      ['八年級', '英語更正', 'school:八年級/英語更正.PNG', 'image'],
+      ['八年級', '舊檔', 'school:八年級/舊檔.doc', 'doc'],
+    ]);
+    assert.ok(isSchoolUrl(r.items[2].url));
+    assert.equal(schoolPath(r.items[2].url), '七年級/數學更正.pdf');
+  });
+
+  it('檔案類型', () => {
+    assert.equal(docKind('a.JPG'), 'image');
+    assert.equal(docKind('網址清單-七年級.txt'), '');
+    assert.equal(docKind('說明.txt'), 'text');
+    assert.equal(docKind('~$說明.docx'), '');
+    assert.equal(docKind('a.zip'), '');
+  });
+
+  it('讀不到共用資料夾時丟出錯誤', async () => {
+    const fs = new MemFs('\\\\fileserver\\公告');
+    fs.failing = true;
+    await assert.rejects(() => loadSchoolLinks(fs));
+  });
+
+  it('文字檔裡的網址變成連結，句尾標點不算', () => {
+    assert.deepEqual(linkify('詳見 https://a.com/x。謝謝'), [{ text: '詳見 ' }, { url: 'https://a.com/x' }, { text: '。謝謝' }]);
+    assert.deepEqual(linkify('沒有網址'), [{ text: '沒有網址' }]);
+  });
+
+  it('school.json：JSON、BOM、只寫路徑都可以', () => {
+    assert.equal(parseSchoolConfig('\uFEFF{"dir": "\\\\\\\\fileserver\\\\公告"}\r\n'), '\\\\fileserver\\公告');
+    assert.equal(parseSchoolConfig('S:\\教務處\\公告\r\n'), 'S:\\教務處\\公告');
+    assert.equal(parseSchoolConfig(''), '');
   });
 });
