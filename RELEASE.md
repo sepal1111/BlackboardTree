@@ -1,10 +1,22 @@
-# 黑板樹 Blackboard Tree v2.1.0 發布說明
+# 黑板樹 Blackboard Tree v2.2.0 發布說明
 
 黑板樹（Blackboard Tree）是一套專為學校教學與教室投影設計的免費電子白板軟體。白板與班級設定預設儲存於教師個人的**網路磁碟機（V:）**或隨身硬碟，換電腦、換教室皆能無縫接續教學。軟體內建手機遙控與學生即時投票伺服器，**無須額外架設外部主機**即可實現互動教學。
 
 - 專案首頁：[https://github.com/sepal1111/BlackboardTree](https://github.com/sepal1111/BlackboardTree)
-- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.1.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.1.0)
+- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.2.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.2.0)
 - 詳細開發與使用文件：[README.md](README.md)
+
+---
+
+## 📑 v2.2.0：試卷釋疑，直接讀取學校共用資料夾
+
+- **新工具「📑 試卷釋疑」**：段考時教務處把試題疑義、更正說明放在學校的共用資料夾（檔案伺服器、NAS），全校教室的黑板樹都讀同一份，老師點一下就能顯示。
+- 支援 **PDF、圖片、Word（.docx）、文字檔**，以及網址清單（Google 簡報、Canva 公開檢視連結）。Word 會顯示標題、粗體、顏色、螢光筆、編號、表格與圖片；文字檔裡的網址可以點。舊版 .doc 請另存成 .docx 或 PDF。
+- 共用資料夾裡的子資料夾（例如「七年級」「八年級」）會當作分類，可以切換或搜尋，上次選的分類會記住。
+- 教務處**直接覆蓋同一個檔案**就能更新，白板每分鐘檢查一次，自動顯示新的內容；右下角也有 ↻ 重新載入、A−／A+ 調整字的大小。
+- 手機遙控可以上一頁／下一頁、調整字的大小、重新載入。
+- **設定共用資料夾**：每台電腦在「⚙ 設定 → 🏫 學校共用資料夾」選擇資料夾；資訊組大量部署時，安裝程式加上 `/SCHOOLDIR="\\fileserver\公告"` 一次設定好。只有電腦版可以使用。
+- 「🌐 網頁／影片」恢復成 2.0.0 的樣子（不再從白板資料夾讀取網址清單），網址清單改在「試卷釋疑」使用。
 
 ---
 
@@ -144,11 +156,11 @@
 
 ## 📦 下載檔案說明
 
-請至 [GitHub Releases (v2.1.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.1.0) 下載對應檔案：
+請至 [GitHub Releases (v2.2.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.2.0) 下載對應檔案：
 
 | 下載檔案                                     | 適用情境                     | 說明                                                                                         |
 | -------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
-| **`BlackboardTree-Setup-2.1.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
+| **`BlackboardTree-Setup-2.2.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
 | **`BlackboardTree.exe`**             | 臨時使用／隨身碟執行         | 免安裝綠色版。單一執行檔，下載後雙擊即可直接執行（已內建遙控轉送模組）。                     |
 
 ---
@@ -166,7 +178,7 @@
 
 ### 安裝步驟（安裝版）
 
-1. 雙擊執行 `BlackboardTree-Setup-2.1.0.exe`。
+1. 雙擊執行 `BlackboardTree-Setup-2.2.0.exe`。
 2. 若出現微軟藍色警示畫面「Windows 已保護您的電腦」：請點擊「**其他資訊**」→「**仍要執行**」。
 3. 依安裝引導步驟點選「下一步」，建議勾選：
    - **建立桌面捷徑**
@@ -193,7 +205,7 @@
 
 ```cmd
 :: 為電腦所有使用者安裝（需以系統管理員身分執行），並自動設定防火牆例外
-BlackboardTree-Setup-2.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
+BlackboardTree-Setup-2.2.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
 ```
 
 - **防火牆說明**：手機遙控與學生投票使用內建的轉送程式 `myscreen-relay.exe`，通訊埠預設為 `52480`。
@@ -227,6 +239,12 @@ BlackboardTree-Setup-2.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="d
 ---
 
 ## 版本紀錄
+
+### 2.2.0
+- **試卷釋疑**：新工具，讀取學校共用資料夾裡的 PDF、圖片、Word（.docx）、文字檔與網址清單，子資料夾當分類
+- 檔案更新後自動顯示新的內容；Word、文字檔可以調整字的大小；手機遙控可以翻頁
+- 學校共用資料夾：「⚙ 設定 → 🏫 學校共用資料夾」，或安裝程式的 `/SCHOOLDIR`
+- 網頁／影片恢復成 2.0.0 的樣子，網址清單改在試卷釋疑使用
 
 ### 2.1.0
 - **網址清單**：把學校發的 `網址清單.txt` 放進白板資料夾，「🌐 網頁／影片」可以按「📋 從網址清單選擇」挑選，依分類切換或搜尋

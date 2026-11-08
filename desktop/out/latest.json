@@ -1,12 +1,23 @@
 {
-  "version": "2.1.0",
-  "date": "2026-11-08",
+  "version": "2.2.0",
+  "date": "2026-11-09",
   "notes": [
-    "- **網址清單**：把學校發的 `網址清單.txt` 放進白板資料夾，「🌐 網頁／影片」可以按「📋 從網址清單選擇」挑選，依分類切換或搜尋",
-    "- Google 簡報、雲端硬碟連結自動用預覽模式顯示，Canva 公開連結自動用嵌入模式",
-    "- 網頁可以按 ↻ 重新載入，或設定每幾分鐘自動重新載入"
+    "- **試卷釋疑**：新工具，讀取學校共用資料夾裡的 PDF、圖片、Word（.docx）、文字檔與網址清單，子資料夾當分類",
+    "- 檔案更新後自動顯示新的內容；Word、文字檔可以調整字的大小；手機遙控可以翻頁",
+    "- 學校共用資料夾：「⚙ 設定 → 🏫 學校共用資料夾」，或安裝程式的 `/SCHOOLDIR`",
+    "- 網頁／影片恢復成 2.0.0 的樣子，網址清單改在試卷釋疑使用"
   ],
   "history": [
+    {
+      "version": "2.2.0",
+      "date": "",
+      "notes": [
+        "- **試卷釋疑**：新工具，讀取學校共用資料夾裡的 PDF、圖片、Word（.docx）、文字檔與網址清單，子資料夾當分類",
+        "- 檔案更新後自動顯示新的內容；Word、文字檔可以調整字的大小；手機遙控可以翻頁",
+        "- 學校共用資料夾：「⚙ 設定 → 🏫 學校共用資料夾」，或安裝程式的 `/SCHOOLDIR`",
+        "- 網頁／影片恢復成 2.0.0 的樣子，網址清單改在試卷釋疑使用"
+      ]
+    },
     {
       "version": "2.1.0",
       "date": "",
@@ -93,24 +104,17 @@
       "notes": [
         "- 第一版正式釋出：全新的下載與安裝說明（功能介紹、系統需求、安裝步驟、資訊組大量部署、常見問題）"
       ]
-    },
-    {
-      "version": "1.6.1",
-      "date": "",
-      "notes": [
-        "- 專案網址改為 <https://github.com/sepal1111/BlackboardTree>（舊網址會自動轉到新網址），檢查更新改用新網址"
-      ]
     }
   ],
   "setup": {
-    "file": "BlackboardTree-Setup-2.1.0.exe",
-    "size": 12416421,
-    "sha256": "296421dabe19e33c9558c3caef955c2f76865a2b1691a6ffa7d18e9542ebe01b"
+    "file": "BlackboardTree-Setup-2.2.0.exe",
+    "size": 12427181,
+    "sha256": "69a6c9d4a76027bf3affd09b5d698067183b1c9c04ce4f303c9c69ca25167a06"
   },
   "portable": {
     "file": "BlackboardTree.exe",
-    "size": 13423616,
-    "sha256": "fdf2dacc99704f7a2af4536aa13e29a8e223c4a9d243e62f36a219896c0c6956"
+    "size": 13462016,
+    "sha256": "a663abb4b4c713c25ed433596f6408b18c2b063c06bd317251e0e56b34d7fe9b"
   },
-  "signature": "myFatmNqATRZOeEHxmyBAY8uZTImYp4uNFd7nfjLC3l8XeUnnm2fq5gwg1RsqAdubvDOc5JHRI3+subk9+0jNQ=="
+  "signature": "N5kZoSKbkb9HQPX9geem/ulcNeUu7g1nsl4lW35BpDmgT4+OI5XzHItWmYnkyOKk7Xzc8Cejno00fnE52kmomg=="
 }
