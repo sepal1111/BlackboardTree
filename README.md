@@ -104,7 +104,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 
 #### 安裝
 
-執行 `BlackboardTree-Setup-2.0.0.exe`，依畫面按「下一步」即可：
+執行 `BlackboardTree-Setup-2.1.0.exe`，依畫面按「下一步」即可：
 
 - 安裝到 `%LOCALAPPDATA%\Programs\BlackboardTree`（從 1.5 以前升級的電腦沿用原本的 `%LOCALAPPDATA%\Programs\MyScreen`），**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
@@ -123,7 +123,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 資訊組大量部署時可以用靜默安裝：
 
 ```
-BlackboardTree-Setup-2.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+BlackboardTree-Setup-2.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 手機遙控與學生投票由老師的電腦擔任伺服器，安裝時不需要設定。
@@ -269,7 +269,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 **Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
 
 - 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
-- 大量部署建議以系統管理員執行：`BlackboardTree-Setup-2.0.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 大量部署建議以系統管理員執行：`BlackboardTree-Setup-2.1.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
 - 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
 
 > **網路注意事項**：手機必須能連到教室電腦（同一個校內網路）。若學校的無線網路（手機）和教學網路（教室電腦）是分開的網段，請資訊組開放手機網段連到教室電腦的 52480 埠（網頁版是 8080 埠）。

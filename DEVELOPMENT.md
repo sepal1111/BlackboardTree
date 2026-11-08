@@ -171,6 +171,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 2.1.0 | 網址清單（`link-list.js`）：讀取白板資料夾的「網址清單*.txt」／`links*.txt`，解析分類、名稱、網址（CSV／Tab、Big5），搜尋與分組；網頁／影片小工具「📋 從網址清單選擇」、記住上次的分類、標題列顯示名稱；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed）；↻ 重新載入與自動重新載入 |
 | 2.0.0 | 以班級為主：白板有 `classId`（`store.newBoard(name, classId)`），首頁 `showClasses()` → `showBoards(classId)`；小工具的 `listId` 一律等於白板的班級（`mountWidget`）；各班資料 settings.classData（`roster.js` 的 `classData()`：pollBank、pollResults、textNotes、points），刪除班級 `dropClass()` 連同白板一起刪；題庫匯出 `bankToText()`；課堂加分 classData.points 同班共用（`saveSettings({ quiet })`）；移除 lastTools 與手動輸入名單；遙控白板清單只列同班 |
 | 1.10.0 | 座位紀錄（`seat-layouts.js`，settings.seatLayouts；座位表 state.layoutId 使用中的一組自動存回）、新開座位表沿用上次的狀態（小工具定義的 `restoreLast`、settings.lastTools、`lastToolState()`）、關閉小工具時立即記錄最後狀態 |
 | 1.9.1 | 資安：遙控要老師允許（`join-request`／`join-answer`）、代碼只在這次開啟有效（`SS`）、遙控內容加密（`remote-crypto.js`，tweetnacl）、relay 需要時才啟動、`/ws/screen` 只接受本機、連線數與逾時限制、iframe `sandbox`、`nativeAllowList` 縮小、`latest.json` 數位簽章；易用性：工具列文字依空間顯示（`fitDockLabels()`）、關閉小工具可復原（`offerUndo()`）、遙控視窗與儲存位置用語白話化 |

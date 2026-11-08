@@ -1,10 +1,20 @@
-# 黑板樹 Blackboard Tree v2.0.0 發布說明
+# 黑板樹 Blackboard Tree v2.1.0 發布說明
 
 黑板樹（Blackboard Tree）是一套專為學校教學與教室投影設計的免費電子白板軟體。白板與班級設定預設儲存於教師個人的**網路磁碟機（V:）**或隨身硬碟，換電腦、換教室皆能無縫接續教學。軟體內建手機遙控與學生即時投票伺服器，**無須額外架設外部主機**即可實現互動教學。
 
 - 專案首頁：[https://github.com/sepal1111/BlackboardTree](https://github.com/sepal1111/BlackboardTree)
-- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.0.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.0.0)
+- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.1.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.1.0)
 - 詳細開發與使用文件：[README.md](README.md)
+
+---
+
+## 📋 v2.1.0：從學校的網址清單挑選網頁
+
+- **網址清單**：學校可以把各年級、各科的說明網頁（例如段考試題疑義與更正的 Google 簡報、Canva 公開連結）整理成 `網址清單.txt` 發給各班。導師把檔案放進白板資料夾（`V:\MyScreen`），在「🌐 網頁／影片」按「📋 從網址清單選擇」就能挑選，不用自己打網址。
+- 可以依分類（例如年級）切換或搜尋（例如輸入「七 數學」），上次選的分類會記住；標題列會顯示選的名稱。
+- 清單格式很寬鬆：沒有網址的一行是分類，網址前面的文字是名稱；用 Excel 另存的 CSV、記事本的 UTF-8 或 ANSI（Big5）都看得懂。挑選畫面可以「📄 下載範例檔」。
+- Google 簡報、雲端硬碟的連結自動改成預覽模式，Canva 公開檢視連結自動改成嵌入模式。
+- 網頁右下角的 ↻ 可以重新載入；也可以設定每 1／3／5／10 分鐘**自動重新載入**，更正說明有更新時白板會顯示最新版本。
 
 ---
 
@@ -134,11 +144,11 @@
 
 ## 📦 下載檔案說明
 
-請至 [GitHub Releases (v2.0.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.0.0) 下載對應檔案：
+請至 [GitHub Releases (v2.1.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.1.0) 下載對應檔案：
 
 | 下載檔案                                     | 適用情境                     | 說明                                                                                         |
 | -------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
-| **`BlackboardTree-Setup-2.0.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
+| **`BlackboardTree-Setup-2.1.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
 | **`BlackboardTree.exe`**             | 臨時使用／隨身碟執行         | 免安裝綠色版。單一執行檔，下載後雙擊即可直接執行（已內建遙控轉送模組）。                     |
 
 ---
@@ -156,7 +166,7 @@
 
 ### 安裝步驟（安裝版）
 
-1. 雙擊執行 `BlackboardTree-Setup-2.0.0.exe`。
+1. 雙擊執行 `BlackboardTree-Setup-2.1.0.exe`。
 2. 若出現微軟藍色警示畫面「Windows 已保護您的電腦」：請點擊「**其他資訊**」→「**仍要執行**」。
 3. 依安裝引導步驟點選「下一步」，建議勾選：
    - **建立桌面捷徑**
@@ -183,7 +193,7 @@
 
 ```cmd
 :: 為電腦所有使用者安裝（需以系統管理員身分執行），並自動設定防火牆例外
-BlackboardTree-Setup-2.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
+BlackboardTree-Setup-2.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
 ```
 
 - **防火牆說明**：手機遙控與學生投票使用內建的轉送程式 `myscreen-relay.exe`，通訊埠預設為 `52480`。
@@ -217,6 +227,11 @@ BlackboardTree-Setup-2.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="d
 ---
 
 ## 版本紀錄
+
+### 2.1.0
+- **網址清單**：把學校發的 `網址清單.txt` 放進白板資料夾，「🌐 網頁／影片」可以按「📋 從網址清單選擇」挑選，依分類切換或搜尋
+- Google 簡報、雲端硬碟連結自動用預覽模式顯示，Canva 公開連結自動用嵌入模式
+- 網頁可以按 ↻ 重新載入，或設定每幾分鐘自動重新載入
 
 ### 2.0.0
 - **以班級為主**：先選班級再選白板，一個班級可以有多個白板
