@@ -822,3 +822,20 @@ body.dragging:not([data-grid=off]) #grid-overlay { background-image:
 .join-ask { text-align: center; }
 .join-device { font-size: 28px; font-weight: 700; margin: 4px 0 10px; }
 .join-ask p { margin: 6px 0; }
+
+/* 網址清單（網頁／影片小工具的「📋 從網址清單選擇」） */
+.embed { position: relative; }
+.embed-reload { position: absolute; right: 8px; bottom: 8px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255, 255, 255, .9); font-size: 18px; line-height: 1; opacity: .5; transition: opacity .15s; cursor: pointer; }
+.embed:hover .embed-reload, .embed-reload:focus-visible { opacity: 1; }
+.lp { display: flex; flex-direction: column; gap: 10px; }
+.lp-groups { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-groups .chip { cursor: pointer; font-size: 14px; padding: 4px 12px; }
+.lp-groups .chip.on { border-color: var(--accent); background: #edf2ff; color: var(--accent); font-weight: 700; }
+.lp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 52vh; overflow: auto; min-height: 120px; align-content: start; }
+.lp-head { grid-column: 1/-1; font-weight: 700; margin-top: 6px; padding-bottom: 2px; border-bottom: 1px solid var(--line); }
+.lp-item { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; cursor: pointer; }
+.lp-item:hover { border-color: var(--accent); background: #f8f9ff; }
+.lp-name { font-size: 15px; }
+.lp-empty { grid-column: 1/-1; padding: 16px; line-height: 1.6; }
+.lp-empty code { background: #f1f3f5; padding: 2px 6px; border-radius: 6px; user-select: all; }
+.lp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }

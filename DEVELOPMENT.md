@@ -119,6 +119,7 @@ npm test
 | `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、加密的狀態與指令、換代碼換金鑰、允許時交換金鑰、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
 | `poll-bank.test.mjs` | 投票題目匯入（文字、Excel 貼上、Excel／CSV 的列）、題庫去除重複、投票紀錄（指紋、上限）、匯出 CSV（BOM、逗號、引號、公式開頭） |
 | `ui-prefs.test.mjs` | 畫面偏好（工具列位置、圖示大小、顯示的工具）的檢查與切換 |
+| `link-list.test.mjs` | 網址清單：分類標題、名稱與網址、CSV／Tab、說明行、檔名當分類（排除 Windows 的「 (1)」「 - 複製」）、Big5 編碼、重複的清單、搜尋與分組；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed） |
 | `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
 
 - `tests/helpers.mjs` 模擬瀏覽器環境（`localStorage`、`window`、`document`），並提供記憶體裡的資料夾 `MemFs`（介面同 `FsaAdapter`／`NeuAdapter`，`failing = true` 可模擬斷線）
@@ -197,6 +198,7 @@ static/                     前端（桌面版、網頁版共用）
   logo.svg                  黑板樹 Logo（唯一來源：畫面上的 Logo，以及建置時產生的所有圖示）
   remote.html               手機遙控頁
   js/poll-bank.js           投票題庫、匯入題目、投票紀錄與匯出
+  js/link-list.js           網址清單：讀取白板資料夾的「網址清單*.txt」、解析分類／名稱／網址、搜尋（網頁／影片小工具的「📋 從網址清單選擇」）
   js/points-log.js          課堂加分的每日紀錄（state.daily = { 日期: { 姓名: 淨分 } }）、排行榜、匯出 CSV
   vote.html                 學生投票頁（CSS、JS 都寫在檔案內，內建 relay 只要嵌入這一個檔）
   css/app.css, remote.css
@@ -257,6 +259,7 @@ MyScreen/
                        classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，這班的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）；小工具定義有 restoreLast（目前是座位表）時，新開會沿用這班的狀態（lastToolState）
                        刪除班級時（roster.js 的 dropClass）這班的白板、classData、classTools、seatLayouts 一起刪除
                        1.10 以前的 pollBank、pollResults、textNotes、lastTools 放在最上層，2.0.0 起不再讀取
+  網址清單*.txt        學校發給各班的網址清單（老師自己放進來，黑板樹只讀不寫；links*.txt 也可以），格式見 link-list.js 開頭與 README
   media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
 ```
 

@@ -625,8 +625,9 @@ function mountWidget(w) {
   // 用到學生名單的小工具（state 有 listId）一律使用白板所屬班級的名單
   if ('listId' in w.state) w.state.listId = S.board.classId;
   const body = h('div', { class: 'w-body' });
+  const title = h('span', { class: 'w-title' }, def.icon + ' ' + def.title);
   const head = h('div', { class: 'w-head' },
-    h('span', { class: 'w-title' }, def.icon + ' ' + def.title),
+    title,
     h('div', { class: 'w-actions' },
       h('button', { title: '放大到全螢幕（雙擊標題列也可以）', 'data-act': 'max' }, '⛶'),
       h('button', { title: '設定', 'data-act': 'settings' }, '⚙'),
@@ -637,7 +638,8 @@ function mountWidget(w) {
   place(el, w);
   $('#stage').append(el);
 
-  const ctx = { state: w.state, widget: w, store: S.store, classId: S.board.classId, save: () => { save(); noteClassTool(w); }, push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size), boardName: () => S.board?.name || '' };
+  const ctx = { state: w.state, widget: w, store: S.store, classId: S.board.classId, save: () => { save(); noteClassTool(w); }, push: () => S.remote?.push(), vote: voteApi(w), fit: (size) => fitWidget(w, size), boardName: () => S.board?.name || '',
+    setTitle: (t) => { title.textContent = def.icon + ' ' + (t || def.title); } };
   let inst = {};
   try { inst = def.mount(body, ctx) || {}; } catch (e) { console.error(e); body.textContent = '此小工具發生錯誤'; }
   S.mounted.set(w.id, { el, inst, w });

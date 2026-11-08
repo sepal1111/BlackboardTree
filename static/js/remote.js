@@ -363,7 +363,7 @@ const RENDER = {
     const SOCIAL = { facebook: '📘 Facebook', instagram: '📸 Instagram', threads: '🧵 Threads', tiktok: '🎵 TikTok', vimeo: '🎞️ Vimeo' };
     const label = v.kind === 'social' ? SOCIAL[v.platform] || '社群影片'
       : { youtube: '▶️ YouTube 影片', video: '🎬 影片', web: '🌐 網頁' }[v.kind] || '尚未設定網址';
-    const out = [h('div', { class: 'card-title' }, label), h('div', { class: 'muted url-text' }, v.url || '')];
+    const out = [h('div', { class: 'card-title' }, v.name ? `📋 ${v.name}` : label), h('div', { class: 'muted url-text' }, v.url || '')];
     if (v.kind === 'youtube' || v.kind === 'video') {
       out.push(h('div', { class: 'row' },
         ...(v.kind === 'video' ? [btn('⏪ 10 秒', () => wcmd(w, 'back'))] : []),
