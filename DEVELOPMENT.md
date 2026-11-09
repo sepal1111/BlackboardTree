@@ -119,6 +119,7 @@ npm test
 | `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、加密的狀態與指令、換代碼換金鑰、允許時交換金鑰、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
 | `poll-bank.test.mjs` | 投票題目匯入（文字、Excel 貼上、Excel／CSV 的列）、題庫去除重複、投票紀錄（指紋、上限）、匯出 CSV（BOM、逗號、引號、公式開頭） |
 | `ui-prefs.test.mjs` | 畫面偏好（工具列位置、圖示大小、顯示的工具）的檢查與切換 |
+| `image-list.test.mjs` | 圖片工具的多張照片：舊版單張（`ref`）轉成 `refs`、顯示方式預設、index 範圍、單張切換頭尾相接、調整順序、顯示用檔名、加入時略過重複、只挑圖片檔 |
 | `link-list.test.mjs` | 網址清單：分類標題、名稱與網址、CSV／Tab、說明行、檔名當分類（排除 Windows 的「 (1)」「 - 複製」）、搜尋與分組；試卷釋疑的學校共用資料夾（`loadSchoolLinks()`：子資料夾當分類、PDF／圖片／Word／文字檔變成 `school:` 網址、排除 `~$` 暫存檔與其他檔案、讀不到時的錯誤）、`docKind()`、`linkify()`、`school.json`（`parseSchoolConfig()`）；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed） |
 | `docx.test.mjs` | Word 轉 HTML（測試裡自己做 ZIP）：ZIP 壓縮／不壓縮、XML 實體字元、粗體／顏色／字大小（em）／置中／上下標、標題、換行與定位點、文字跳脫、超連結只接受 http(s)、編號（一、(1)）與數字格式、表格合併儲存格、圖片、追蹤修訂與隱藏文字、不是 Word 檔時的錯誤 |
 | `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
@@ -201,6 +202,9 @@ static/                     前端（桌面版、網頁版共用）
   logo.svg                  黑板樹 Logo（唯一來源：畫面上的 Logo，以及建置時產生的所有圖示）
   remote.html               手機遙控頁
   js/poll-bank.js           投票題庫、匯入題目、投票紀錄與匯出
+  js/image-picker.js        圖片選擇器：個人資料夾／這台電腦（桌面版：桌面、圖片、下載、文件、各磁碟、選擇其他資料夾；網頁版：開啟資料夾）／選擇檔案／網址，可以多選；這台電腦的圖片複製到 media（訪客模式轉成內嵌圖片）
+  js/image-list.js          圖片工具的多張照片（normalizeImageState、moveItem、refName、addRefs…，不碰畫面）
+  js/widgets/image.js       圖片小工具：縮圖卡片（維持原本比例）與單張切換（左右滑動、‹ ›、手機遙控上一張／下一張）
   js/link-list.js           試卷釋疑的檔案清單：讀取學校共用資料夾（`loadSchoolLinks()`，子資料夾當分類）的 PDF、圖片、Word、文字檔（`school:` 網址、`docKind()`）與「網址清單*.txt」（解析分類／名稱／網址）、搜尋與分組、`toEmbedUrl()`、`linkify()`
   js/docx.js                Word（.docx）轉 HTML，不用外部套件：ZIP（DecompressionStream）、XML、樣式、編號、表格、圖片、超連結；文字一律跳脫
   js/school.js              學校共用資料夾的設定：程式資料夾的 school.json（安裝程式 /SCHOOLDIR 寫入）、這台電腦的 ms:schoolDir（⚙ 設定 → 🏫 學校共用資料夾）；只有桌面版

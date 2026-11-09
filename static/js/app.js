@@ -5,7 +5,8 @@ import { FolderBackend, LocalBackend, DATA_DIR } from './backends/index.js';
 import { FsaAdapter, NeuAdapter, kvGet, kvSet } from './backends/fs.js';
 import { widgets, widgetList, upgradeWidget } from './widgets/index.js';
 import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
-import { h, toast, modal, menu, promptDialog, confirmDialog, pickImage } from './ui.js';
+import { h, toast, modal, menu, promptDialog, confirmDialog } from './ui.js';
+import { pickImage } from './image-picker.js';
 import { RemoteHost } from './remote-host.js';
 import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool, lastToolState, lastListId, rememberList, classData } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
@@ -979,9 +980,25 @@ async function isFullscreen() {
   if (DESKTOP) return window.Neutralino.window.isFullScreen().catch(() => false);
   return !!document.fullscreenElement;
 }
+// 桌面版：離開全螢幕後，Neutralino 會把視窗留在「蓋住整個螢幕」的大小（連 Windows 工作列也蓋住），
+// 下方工具列就跑到工作列底下。進入全螢幕前記下是否最大化，離開後重新最大化一次。
+let wasMaximized = true;
+async function desktopFullscreen(on) {
+  const w = window.Neutralino.window;
+  if (on) {
+    wasMaximized = await w.isMaximized().catch(() => true);
+    await w.setFullScreen();
+    return;
+  }
+  await w.exitFullScreen();
+  if (!wasMaximized) return;
+  await new Promise((r) => setTimeout(r, 80));
+  await w.unmaximize().catch(() => {});
+  await w.maximize().catch(() => {});
+}
 async function setFullscreen(on) {
   try {
-    if (DESKTOP) { if (on) await window.Neutralino.window.setFullScreen(); else await window.Neutralino.window.exitFullScreen(); return true; }
+    if (DESKTOP) { await desktopFullscreen(on); return true; }
     if (on) await document.documentElement.requestFullscreen(); else if (document.fullscreenElement) await document.exitFullscreen();
     return true;
   } catch { return false; } // 手機遙控觸發時瀏覽器不允許全螢幕，小工具仍會填滿視窗
@@ -1021,8 +1038,7 @@ function setMaxButton(m, on) {
 
 async function toggleFullscreen() {
   if (DESKTOP) {
-    const w = window.Neutralino.window;
-    if (await w.isFullScreen()) w.exitFullScreen(); else w.setFullScreen();
+    await desktopFullscreen(!(await window.Neutralino.window.isFullScreen())).catch(() => {});
     return;
   }
   if (document.fullscreenElement) document.exitFullscreen();

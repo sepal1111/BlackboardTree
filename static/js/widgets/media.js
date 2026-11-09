@@ -1,5 +1,5 @@
-// 內容類：文字、畫板、圖片、QR Code、嵌入網頁、視訊鏡頭
-import { h, field, select, checkbox, pickImage, setImage, toast, modal, confirmDialog } from '../ui.js';
+// 內容類：文字、畫板、QR Code、嵌入網頁、視訊鏡頭（圖片在 image.js）
+import { h, field, select, checkbox, toast, modal, confirmDialog } from '../ui.js';
 import { htmlToText, upsertNote, deleteNote, searchNotes, newNoteId } from '../text-notes.js';
 import { observeSize } from './util.js';
 import { classData } from '../roster.js';
@@ -509,39 +509,6 @@ export const draw = {
       destroy: () => { unobserve(); clearTimeout(saveT); },
       update(state) { if (!last) loadImage(state.img); },
       settings: (c) => c.append(field('背景顏色', colorRow(s.bg, (v) => { s.bg = v; body.style.background = v; ctx.save(); }))),
-    };
-  },
-};
-
-export const image = {
-  type: 'image', title: '圖片', icon: '🖼️', size: { w: 0.34, h: 0.36 },
-  state: () => ({ ref: null, fit: 'contain', caption: '' }),
-  mount(body, ctx) {
-    const s = ctx.state;
-    const wrap = h('div', { class: 'image-w' });
-    body.append(wrap);
-    async function choose() {
-      const r = await pickImage(ctx.store);
-      if (r) { s.ref = r; render(); ctx.save(); }
-    }
-    function render() {
-      wrap.innerHTML = '';
-      if (!s.ref) {
-        wrap.append(h('button', { class: 'btn primary', onclick: choose }, '選擇圖片'));
-        return;
-      }
-      const img = h('img', { alt: s.caption || '', style: { objectFit: s.fit } });
-      setImage(img, ctx.store, s.ref);
-      img.onerror = () => { wrap.innerHTML = ''; wrap.append(h('div', { class: 'muted center' }, '圖片無法載入'), h('button', { class: 'btn', onclick: choose }, '重新選擇')); };
-      wrap.append(img);
-      if (s.caption) wrap.append(h('div', { class: 'image-cap' }, s.caption));
-    }
-    render();
-    return {
-      settings: (c) => c.append(
-        h('button', { class: 'btn primary', onclick: choose }, '更換圖片'),
-        field('顯示方式', select([['contain', '完整顯示'], ['cover', '填滿裁切']], s.fit, (v) => { s.fit = v; render(); ctx.save(); })),
-        field('說明文字', h('input', { class: 'input', value: s.caption, oninput: (e) => { s.caption = e.target.value; render(); ctx.save(); } }))),
     };
   },
 };

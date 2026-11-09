@@ -377,6 +377,17 @@ const RENDER = {
     } else if (v.kind === 'web') out.push(h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload'))));
     return out;
   },
+  image(w) {
+    const v = w.view || {};
+    if (!v.count) return [h('div', { class: 'muted' }, '還沒有圖片，請在電視上按「選擇圖片」')];
+    const out = [h('div', { class: 'card-title' }, `🖼️ 第 ${v.index + 1} / ${v.count} 張`)];
+    if (v.name) out.push(h('div', { class: 'muted url-text' }, v.name));
+    if (v.count > 1) {
+      out.push(h('div', { class: 'row' }, btn('◀ 上一張', () => wcmd(w, 'prev')), btn('下一張 ▶', () => wcmd(w, 'next'), 'primary big')));
+      out.push(h('div', { class: 'chips' }, v.mode === 'grid' ? btn('🖼 單張切換', () => wcmd(w, 'slide')) : btn('▦ 縮圖卡片', () => wcmd(w, 'grid'))));
+    }
+    return out;
+  },
   examdoc(w) {
     const v = w.view || {};
     const ICON = { pdf: '📕', image: '🖼️', text: '📝', word: '📘', doc: '📘', web: '🌐' };

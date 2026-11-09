@@ -38,6 +38,9 @@
     "window.isFullScreen",
     "window.setFullScreen",
     "window.exitFullScreen",
+    "window.isMaximized",
+    "window.maximize",
+    "window.unmaximize",
     "resources.extractFile",
     "resources.getStats"
   ],

@@ -1,6 +1,7 @@
 import { clock, timer, stopwatch, exam } from './time.js';
 import { names, groups, work, poll, sound, seats, points } from './classroom.js';
-import { text, draw, image, qr, embed, webcam } from './media.js';
+import { text, draw, qr, embed, webcam } from './media.js';
+import { image } from './image.js';
 import { examdoc } from './exam-doc.js';
 
 // 下方工具列的順序
