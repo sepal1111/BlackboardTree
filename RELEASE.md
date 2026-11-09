@@ -1,10 +1,23 @@
-# 黑板樹 Blackboard Tree v2.2.0 發布說明
+# 黑板樹 Blackboard Tree v2.3.0 發布說明
 
 黑板樹（Blackboard Tree）是一套專為學校教學與教室投影設計的免費電子白板軟體。白板與班級設定預設儲存於教師個人的**網路磁碟機（V:）**或隨身硬碟，換電腦、換教室皆能無縫接續教學。軟體內建手機遙控與學生即時投票伺服器，**無須額外架設外部主機**即可實現互動教學。
 
 - 專案首頁：[https://github.com/sepal1111/BlackboardTree](https://github.com/sepal1111/BlackboardTree)
-- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.2.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.2.0)
+- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.3.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.3.0)
 - 詳細開發與使用文件：[README.md](README.md)
+
+---
+
+## 🖼️ v2.3.0：圖片工具可以放多張照片
+
+- **瀏覽這台電腦的資料夾**：選擇圖片時多了「💻 這台電腦」，可以直接瀏覽桌面、圖片、下載、文件與各個磁碟，或「選擇其他資料夾…」；縮圖一張張顯示，不用再記檔案放在哪裡。選好的照片會複製一份到白板資料夾，換到其他電腦也看得到。
+- **一次加入多張**：點圖片就能多選，也可以「全選這個資料夾」。
+- **兩種顯示方式**：
+  - **縮圖卡片**：像檔案總管的大圖示，每張縮圖維持原本的長寬比例，下方顯示檔名，右下角 −／+ 調整縮圖大小；點一張就放大成單張。
+  - **單張切換**：用手指或滑鼠左右滑動換下一張，或按兩側的 ‹ ›、鍵盤方向鍵；最後一張接回第一張，下方顯示「第幾張／共幾張」。
+- ⚙ 設定可以調整照片順序、移除照片、選擇縮圖大小、是否顯示檔名。
+- 手機遙控可以上一張／下一張、切換縮圖卡片或單張。
+- 修正：桌面版把小工具放大成全螢幕後再關閉，下方工具列會跑到 Windows 工作列底下。
 
 ---
 
@@ -156,11 +169,11 @@
 
 ## 📦 下載檔案說明
 
-請至 [GitHub Releases (v2.2.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.2.0) 下載對應檔案：
+請至 [GitHub Releases (v2.3.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.3.0) 下載對應檔案：
 
 | 下載檔案                                     | 適用情境                     | 說明                                                                                         |
 | -------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
-| **`BlackboardTree-Setup-2.2.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
+| **`BlackboardTree-Setup-2.3.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
 | **`BlackboardTree.exe`**             | 臨時使用／隨身碟執行         | 免安裝綠色版。單一執行檔，下載後雙擊即可直接執行（已內建遙控轉送模組）。                     |
 
 ---
@@ -178,7 +191,7 @@
 
 ### 安裝步驟（安裝版）
 
-1. 雙擊執行 `BlackboardTree-Setup-2.2.0.exe`。
+1. 雙擊執行 `BlackboardTree-Setup-2.3.0.exe`。
 2. 若出現微軟藍色警示畫面「Windows 已保護您的電腦」：請點擊「**其他資訊**」→「**仍要執行**」。
 3. 依安裝引導步驟點選「下一步」，建議勾選：
    - **建立桌面捷徑**
@@ -205,7 +218,7 @@
 
 ```cmd
 :: 為電腦所有使用者安裝（需以系統管理員身分執行），並自動設定防火牆例外
-BlackboardTree-Setup-2.2.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
+BlackboardTree-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
 ```
 
 - **防火牆說明**：手機遙控與學生投票使用內建的轉送程式 `myscreen-relay.exe`，通訊埠預設為 `52480`。
@@ -239,6 +252,12 @@ BlackboardTree-Setup-2.2.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="d
 ---
 
 ## 版本紀錄
+
+### 2.3.0
+- **圖片工具**：可以瀏覽這台電腦的資料夾（桌面、圖片、下載、各磁碟），一次加入多張照片
+- 多張照片用「縮圖卡片」（維持原本比例）或「單張切換」（左右滑動）顯示；可以調整順序、縮圖大小
+- 手機遙控可以上一張／下一張
+- 修正：小工具全螢幕後關閉，桌面版下方工具列被 Windows 工作列擋住
 
 ### 2.2.0
 - **試卷釋疑**：新工具，讀取學校共用資料夾裡的 PDF、圖片、Word（.docx）、文字檔與網址清單，子資料夾當分類

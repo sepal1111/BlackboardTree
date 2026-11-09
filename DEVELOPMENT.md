@@ -173,6 +173,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 2.3.0 | 圖片工具多張照片（`widgets/image.js`、`image-list.js`）：縮圖卡片與單張切換、手機遙控上一張／下一張；圖片選擇器（`image-picker.js`）可以瀏覽這台電腦的資料夾、多選，選到的檔案複製到 media；舊的單張 `state.ref` 自動轉成 `refs`；桌面版離開全螢幕後重新最大化（`desktopFullscreen()`，新增 window.isMaximized／maximize／unmaximize 權限） |
 | 2.2.0 | 試卷釋疑（`widgets/exam-doc.js`）：讀取學校共用資料夾（`school.js`：school.json／安裝程式 `/SCHOOLDIR`、`ms:schoolDir`）的 PDF、圖片、Word、文字檔、網址清單（`link-list.js` 的 `loadSchoolLinks()`）；Word 轉 HTML（`docx.js`）；每分鐘比對檔案大小與修改時間自動更新；設定頁「🏫 學校共用資料夾」；網頁／影片恢復成 2.0.0（移除白板資料夾的網址清單） |
 | 2.1.0 | 網址清單（`link-list.js`）：讀取白板資料夾的「網址清單*.txt」／`links*.txt`，解析分類、名稱、網址（CSV／Tab、Big5），搜尋與分組；網頁／影片小工具「📋 從網址清單選擇」、記住上次的分類、標題列顯示名稱；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed）；↻ 重新載入與自動重新載入 |
 | 2.0.0 | 以班級為主：白板有 `classId`（`store.newBoard(name, classId)`），首頁 `showClasses()` → `showBoards(classId)`；小工具的 `listId` 一律等於白板的班級（`mountWidget`）；各班資料 settings.classData（`roster.js` 的 `classData()`：pollBank、pollResults、textNotes、points），刪除班級 `dropClass()` 連同白板一起刪；題庫匯出 `bankToText()`；課堂加分 classData.points 同班共用（`saveSettings({ quiet })`）；移除 lastTools 與手動輸入名單；遙控白板清單只列同班 |

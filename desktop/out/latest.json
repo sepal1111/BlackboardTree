@@ -1,13 +1,23 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "date": "2026-11-09",
   "notes": [
-    "- **試卷釋疑**：新工具，讀取學校共用資料夾裡的 PDF、圖片、Word（.docx）、文字檔與網址清單，子資料夾當分類",
-    "- 檔案更新後自動顯示新的內容；Word、文字檔可以調整字的大小；手機遙控可以翻頁",
-    "- 學校共用資料夾：「⚙ 設定 → 🏫 學校共用資料夾」，或安裝程式的 `/SCHOOLDIR`",
-    "- 網頁／影片恢復成 2.0.0 的樣子，網址清單改在試卷釋疑使用"
+    "- **圖片工具**：可以瀏覽這台電腦的資料夾（桌面、圖片、下載、各磁碟），一次加入多張照片",
+    "- 多張照片用「縮圖卡片」（維持原本比例）或「單張切換」（左右滑動）顯示；可以調整順序、縮圖大小",
+    "- 手機遙控可以上一張／下一張",
+    "- 修正：小工具全螢幕後關閉，桌面版下方工具列被 Windows 工作列擋住"
   ],
   "history": [
+    {
+      "version": "2.3.0",
+      "date": "",
+      "notes": [
+        "- **圖片工具**：可以瀏覽這台電腦的資料夾（桌面、圖片、下載、各磁碟），一次加入多張照片",
+        "- 多張照片用「縮圖卡片」（維持原本比例）或「單張切換」（左右滑動）顯示；可以調整順序、縮圖大小",
+        "- 手機遙控可以上一張／下一張",
+        "- 修正：小工具全螢幕後關閉，桌面版下方工具列被 Windows 工作列擋住"
+      ]
+    },
     {
       "version": "2.2.0",
       "date": "",
@@ -97,24 +107,17 @@
       "notes": [
         "- 新的黑板樹 Logo：程式圖示、安裝程式、工作列與系統匣圖示，以及開始畫面、「關於與更新」都改用新 Logo"
       ]
-    },
-    {
-      "version": "1.6.2",
-      "date": "",
-      "notes": [
-        "- 第一版正式釋出：全新的下載與安裝說明（功能介紹、系統需求、安裝步驟、資訊組大量部署、常見問題）"
-      ]
     }
   ],
   "setup": {
-    "file": "BlackboardTree-Setup-2.2.0.exe",
-    "size": 12427181,
-    "sha256": "69a6c9d4a76027bf3affd09b5d698067183b1c9c04ce4f303c9c69ca25167a06"
+    "file": "BlackboardTree-Setup-2.3.0.exe",
+    "size": 12431256,
+    "sha256": "26f94de68c2ce00d9eb02e52c81c8c28d7cc7b6a34a0a756759c0a61dbcf4fa3"
   },
   "portable": {
     "file": "BlackboardTree.exe",
-    "size": 13462016,
-    "sha256": "a663abb4b4c713c25ed433596f6408b18c2b063c06bd317251e0e56b34d7fe9b"
+    "size": 13485056,
+    "sha256": "657bcecc6affeb0653bbcf11b0601eea6e8dbd9b04b12c1b7bcaf4f14feb3856"
   },
-  "signature": "N5kZoSKbkb9HQPX9geem/ulcNeUu7g1nsl4lW35BpDmgT4+OI5XzHItWmYnkyOKk7Xzc8Cejno00fnE52kmomg=="
+  "signature": "AUjgwiUVXBAYfdU9btQ7ik7NdE46eRE9cCQFoYtW8p7vl6QRE98qKWgriZZ9cJRpDd1Wgg3OlvGk1SySFO4Tfg=="
 }
