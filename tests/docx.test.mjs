@@ -1,46 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { docxToHtml, readZip, parseXml, formatNumber } from '../static/js/docx.js';
-
-// 做一個最小的 .docx（ZIP）：files = { 路徑: 文字或 Uint8Array }，store 的用不壓縮，其他用 deflate
-async function makeZip(files, { store = [] } = {}) {
-  const enc = new TextEncoder();
-  const parts = [];
-  const central = [];
-  let offset = 0;
-  for (const [name, content] of Object.entries(files)) {
-    const raw = typeof content === 'string' ? enc.encode(content) : content;
-    const deflate = !store.includes(name);
-    const data = deflate
-      ? new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer())
-      : raw;
-    const nameBytes = enc.encode(name);
-    const local = new DataView(new ArrayBuffer(30));
-    local.setUint32(0, 0x04034b50, true);
-    local.setUint16(8, deflate ? 8 : 0, true);
-    local.setUint32(18, data.length, true);
-    local.setUint32(22, raw.length, true);
-    local.setUint16(26, nameBytes.length, true);
-    const cd = new DataView(new ArrayBuffer(46));
-    cd.setUint32(0, 0x02014b50, true);
-    cd.setUint16(10, deflate ? 8 : 0, true);
-    cd.setUint32(20, data.length, true);
-    cd.setUint32(24, raw.length, true);
-    cd.setUint16(28, nameBytes.length, true);
-    cd.setUint32(42, offset, true);
-    parts.push(new Uint8Array(local.buffer), nameBytes, data);
-    central.push(new Uint8Array(cd.buffer), nameBytes);
-    offset += 30 + nameBytes.length + data.length;
-  }
-  const cdSize = central.reduce((a, b) => a + b.length, 0);
-  const end = new DataView(new ArrayBuffer(22));
-  end.setUint32(0, 0x06054b50, true);
-  end.setUint16(8, Object.keys(files).length, true);
-  end.setUint16(10, Object.keys(files).length, true);
-  end.setUint32(12, cdSize, true);
-  end.setUint32(16, offset, true);
-  return new Blob([...parts, ...central, new Uint8Array(end.buffer)]).arrayBuffer();
-}
+import { makeZip } from './helpers.mjs';
 
 const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
 const doc = (body) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body>${body}<w:sectPr/></w:body></w:document>`;

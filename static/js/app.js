@@ -4,9 +4,10 @@ import { Store, LS, uid, initLocalPrefs, flushLocalPrefs } from './store.js';
 import { FolderBackend, LocalBackend, DATA_DIR } from './backends/index.js';
 import { FsaAdapter, NeuAdapter, kvGet, kvSet } from './backends/fs.js';
 import { widgets, widgetList, upgradeWidget } from './widgets/index.js';
-import { classifyUrl, openExternal, PLATFORMS } from './widgets/media.js';
+import { classifyUrl, openExternal, PLATFORMS } from './web-url.js';
 import { h, toast, modal, menu, promptDialog, confirmDialog } from './ui.js';
-import { pickImage } from './image-picker.js';
+import { pickImage } from './res-picker.js';
+import { setLocalFileServer } from './res-files.js';
 import { RemoteHost } from './remote-host.js';
 import { rosterDialog, studentsOf, hasPhotos, recordClassTool, classToolsOf, forgetClassTool, lastToolState, lastListId, rememberList, classData } from './roster.js';
 import { renderPollLibrary } from './poll-bank.js';
@@ -1239,6 +1240,9 @@ async function cleanupUpdateLeftovers() {
 //   桌面版：這台電腦（內建的 myscreen-relay.exe，手機要在同一個校內網路）
 //   網頁版：提供這個網頁的黑板樹伺服器（server/app.py）；只放在一般網頁伺服器上時沒有遙控
 const LOCAL = 'local';
+// 內建伺服器也負責播放這台電腦上的影片、音訊、文件（res-files.js），這個通行碼只有黑板樹知道
+const MEDIA_TOKEN = [...crypto.getRandomValues(new Uint8Array(18))].map((b) => b.toString(16).padStart(2, '0')).join('');
+if (DESKTOP) setLocalFileServer(async () => `http://127.0.0.1:${(await startLocalRelay()).port}/media?t=${MEDIA_TOKEN}&p=`);
 const relayBase = () => (DESKTOP ? LOCAL : (S.config ? location.origin : ''));
 
 // ---- 內建遙控伺服器（桌面版）
@@ -1267,7 +1271,7 @@ function startLocalRelay() {
   S.localRelay = (async () => {
     const exe = await relayExePath();
     const pid = window.NL_PID ? ` --parent ${window.NL_PID}` : '';
-    const proc = await window.Neutralino.os.spawnProcess(`"${exe.replace(/\//g, '\\')}" --port 52480${pid}`);
+    const proc = await window.Neutralino.os.spawnProcess(`"${exe.replace(/\//g, '\\')}" --port 52480${pid} --token ${MEDIA_TOKEN}`);
     return await new Promise((resolve, reject) => {
       let buf = '', all = '', info = null;
       const ipList = (s) => (s ? s.split(',').filter(Boolean) : []);
@@ -1462,10 +1466,10 @@ async function openUrlFromRemote(url) {
   }
   if (!S.board) return S.remote?.notice('請先在電腦上開啟一個白板');
   // 影片：放在畫面中間、佔大部分空間（直式短影音放成直的）；取代上一個從手機送來的影片，避免兩個一起出聲
-  const prev = S.board.data.widgets.find((x) => x.type === 'embed' && x.state?.fromRemote);
+  const prev = S.board.data.widgets.find((x) => x.type === 'resource' && x.state?.fromRemote);
   const pos = info.portrait ? { x: 0.34, y: 0.05, w: 0.32, h: 0.86 } : { x: 0.12, y: 0.08, w: 0.76, h: 0.8 };
   if (prev) removeWidget(prev.id);
-  const w = addWidget('embed', null, { ...pos, state: { url: info.href, autoplay: true, fromRemote: true } });
+  const w = addWidget('resource', null, { ...pos, state: { refs: [{ kind: 'url', url: info.href }], mode: 'slide', index: 0, autoplay: true, fromRemote: true } });
   const platform = PLATFORMS[info.platform]?.name;
   S.remote?.notice(info.kind === 'youtube' ? '已在白板上播放 YouTube 影片'
     : platform ? `已在白板上顯示 ${platform} 影片，請在電視上點播放` : '已在白板上播放影片');

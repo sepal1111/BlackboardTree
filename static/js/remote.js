@@ -358,34 +358,36 @@ const RENDER = {
       ...(v.flip ? [grid, desk] : [desk, grid]),
       h('div', { class: 'row' }, btn('🎯 隨機點名', () => wcmd(w, 'pick'), 'primary'), btn('🔀 隨機排座位', () => { if (confirm('要重新隨機排座位嗎？')) wcmd(w, 'shuffle'); }))];
   },
-  embed(w) {
+  resource(w) {
     const v = w.view || {};
+    if (!v.count) return [h('div', { class: 'muted' }, '還沒有資源，請在電視上按「📂 匯入資源」')];
+    const ICON = { image: '🖼️', video: '🎬', audio: '🎵', pdf: '📕', text: '📝', word: '📘', odt: '📄', ods: '📊', odp: '📽️', office: '📎', youtube: '▶️', social: '📱', web: '🌐' };
     const SOCIAL = { facebook: '📘 Facebook', instagram: '📸 Instagram', threads: '🧵 Threads', tiktok: '🎵 TikTok', vimeo: '🎞️ Vimeo' };
-    const label = v.kind === 'social' ? SOCIAL[v.platform] || '社群影片'
-      : { youtube: '▶️ YouTube 影片', video: '🎬 影片', web: '🌐 網頁' }[v.kind] || '尚未設定網址';
-    const out = [h('div', { class: 'card-title' }, label), h('div', { class: 'muted url-text' }, v.url || '')];
-    if (v.kind === 'youtube' || v.kind === 'video') {
-      out.push(h('div', { class: 'row' },
-        ...(v.kind === 'video' ? [btn('⏪ 10 秒', () => wcmd(w, 'back'))] : []),
-        btn(v.playing ? '⏸ 暫停' : '▶ 播放', () => wcmd(w, v.playing ? 'pause' : 'play'), 'primary big'),
-        ...(v.kind === 'video' ? [btn('10 秒 ⏩', () => wcmd(w, 'fwd'))] : [])),
-      h('div', { class: 'chips' }, btn(v.muted ? '🔊 取消靜音' : '🔇 靜音', () => wcmd(w, 'mute')), btn('⏮ 從頭播放', () => wcmd(w, 'restart'))));
-    } else if (v.kind === 'social') {
+    const grid = v.mode === 'grid' && v.count > 1;
+    const head = grid ? `▦ 縮圖卡片（${v.count} 個）` : (v.kind === 'social' ? SOCIAL[v.platform] || '📱 社群影片' : (ICON[v.kind] || '📄') + ' ' + (v.name || ''));
+    const out = [h('div', { class: 'card-title' }, head)];
+    if (!grid && v.count > 1) out.push(h('div', { class: 'muted', style: { textAlign: 'center' } }, `第 ${v.index + 1} / ${v.count} 個`));
+    if (!grid && v.kind === 'social') {
       // 社群網站的播放器不開放外部控制
-      out.push(h('div', { class: 'muted' }, '社群網站的影片無法從手機控制，請在電視上點播放。若顯示「無法觀看」，可能是非公開貼文，可改用瀏覽器開啟。'),
-        h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload')), btn('🌐 改用瀏覽器開啟', () => wcmd(w, 'browser'))));
-    } else if (v.kind === 'web') out.push(h('div', { class: 'chips' }, btn('🔄 重新載入', () => wcmd(w, 'reload'))));
-    return out;
-  },
-  image(w) {
-    const v = w.view || {};
-    if (!v.count) return [h('div', { class: 'muted' }, '還沒有圖片，請在電視上按「選擇圖片」')];
-    const out = [h('div', { class: 'card-title' }, `🖼️ 第 ${v.index + 1} / ${v.count} 張`)];
-    if (v.name) out.push(h('div', { class: 'muted url-text' }, v.name));
-    if (v.count > 1) {
-      out.push(h('div', { class: 'row' }, btn('◀ 上一張', () => wcmd(w, 'prev')), btn('下一張 ▶', () => wcmd(w, 'next'), 'primary big')));
-      out.push(h('div', { class: 'chips' }, v.mode === 'grid' ? btn('🖼 單張切換', () => wcmd(w, 'slide')) : btn('▦ 縮圖卡片', () => wcmd(w, 'grid'))));
+      out.push(h('div', { class: 'muted' }, '社群網站的影片無法從手機控制，請在電視上點播放。若顯示「無法觀看」，可能是非公開貼文，可改用瀏覽器開啟。'));
     }
+    const media = !grid && (v.kind === 'video' || v.kind === 'audio' || v.kind === 'youtube');
+    if (media) {
+      const file = v.kind !== 'youtube';
+      out.push(h('div', { class: 'row' },
+        ...(file ? [btn('⏪ 10 秒', () => wcmd(w, 'back'))] : []),
+        btn(v.playing ? '⏸ 暫停' : '▶ 播放', () => wcmd(w, v.playing ? 'pause' : 'play'), 'primary big'),
+        ...(file ? [btn('10 秒 ⏩', () => wcmd(w, 'fwd'))] : [])),
+      h('div', { class: 'chips' }, btn(v.muted ? '🔊 取消靜音' : '🔇 靜音', () => wcmd(w, 'mute')), btn('⏮ 從頭播放', () => wcmd(w, 'restart'))));
+    }
+    if (!grid && v.scroll) out.push(h('div', { class: 'row' }, btn('▲ 上一頁', () => wcmd(w, 'up')), btn('▼ 下一頁', () => wcmd(w, 'down'), 'primary')));
+    if (v.count > 1) out.push(h('div', { class: 'row' }, btn('◀ 上一個', () => wcmd(w, 'prev')), btn('下一個 ▶', () => wcmd(w, 'next'), media ? '' : 'primary big')));
+    const chips = [];
+    if (v.count > 1) chips.push(grid ? btn('🖼 單張切換', () => wcmd(w, 'slide')) : btn('▦ 縮圖卡片', () => wcmd(w, 'grid')));
+    if (!grid && ['text', 'word', 'odt', 'ods'].includes(v.kind)) chips.push(btn('A− 字變小', () => wcmd(w, 'smaller')), btn('A+ 字變大', () => wcmd(w, 'bigger')));
+    if (!grid && v.kind && v.kind !== 'image') chips.push(btn('🔄 重新載入', () => wcmd(w, 'reload')));
+    if (!grid && (v.kind === 'social' || v.kind === 'web')) chips.push(btn('🌐 改用瀏覽器開啟', () => wcmd(w, 'browser')));
+    if (chips.length) out.push(h('div', { class: 'chips' }, ...chips));
     return out;
   },
   examdoc(w) {

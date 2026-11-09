@@ -22,6 +22,7 @@ const mediaName = (name) => `${new Date().toISOString().slice(0, 10).replace(/-/
 //   {kind:'file', base:'root', path:'照片/a.jpg'}    使用者瀏覽個人資料夾選的圖片
 //   {kind:'smb', path}                               1.0 以前的舊格式，等同 base:'root'
 //   {kind:'data'|'url', url}                         內嵌或外部網址
+//   {kind:'abs', path}                               這台電腦上的完整路徑（匯入資源的大檔案，只有桌面版、這台電腦能讀）
 function commonImage(ref) {
   if (!ref) return '';
   if (ref.kind === 'data' || ref.kind === 'url') return ref.url || '';
@@ -106,10 +107,23 @@ export class FolderBackend {
     return { kind: 'file', base: 'data', path };
   }
 
+  // 桌面版：把這台電腦上的檔案（完整路徑）直接複製到 media，不經過記憶體（大影片也不會卡住）
+  async importPath(src, name) {
+    if (!this.fs.base || !window.Neutralino?.filesystem?.copy) return null;
+    const path = 'media/' + mediaName(name);
+    await this.fs.ensureDir(splitPath(this.d('media')));
+    await window.Neutralino.filesystem.copy(src, this.fs.p(this.d(path)));
+    return { kind: 'file', base: 'data', path };
+  }
+
+  // 參照 → 相對於資料夾根目錄的路徑
+  relOf(ref) { return ref.kind === 'file' && ref.base === 'data' ? this.d(ref.path) : splitPath(ref.path).join('/'); }
+
   async imageUrl(ref) {
     const c = commonImage(ref);
     if (c !== null) return c;
-    const rel = ref.kind === 'file' && ref.base === 'data' ? this.d(ref.path) : splitPath(ref.path).join('/');
+    if (ref.kind === 'abs') return '';
+    const rel = this.relOf(ref);
     if (this.urls.has(rel)) return this.urls.get(rel);
     const blob = await this.fs.readBlob(rel);
     if (!blob) return '';

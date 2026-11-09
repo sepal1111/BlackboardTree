@@ -5,7 +5,9 @@
 // 也提供手機遙控網頁與學生投票網頁（remote.html、vote.html 等檔案編譯時嵌入）
 // 用 Windows 內建的 .NET Framework 編譯（desktop\build.ps1），不需要另外安裝任何東西
 //
-// 參數：--port 52480（被占用時自動往後找）  --parent <黑板樹的 PID，主程式結束時自動關閉>
+// 也讓黑板樹播放這台電腦上的影片、音訊、文件（/media，只限本機、要有啟動時給的 token，支援 Range 分段讀取，不會整個讀進記憶體）
+//
+// 參數：--port 52480（被占用時自動往後找）  --parent <黑板樹的 PID，主程式結束時自動關閉>  --token <本機檔案的通行碼>
 // 啟動後在標準輸出印出：LISTEN <port> <ip1,ip2,...>；之後網路變動時印出：IPS <ip1,ip2,...>
 using System;
 using System.Collections.Generic;
@@ -163,6 +165,7 @@ namespace BlackboardTree
         static readonly RandomNumberGenerator rng = RandomNumberGenerator.Create();
         static readonly JavaScriptSerializer json = new JavaScriptSerializer { MaxJsonLength = MAX_MSG * 4 };
         static readonly Dictionary<string, byte[]> files = new Dictionary<string, byte[]>();
+        static string mediaToken = "";
 
         static int Main(string[] args)
         {
@@ -171,6 +174,7 @@ namespace BlackboardTree
             {
                 if (args[i] == "--port") int.TryParse(args[i + 1], out port);
                 if (args[i] == "--parent") int.TryParse(args[i + 1], out parent);
+                if (args[i] == "--token") mediaToken = args[i + 1];
             }
             LoadFiles();
             TcpListener listener = null;
@@ -324,6 +328,16 @@ namespace BlackboardTree
                     else ws.Close();
                     return;
                 }
+                if (path == "/media")
+                {
+                    // 只有這台電腦上的黑板樹可以讀（token 只有黑板樹知道）
+                    if (!IPAddress.IsLoopback(remoteAddr) || mediaToken.Length < 16 || QueryValue(query, "t") != mediaToken) { Reply(stream, "403 Forbidden", "Forbidden"); return; }
+                    string range;
+                    headers.TryGetValue("Range", out range);
+                    stream.WriteTimeout = 120000; // 影片暫停很久時放掉連線，繼續播放時瀏覽器會再要一次
+                    ServeLocal(stream, QueryValue(query, "p"), range, first[0] == "HEAD");
+                    return;
+                }
                 ServeFile(stream, path);
             }
             catch { }
@@ -354,6 +368,83 @@ namespace BlackboardTree
             stream.Write(hb, 0, hb.Length);
             stream.Write(body, 0, body.Length);
             stream.Flush();
+        }
+
+        const string CRLF = "\r\n";
+
+        static void Reply(Stream stream, string status, string text)
+        {
+            var body = Encoding.UTF8.GetBytes(text);
+            var hb = Encoding.ASCII.GetBytes("HTTP/1.1 " + status + CRLF + "Content-Type: text/plain; charset=utf-8" + CRLF +
+                "Content-Length: " + body.Length + CRLF + "Access-Control-Allow-Origin: *" + CRLF + "Connection: close" + CRLF + CRLF);
+            stream.Write(hb, 0, hb.Length);
+            stream.Write(body, 0, body.Length);
+            stream.Flush();
+        }
+
+        // 匯入資源可以顯示的檔案類型
+        static readonly Dictionary<string, string> MEDIA_TYPES = new Dictionary<string, string>
+        {
+            { ".mp4", "video/mp4" }, { ".m4v", "video/mp4" }, { ".mov", "video/mp4" }, { ".webm", "video/webm" }, { ".ogv", "video/ogg" },
+            { ".mp3", "audio/mpeg" }, { ".wav", "audio/wav" }, { ".ogg", "audio/ogg" }, { ".oga", "audio/ogg" }, { ".opus", "audio/ogg" },
+            { ".m4a", "audio/mp4" }, { ".aac", "audio/aac" }, { ".flac", "audio/flac" }, { ".weba", "audio/webm" },
+            { ".pdf", "application/pdf" }, { ".txt", "text/plain" }, { ".md", "text/plain" }, { ".csv", "text/plain" }, { ".log", "text/plain" }, { ".json", "text/plain" },
+            { ".docx", "application/octet-stream" }, { ".odt", "application/octet-stream" }, { ".ods", "application/octet-stream" }, { ".odp", "application/octet-stream" },
+            { ".png", "image/png" }, { ".jpg", "image/jpeg" }, { ".jpeg", "image/jpeg" }, { ".gif", "image/gif" }, { ".webp", "image/webp" },
+            { ".bmp", "image/bmp" }, { ".svg", "image/svg+xml" }, { ".avif", "image/avif" }, { ".ico", "image/x-icon" },
+        };
+
+        // 這台電腦上的檔案：支援 Range（影片可以拖曳進度），一次只讀一小段送出，不會整個讀進記憶體
+        static void ServeLocal(Stream stream, string file, string range, bool headOnly)
+        {
+            string type;
+            if (string.IsNullOrEmpty(file) || !MEDIA_TYPES.TryGetValue(Path.GetExtension(file).ToLowerInvariant(), out type)) { Reply(stream, "403 Forbidden", "Forbidden"); return; }
+            FileStream fs;
+            try { fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16); }
+            catch { Reply(stream, "404 Not Found", "Not found"); return; }
+            using (fs)
+            {
+                long len = fs.Length, start = 0, end = len - 1;
+                bool partial = false;
+                if (!string.IsNullOrEmpty(range) && range.StartsWith("bytes=") && range.IndexOf(',') < 0)
+                {
+                    var r = range.Substring(6).Split('-');
+                    long a, b;
+                    if (r.Length == 2 && r[0] == "" && long.TryParse(r[1], out b)) { start = Math.Max(0, len - b); partial = true; }
+                    else if (r.Length == 2 && long.TryParse(r[0], out a))
+                    {
+                        start = a;
+                        if (r[1] != "" && long.TryParse(r[1], out b)) end = Math.Min(b, len - 1);
+                        partial = true;
+                    }
+                    if (partial && (start >= len || start > end))
+                    {
+                        var h416 = Encoding.ASCII.GetBytes("HTTP/1.1 416 Range Not Satisfiable" + CRLF + "Content-Range: bytes */" + len + CRLF +
+                            "Content-Length: 0" + CRLF + "Access-Control-Allow-Origin: *" + CRLF + "Connection: close" + CRLF + CRLF);
+                        stream.Write(h416, 0, h416.Length);
+                        return;
+                    }
+                }
+                long count = len == 0 ? 0 : end - start + 1;
+                var head = "HTTP/1.1 " + (partial ? "206 Partial Content" : "200 OK") + CRLF +
+                           "Content-Type: " + type + CRLF + "Content-Length: " + count + CRLF +
+                           (partial ? "Content-Range: bytes " + start + "-" + end + "/" + len + CRLF : "") +
+                           "Accept-Ranges: bytes" + CRLF + "Cache-Control: no-cache" + CRLF + "Access-Control-Allow-Origin: *" + CRLF +
+                           "Connection: close" + CRLF + CRLF;
+                var hb = Encoding.ASCII.GetBytes(head);
+                stream.Write(hb, 0, hb.Length);
+                if (headOnly || count == 0) { stream.Flush(); return; }
+                fs.Position = start;
+                var buf = new byte[1 << 18];
+                while (count > 0)
+                {
+                    int n = fs.Read(buf, 0, (int)Math.Min(buf.Length, count));
+                    if (n <= 0) break;
+                    stream.Write(buf, 0, n); // 瀏覽器中途不要了（換張、拖曳進度）時會丟出例外，連線就結束
+                    count -= n;
+                }
+                stream.Flush();
+            }
         }
 
         // ---------------------------------------------------------------- 轉送

@@ -11,7 +11,8 @@ const results = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`);
 const firstLine = (p) => new Promise((resolve) => p.stdout.once('data', (d) => resolve(d.toString().trim())));
 
-const proc = spawn(exe, ['--port', '52480', '--parent', String(process.pid)]);
+const TOKEN = 'test-token-0123456789abcdef';
+const proc = spawn(exe, ['--port', '52480', '--parent', String(process.pid), '--token', TOKEN]);
 const listen = await firstLine(proc);
 const port = +listen.split(' ')[1];
 check('啟動輸出 LISTEN <port> <ip>', /^LISTEN \d+ /.test(listen), listen);
@@ -37,6 +38,34 @@ check('提供手機頁的 JS', js.ok);
 const naclJs = await fetch(`http://127.0.0.1:${port}/vendor/nacl-fast.min.js`);
 check('提供加密程式（remote-crypto.js、nacl-fast.min.js）', naclJs.ok && (await naclJs.text()).includes('secretbox') && (await fetch(`http://127.0.0.1:${port}/js/remote-crypto.js`)).ok);
 check('不存在的檔案回 404', (await fetch(`http://127.0.0.1:${port}/../server/app.py`)).status === 404);
+
+// 本機檔案（匯入資源）：要 token、只給影音文件類型、支援 Range
+{
+  const { writeFileSync, mkdtempSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'bt-media-'));
+  const file = join(dir, '測試 影片.mp4');
+  const data = Buffer.alloc(1000000);
+  for (let i = 0; i < data.length; i++) data[i] = i % 251;
+  writeFileSync(file, data);
+  writeFileSync(join(dir, 'secret.ini'), 'x');
+  const media = (p, t = TOKEN, headers = {}) => fetch(`http://127.0.0.1:${port}/media?t=${t}&p=${encodeURIComponent(p)}`, { headers });
+  const full = await media(file);
+  const body = Buffer.from(await full.arrayBuffer());
+  check('本機檔案：完整讀取', full.status === 200 && body.equals(data) && full.headers.get('accept-ranges') === 'bytes' && full.headers.get('content-type') === 'video/mp4');
+  const part = await media(file, TOKEN, { Range: 'bytes=500000-500099' });
+  const pb = Buffer.from(await part.arrayBuffer());
+  check('本機檔案：Range 分段', part.status === 206 && part.headers.get('content-range') === 'bytes 500000-500099/1000000' && pb.equals(data.subarray(500000, 500100)));
+  const tail = await media(file, TOKEN, { Range: 'bytes=-10' });
+  check('本機檔案：Range 最後幾個位元組', tail.status === 206 && Buffer.from(await tail.arrayBuffer()).equals(data.subarray(-10)));
+  const open = await media(file, TOKEN, { Range: 'bytes=999990-' });
+  check('本機檔案：Range 到結尾', open.status === 206 && (await open.arrayBuffer()).byteLength === 10);
+  check('本機檔案：超出範圍回 416', (await media(file, TOKEN, { Range: 'bytes=2000000-' })).status === 416);
+  check('本機檔案：沒有 token 或 token 錯誤回 403', (await media(file, 'wrong')).status === 403 && (await fetch(`http://127.0.0.1:${port}/media?p=${encodeURIComponent(file)}`)).status === 403);
+  check('本機檔案：不是影音文件類型回 403', (await media(join(dir, 'secret.ini'))).status === 403);
+  check('本機檔案：不存在回 404', (await media(join(dir, 'none.mp4'))).status === 404);
+}
 
 const base = `ws://127.0.0.1:${port}`;
 function client(path) {

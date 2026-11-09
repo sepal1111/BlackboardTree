@@ -119,7 +119,8 @@ npm test
 | `remote-host.test.mjs` | 教室電腦端的遙控連線（用假的 WebSocket）：取得代碼、記住代碼、加密的狀態與指令、換代碼換金鑰、允許時交換金鑰、斷線重連；學生投票的開放／回覆／結束、重新連線沿用投票代碼 |
 | `poll-bank.test.mjs` | 投票題目匯入（文字、Excel 貼上、Excel／CSV 的列）、題庫去除重複、投票紀錄（指紋、上限）、匯出 CSV（BOM、逗號、引號、公式開頭） |
 | `ui-prefs.test.mjs` | 畫面偏好（工具列位置、圖示大小、顯示的工具）的檢查與切換 |
-| `image-list.test.mjs` | 圖片工具的多張照片：舊版單張（`ref`）轉成 `refs`、顯示方式預設、index 範圍、單張切換頭尾相接、調整順序、顯示用檔名、加入時略過重複、只挑圖片檔 |
+| `res-list.test.mjs` | 匯入資源：副檔名分類（排除隱藏檔、`~$` 暫存檔）、`resKind()`（檔案、`abs`、內嵌圖片、網址、舊圖片網址的 `as:'image'`）、200 MB 門檻與 `fmtSize()`、狀態預設值、編號與移動、加入時略過重複、顯示用名稱；舊的「圖片」「網頁／影片」小工具轉成 `resource`（`upgradeWidget()`） |
+| `odf.test.mjs` | ODF 轉 HTML（用 `helpers.mjs` 的 `makeZip()`）：長度單位、.odt 的標題／對齊／粗體顏色／文字跳脫／超連結只接受 http(s)／清單／表格／圖片、不是 ODF 時的錯誤；.ods 去掉重複的空白列欄、空工作表、數字靠右；.odp 逐頁、物件位置百分比、標題放大、略過備忘稿與頁碼 |
 | `link-list.test.mjs` | 網址清單：分類標題、名稱與網址、CSV／Tab、說明行、檔名當分類（排除 Windows 的「 (1)」「 - 複製」）、搜尋與分組；試卷釋疑的學校共用資料夾（`loadSchoolLinks()`：子資料夾當分類、PDF／圖片／Word／文字檔變成 `school:` 網址、排除 `~$` 暫存檔與其他檔案、讀不到時的錯誤）、`docKind()`、`linkify()`、`school.json`（`parseSchoolConfig()`）；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed） |
 | `docx.test.mjs` | Word 轉 HTML（測試裡自己做 ZIP）：ZIP 壓縮／不壓縮、XML 實體字元、粗體／顏色／字大小（em）／置中／上下標、標題、換行與定位點、文字跳脫、超連結只接受 http(s)、編號（一、(1)）與數字格式、表格合併儲存格、圖片、追蹤修訂與隱藏文字、不是 Word 檔時的錯誤 |
 | `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
@@ -203,9 +204,12 @@ static/                     前端（桌面版、網頁版共用）
   logo.svg                  黑板樹 Logo（唯一來源：畫面上的 Logo，以及建置時產生的所有圖示）
   remote.html               手機遙控頁
   js/poll-bank.js           投票題庫、匯入題目、投票紀錄與匯出
-  js/image-picker.js        圖片選擇器：個人資料夾／這台電腦（桌面版：桌面、圖片、下載、文件、各磁碟、選擇其他資料夾；網頁版：開啟資料夾）／選擇檔案／網址，可以多選；這台電腦的圖片複製到 media（訪客模式轉成內嵌圖片）
-  js/image-list.js          圖片工具的多張照片（normalizeImageState、moveItem、refName、addRefs…，不碰畫面）
-  js/widgets/image.js       圖片小工具：縮圖卡片（維持原本比例）與單張切換（左右滑動、‹ ›、手機遙控上一張／下一張）
+  js/res-picker.js          資源選擇器（pickResources；背景圖片用 pickImage 只列圖片）：個人資料夾／這台電腦（桌面版：桌面、圖片、下載、文件、各磁碟、選擇其他資料夾；網頁版：開啟資料夾）／選擇檔案／網址，可以多選；這台電腦的檔案複製到 media（桌面版用 filesystem.copy），200 MB 以上的非圖片只記住完整路徑（{kind:'abs'}）
+  js/res-list.js            匯入資源的資料（副檔名分類、resKind、舊圖片／網頁影片狀態升級、moveItem、refName、addRefs…，不碰畫面）
+  js/res-files.js           資源的網址與內容：桌面版的影片、音訊、PDF、文件交給內建伺服器 myscreen-relay.exe 的 /media（只限本機、要有啟動時的 --token，支援 Range，從磁碟分段讀取；Neutralino 內建的網頁伺服器會把整個檔案讀進記憶體，不能用）；resBuffer、resExists
+  js/odf.js                 ODF（.odt／.ods／.odp）轉 HTML，不用外部套件（ZIP、XML 共用 docx.js）；文字一律跳脫
+  js/web-url.js             網址判斷 classifyUrl（YouTube、社群影片、影片檔、網頁）、youtubeSrc、EMBED_SANDBOX、openExternal
+  js/widgets/resource.js    匯入資源小工具：縮圖卡片（維持原本比例；影片、YouTube 顯示畫面）與單張切換；圖片、影片、音訊、PDF、文件、網頁；手機遙控
   js/link-list.js           試卷釋疑的檔案清單：讀取學校共用資料夾（`loadSchoolLinks()`，子資料夾當分類）的 PDF、圖片、Word、文字檔（`school:` 網址、`docKind()`）與「網址清單*.txt」（解析分類／名稱／網址）、搜尋與分組、`toEmbedUrl()`、`linkify()`
   js/docx.js                Word（.docx）轉 HTML，不用外部套件：ZIP（DecompressionStream）、XML、樣式、編號、表格、圖片、超連結；文字一律跳脫
   js/school.js              學校共用資料夾的設定：程式資料夾的 school.json（安裝程式 /SCHOOLDIR 寫入）、這台電腦的 ms:schoolDir（⚙ 設定 → 🏫 學校共用資料夾）；只有桌面版
@@ -223,7 +227,7 @@ static/                     前端（桌面版、網頁版共用）
   js/ui.js                  h()、modal、toast、選擇圖片等共用 UI
   js/ui-prefs.js            畫面偏好（工具列位置、圖示大小、顯示的工具、畫布格線 grid／gridShow 與對齊計算 snapMove、snapResize）
   js/update.js              檢查新版本、下載並驗證、產生更新用的 PowerShell 指令
-  js/widgets/               小工具：time.js、classroom.js、media.js、exam-doc.js（試卷釋疑）、util.js、index.js（清單與順序）；考試時間的計算 examStatus() 在 util.js（手機遙控頁共用，內建 relay 也有嵌入）
+  js/widgets/               小工具：time.js、classroom.js、media.js、resource.js（匯入資源）、exam-doc.js（試卷釋疑）、util.js、index.js（清單與順序）；考試時間的計算 examStatus() 在 util.js（手機遙控頁共用，內建 relay 也有嵌入）
   vendor/qrcode.js          QR Code
   vendor/xlsx.mini.min.js   SheetJS 0.20.3（讀 Excel，用到時才載入）
   js/bpmf.js                注音字型的破音字（讀音選擇符、自動判斷 autoReadings）
@@ -269,7 +273,7 @@ MyScreen/
                        classTools：{ [班級 id]: { [小工具 type]: { state, usedAt } } }，這班的小工具最後的狀態（roster.js 的 recordClassTool，app.js 存檔後 1.5 秒記錄）；小工具定義有 restoreLast（目前是座位表）時，新開會沿用這班的狀態（lastToolState）
                        刪除班級時（roster.js 的 dropClass）這班的白板、classData、classTools、seatLayouts 一起刪除
                        1.10 以前的 pollBank、pollResults、textNotes、lastTools 放在最上層，2.0.0 起不再讀取
-  media/               上傳的圖片、學生照片（照片縮成約 270×360 JPEG）
+  media/               匯入的圖片、影片、文件，學生照片（照片縮成約 270×360 JPEG）
 ```
 
 - **小工具**：`{id, type, x, y, w, h, z, state}`，位置與大小是「佔畫面的比例」（0～1）
@@ -277,7 +281,7 @@ MyScreen/
 - **班級名單**：`classLists: [{id, name, students: [{no, sid, name, photo?}], names}]`
   - `no` 座號（兩位數字串）、`sid` 學號、`photo` 圖片參照
   - `names` 是給舊版程式讀的，存檔時自動由 `students` 產生
-- **圖片參照**：`{kind:'file', base:'data'|'root', path}`、`{kind:'data'|'url', url}`（`{kind:'smb', path}` 是舊格式，等同 root）
+- **圖片／資源參照**：`{kind:'file', base:'data'|'root', path}`、`{kind:'data'|'url', url}`（`{kind:'smb', path}` 是舊格式，等同 root）、`{kind:'abs', path, name}`（匯入資源的 200 MB 以上檔案，這台電腦的完整路徑，只有桌面版、這台電腦能讀）；可另有 `name`（顯示用檔名）、`as:'image'`（舊圖片工具的網址）
 - **relay**：1.3 以前老師自己設定的遙控伺服器網址；1.4.0 起不再使用（舊資料留著也沒關係）
 - **ui**：畫面偏好 `{dock: 'bottom'|'top'|'left'|'right', icon: 'xs'|'s'|'m'|'l'|'xl', labels: 'auto'|'show'|'hide', hidden: [小工具 type]}`（選填）。讀取時一律經過 `ui-prefs.js` 的 `normalizeUi()`：不認得的值改回預設、不存在的小工具去掉、全部隱藏時改回全部顯示
 - **這台電腦上的資料**（不在 V:）：
@@ -379,7 +383,7 @@ export const example = {
 ### 桌面版權限與內嵌網頁
 
 - `desktop/neutralino.config.json` 的 `nativeAllowList` 只列出用到的 Neutralino 函式（不用 `os.*`、`filesystem.*` 萬用字元）。**新增用到的原生函式時要加進清單**，否則桌面版會出現權限錯誤（網頁版測不出來）
-- 網址小工具的 iframe 有 `sandbox`（`media.js` 的 `EMBED_SANDBOX`）：可以執行網頁、全螢幕、開新視窗，但不能把整個黑板樹導到別的網址、不能自動下載
+- 匯入資源的網頁 iframe 有 `sandbox`（`web-url.js` 的 `EMBED_SANDBOX`；PDF 的框沒有 sandbox，WebView2 才會用內建檢視器）：可以執行網頁、全螢幕、開新視窗，但不能把整個黑板樹導到別的網址、不能自動下載
 
 ---
 

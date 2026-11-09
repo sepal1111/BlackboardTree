@@ -3,7 +3,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fmtDuration, parseDuration, shuffle, splitNames } from '../static/js/widgets/util.js';
-import { classifyUrl } from '../static/js/widgets/media.js';
+import { classifyUrl } from '../static/js/web-url.js';
 import { widgetList, widgets, upgradeWidget } from '../static/js/widgets/index.js';
 import { dateHtml } from '../static/js/widgets/time.js';
 import { castVote } from '../static/js/widgets/classroom.js';

@@ -7,7 +7,7 @@ import { LS } from '../store.js';
 import { loadSchoolLinks, filterLinks, groupLinks, isSchoolUrl, schoolPath, docKind, decodeText, toEmbedUrl, linkify, DOC_ICON } from '../link-list.js';
 import { schoolFs, schoolSupported } from '../school.js';
 import { docxToHtml } from '../docx.js';
-import { openExternal, EMBED_SANDBOX } from './media.js';
+import { openExternal, EMBED_SANDBOX } from '../web-url.js';
 
 const CHECK_MS = 60 * 1000;
 const BASE_PX = 22; // 文字、Word 在 100% 時的字大小

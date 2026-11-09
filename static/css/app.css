@@ -257,6 +257,9 @@ body.dragging iframe { pointer-events: none; }
 .fp-item.sel .fp-check { display: grid; }
 .fp-foot { display: flex; align-items: center; gap: 10px; }
 .fp-count { color: var(--muted); }
+.fp-list { position: relative; user-select: none; -webkit-user-select: none; }
+.fp-list.boxing .fp-item { pointer-events: none; }
+.fp-box { position: absolute; z-index: 2; border: 1.5px solid var(--accent); background: rgba(76,110,245,.15); border-radius: 3px; pointer-events: none; }
 .fp-empty { grid-column: 1/-1; color: var(--muted); text-align: center; padding: 30px; }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -420,8 +423,7 @@ body.dragging iframe { pointer-events: none; }
 .tool { border: 0; background: none; border-radius: 6px; padding: 2px 5px; font-size: 16px; }
 .tool.on, .tool:hover { background: #e9ecef; }
 
-/* 圖片 */
-/* 圖片：縮圖卡片（像檔案總管的大圖示，維持原本比例）與單張切換 */
+/* 匯入資源：縮圖卡片（像檔案總管的大圖示，維持原本比例）與單張切換 */
 .image-w { position: relative; display: flex; flex-direction: column; background: #f8f9fa; }
 .image-w.empty { align-items: center; justify-content: center; gap: 8px; }
 .img-main { position: relative; flex: 1; min-height: 0; }
@@ -453,6 +455,42 @@ body.dragging iframe { pointer-events: none; }
 .img-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .image-cap { width: 100%; padding: 6px 10px; text-align: center; font-weight: 700; background: #fff; font-size: min(5cqw, 18px); }
 
+/* 匯入資源：影片、音訊、網頁、文件 */
+.res-pane > video, .res-pane > .res-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.res-pane > video { background: #000; object-fit: contain; }
+.res-pane.social, .res-pane > .res-frame { background: #fff; }
+.res-w .noswipe { touch-action: auto; user-select: text; }
+.res-w .noswipe .img-nav { opacity: .3; width: 36px; }
+.res-w .noswipe .img-nav:hover { opacity: 1; }
+.res-ph, .res-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; color: #343a40; }
+.res-ph-name { max-width: 90%; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.res-msg p { margin: 0; font-size: min(4cqw, 18px); }
+.res-icon { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.img-box > .res-icon { position: absolute; inset: 8%; border-radius: 12px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+.res-icon-e { font-size: min(18cqmin, 64px); line-height: 1; }
+.img-box .res-icon-e { font-size: calc(var(--cell, 180px) * .32); }
+.res-icon small { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .5px; }
+.res-vbox { position: absolute; inset: 0; display: grid; place-items: center; }
+.res-vbox > video, .res-vbox > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #212529; border-radius: 6px; }
+.res-play { position: relative; width: 44px; height: 44px; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; display: grid; place-items: center; font-size: 20px; padding-left: 3px; }
+.res-audio { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: linear-gradient(160deg, #e7f5ff, #f3f0ff); }
+.res-audio-e { font-size: min(22cqmin, 96px); line-height: 1; }
+.res-audio-name { font-size: min(5cqw, 22px); font-weight: 700; max-width: 90%; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-audio audio { width: min(90%, 520px); }
+.res-pane > .res-doc { position: absolute; inset: 0; background: #fff; }
+.res-odp { background: #868e96 !important; padding: 12px; }
+
+/* ODF 文件（odf.js） */
+.xd-word .od-list { margin: 0 0 .35em; padding-left: 1.6em; }
+.xd-word h3.od-sheet { font-size: 1em; margin: .8em 0 .3em; color: #495057; }
+.xd-word .od-table { border-collapse: collapse; }
+.xd-word .od-table td { border: 1px solid #ced4da; padding: .15em .45em; white-space: nowrap; vertical-align: top; }
+.od-slide { position: relative; container-type: inline-size; background: #fff; margin: 0 auto 12px; max-width: 100%; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); overflow: hidden; }
+.od-page { position: absolute; inset: 0; line-height: 1.25; }
+.od-obj { position: absolute; overflow: hidden; }
+img.od-obj { object-fit: contain; max-width: none; }
+.od-obj .dx-p { margin: 0 0 .2em; }
+
 /* QR */
 .qr { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4cqmin; gap: 2cqmin; background: #fff; }
 .qr-box { flex: 1; min-height: 0; width: 100%; display: grid; place-items: center; }
@@ -477,7 +515,6 @@ body.dragging iframe { pointer-events: none; }
 #toast.interactive.show { pointer-events: auto; }
 .toast-link { color: #a5d8ff; font-weight: 700; text-decoration: underline; }
 .toast-undo { background: #fff; color: #212529; border: 0; border-radius: 8px; padding: 6px 14px; font-weight: 700; font-size: 15px; margin: -4px 0; }
-.embed video { flex: 1; width: 100%; height: 100%; background: #000; object-fit: contain; }
 
 /* 座位表 */
 .seats { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
@@ -506,7 +543,6 @@ body.dragging iframe { pointer-events: none; }
 .sl-mini { display: grid; grid-auto-rows: 16px; gap: 2px; max-width: 520px; }
 .sl-mini span { background: #f1f3f5; border-radius: 3px; font-size: 10px; line-height: 16px; height: 16px; text-align: center; overflow: hidden; white-space: nowrap; }
 .sl-mini span.empty { background: #fafafa; }
-.embed.social { background: #fff; }
 
 /* 班級名單 */
 .modal.wide:has(.roster) { width: min(1000px, 100%); }

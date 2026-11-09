@@ -6,6 +6,7 @@ export const splitPath = (rel) => String(rel || '').split(/[\\/]+/).filter((p) =
 const MIME = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
   bmp: 'image/bmp', json: 'application/json', mp3: 'audio/mpeg', wav: 'audio/wav', mp4: 'video/mp4', pdf: 'application/pdf',
+  webm: 'video/webm', ogg: 'audio/ogg', m4a: 'audio/mp4', txt: 'text/plain', avif: 'image/avif', ico: 'image/x-icon',
 };
 export const mimeOf = (name) => MIME[String(name).split('.').pop().toLowerCase()] || '';
 
