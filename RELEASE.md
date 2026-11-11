@@ -1,10 +1,23 @@
-# 黑板樹 Blackboard Tree v2.3.0 發布說明
+# 黑板樹 Blackboard Tree v2.4.0 發布說明
 
 黑板樹（Blackboard Tree）是一套專為學校教學與教室投影設計的免費電子白板軟體。白板與班級設定預設儲存於教師個人的**網路磁碟機（V:）**或隨身硬碟，換電腦、換教室皆能無縫接續教學。軟體內建手機遙控與學生即時投票伺服器，**無須額外架設外部主機**即可實現互動教學。
 
 - 專案首頁：[https://github.com/sepal1111/BlackboardTree](https://github.com/sepal1111/BlackboardTree)
-- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.3.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.3.0)
+- 下載頁面：[https://github.com/sepal1111/BlackboardTree/releases/tag/v2.4.0](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.4.0)
 - 詳細開發與使用文件：[README.md](README.md)
+
+---
+
+## 📂 v2.4.0：匯入資源，圖片、影片、音訊、文件都能放上白板
+
+- **「🖼️ 圖片」和「🌐 網頁／影片」合併成「📂 匯入資源」**：一個工具就能放圖片、影片、音訊、PDF、文字檔、Word（.docx）、開放文件格式（ODF 文字 .odt、試算表 .ods、簡報 .odp），以及 YouTube、網頁、Google 簡報、Canva 等網址。
+- 同樣可以一次選好幾個檔案，用「縮圖卡片」或「單張切換」顯示；影片在縮圖上會顯示畫面，文件顯示圖示。
+- **選檔可以拖曳框選**：用滑鼠拖曳拉出框，框到的檔案都會選取；觸控螢幕用手指按住一下再拖曳。
+- 檔案會複製到白板資料夾，換電腦也看得到；**200 MB 以上的大檔案（例如長影片）不複製，只記住位置**，只有這台電腦能播放。
+- 電腦版播放大影片不再把整個檔案讀進記憶體，幾 GB 的影片也能馬上播放、拖曳進度，不會讓電腦變慢。
+- `.mov` 影片可以播放（H.264 編碼）；iPhone 拍的 HEVC 影片無法播放時，會說明原因並提供「用電腦開啟」按鈕。
+- 手機遙控可以播放／暫停、前後 10 秒、靜音、上一個／下一個、調整文件字的大小。
+- 舊的「圖片」「網頁／影片」小工具會自動變成「匯入資源」，內容不變。
 
 ---
 
@@ -169,11 +182,11 @@
 
 ## 📦 下載檔案說明
 
-請至 [GitHub Releases (v2.3.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.3.0) 下載對應檔案：
+請至 [GitHub Releases (v2.4.0)](https://github.com/sepal1111/BlackboardTree/releases/tag/v2.4.0) 下載對應檔案：
 
 | 下載檔案                                     | 適用情境                     | 說明                                                                                         |
 | -------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
-| **`BlackboardTree-Setup-2.3.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
+| **`BlackboardTree-Setup-2.4.0.exe`** | 一般使用者（**推薦**） | 完整安裝版。自動建立開始功能表與桌面捷徑，支援自動設定防火牆例外，後續版本亦可直接覆蓋升級。 |
 | **`BlackboardTree.exe`**             | 臨時使用／隨身碟執行         | 免安裝綠色版。單一執行檔，下載後雙擊即可直接執行（已內建遙控轉送模組）。                     |
 
 ---
@@ -191,7 +204,7 @@
 
 ### 安裝步驟（安裝版）
 
-1. 雙擊執行 `BlackboardTree-Setup-2.3.0.exe`。
+1. 雙擊執行 `BlackboardTree-Setup-2.4.0.exe`。
 2. 若出現微軟藍色警示畫面「Windows 已保護您的電腦」：請點擊「**其他資訊**」→「**仍要執行**」。
 3. 依安裝引導步驟點選「下一步」，建議勾選：
    - **建立桌面捷徑**
@@ -218,7 +231,7 @@
 
 ```cmd
 :: 為電腦所有使用者安裝（需以系統管理員身分執行），並自動設定防火牆例外
-BlackboardTree-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
+BlackboardTree-Setup-2.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="desktopicon,firewall"
 ```
 
 - **防火牆說明**：手機遙控與學生投票使用內建的轉送程式 `myscreen-relay.exe`，通訊埠預設為 `52480`。
@@ -253,6 +266,11 @@ BlackboardTree-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /TASKS="d
 
 ## 版本紀錄
 
+### 2.4.0
+- **匯入資源**：圖片與網頁／影片合併成一個工具，可以放圖片、影片、音訊、PDF、文字檔、Word、ODF（.odt、.ods、.odp）與網址
+- 選檔可以拖曳框選（觸控螢幕按住一下再拖曳）
+- 200 MB 以上的檔案不複製，只記住在這台電腦上的位置
+- 修正：播放大影片時記憶體大量增加、電腦變慢；.mov 影片無法播放
 ### 2.3.0
 - **圖片工具**：可以瀏覽這台電腦的資料夾（桌面、圖片、下載、各磁碟），一次加入多張照片
 - 多張照片用「縮圖卡片」（維持原本比例）或「單張切換」（左右滑動）顯示；可以調整順序、縮圖大小

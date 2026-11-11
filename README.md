@@ -104,7 +104,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 
 #### 安裝
 
-執行 `BlackboardTree-Setup-2.3.0.exe`，依畫面按「下一步」即可：
+執行 `BlackboardTree-Setup-2.4.0.exe`，依畫面按「下一步」即可：
 
 - 安裝到 `%LOCALAPPDATA%\Programs\BlackboardTree`（從 1.5 以前升級的電腦沿用原本的 `%LOCALAPPDATA%\Programs\MyScreen`），**不需要系統管理員權限**（和網路磁碟機程式相同）
 - 會建立開始功能表與桌面捷徑，並出現在「設定 → 應用程式」中，可以從那裡解除安裝
@@ -123,7 +123,7 @@ V: 暫時斷線時，白板仍可繼續使用（先存在這台電腦），連�
 資訊組大量部署時可以用靜默安裝：
 
 ```
-BlackboardTree-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
+BlackboardTree-Setup-2.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon
 ```
 
 手機遙控與學生投票由老師的電腦擔任伺服器，安裝時不需要設定。要讓全校的「試卷釋疑」讀同一個學校共用資料夾，可以再加上 `/SCHOOLDIR="\\fileserver\公告"`（見「🏫 學校共用資料夾的設定」）。
@@ -206,6 +206,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 | Word（`.docx`）、ODF 文字文件（`.odt`）、試算表（`.ods`）、簡報（`.odp`）、文字檔（`.txt`、`.md`、`.csv`） | 轉成網頁顯示，文字可用 A−／A+ 調整大小；簡報逐頁往下排 |
 | 網址 | YouTube、Facebook、Instagram、Threads、TikTok、Vimeo、Google 簡報、Canva、一般網頁 |
 
+- 選檔時點一下可以多選，也可以用滑鼠拖曳框選（觸控螢幕：手指按住一下再拖曳）；從已選的檔案開始拖曳會取消框到的檔案。
 - 檔案會複製到白板資料夾的 `media`，換到其他電腦也看得到。
 - **200 MB 以上的大檔案（例如長影片）不複製，只記住在這台電腦上的位置**：只有這台電腦能播放，檔案移走或改名後就讀不到。
 - 影片要是 H.264 或 VP9 編碼才能播放；iPhone 拍的 HEVC（H.265）`.mov` 可能無法播放，會出現「用電腦開啟」按鈕，或先轉成 MP4（H.264）再匯入。
@@ -276,7 +277,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - 資訊組大量部署：安裝時加上 `/SCHOOLDIR`，所有電腦一次設定好（寫在程式資料夾的 `school.json`；之後程式內更新不會改掉）
 
 ```
-BlackboardTree-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon /SCHOOLDIR="\\fileserver\公告"
+BlackboardTree-Setup-2.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon /SCHOOLDIR="\\fileserver\公告"
 ```
 
 - 免安裝版：在 `BlackboardTree.exe` 旁邊放一個 `school.json`，內容寫 `{"dir": "\\\\fileserver\\公告"}`（或只寫一行路徑）
@@ -328,7 +329,7 @@ BlackboardTree-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS=desktopicon 
 **Windows 防火牆**：手機要連進這台電腦，需要防火牆允許 `myscreen-relay.exe`。
 
 - 安裝時勾選「允許手機連線到這台電腦」（預設勾選）：以系統管理員安裝時直接加入；一般帳號安裝會跳出系統管理員確認，可請資訊組輸入密碼
-- 大量部署建議以系統管理員執行：`BlackboardTree-Setup-2.3.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
+- 大量部署建議以系統管理員執行：`BlackboardTree-Setup-2.4.0.exe /VERYSILENT /ALLUSERS /TASKS="desktopicon,firewall"`
 - 沒有加入例外時，第一次開啟遙控 Windows 會詢問是否允許，需要系統管理員權限才能允許
 
 > **網路注意事項**：手機必須能連到教室電腦（同一個校內網路）。若學校的無線網路（手機）和教學網路（教室電腦）是分開的網段，請資訊組開放手機網段連到教室電腦的 52480 埠（網頁版是 8080 埠）。

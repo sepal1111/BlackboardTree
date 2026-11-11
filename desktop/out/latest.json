@@ -1,13 +1,23 @@
 {
-  "version": "2.3.0",
-  "date": "2026-11-09",
+  "version": "2.4.0",
+  "date": "2026-11-11",
   "notes": [
-    "- **圖片工具**：可以瀏覽這台電腦的資料夾（桌面、圖片、下載、各磁碟），一次加入多張照片",
-    "- 多張照片用「縮圖卡片」（維持原本比例）或「單張切換」（左右滑動）顯示；可以調整順序、縮圖大小",
-    "- 手機遙控可以上一張／下一張",
-    "- 修正：小工具全螢幕後關閉，桌面版下方工具列被 Windows 工作列擋住"
+    "- **匯入資源**：圖片與網頁／影片合併成一個工具，可以放圖片、影片、音訊、PDF、文字檔、Word、ODF（.odt、.ods、.odp）與網址",
+    "- 選檔可以拖曳框選（觸控螢幕按住一下再拖曳）",
+    "- 200 MB 以上的檔案不複製，只記住在這台電腦上的位置",
+    "- 修正：播放大影片時記憶體大量增加、電腦變慢；.mov 影片無法播放"
   ],
   "history": [
+    {
+      "version": "2.4.0",
+      "date": "",
+      "notes": [
+        "- **匯入資源**：圖片與網頁／影片合併成一個工具，可以放圖片、影片、音訊、PDF、文字檔、Word、ODF（.odt、.ods、.odp）與網址",
+        "- 選檔可以拖曳框選（觸控螢幕按住一下再拖曳）",
+        "- 200 MB 以上的檔案不複製，只記住在這台電腦上的位置",
+        "- 修正：播放大影片時記憶體大量增加、電腦變慢；.mov 影片無法播放"
+      ]
+    },
     {
       "version": "2.3.0",
       "date": "",
@@ -100,24 +110,17 @@
         "- 手機遙控可以延長目前這一節 5 或 10 分鐘",
         "- 新的 24 小時制時間選擇器，選時間更直覺"
       ]
-    },
-    {
-      "version": "1.6.3",
-      "date": "",
-      "notes": [
-        "- 新的黑板樹 Logo：程式圖示、安裝程式、工作列與系統匣圖示，以及開始畫面、「關於與更新」都改用新 Logo"
-      ]
     }
   ],
   "setup": {
-    "file": "BlackboardTree-Setup-2.3.0.exe",
-    "size": 12431256,
-    "sha256": "26f94de68c2ce00d9eb02e52c81c8c28d7cc7b6a34a0a756759c0a61dbcf4fa3"
+    "file": "BlackboardTree-Setup-2.4.0.exe",
+    "size": 12443192,
+    "sha256": "aab246010c4f191654efb809d1a567ba5763fb4efb8d354faf99aee3820881e3"
   },
   "portable": {
     "file": "BlackboardTree.exe",
-    "size": 13485056,
-    "sha256": "657bcecc6affeb0653bbcf11b0601eea6e8dbd9b04b12c1b7bcaf4f14feb3856"
+    "size": 13530624,
+    "sha256": "3a6db616c49e598d65b145eed41a26dfcc2dbb86e76b334b30cc26a4ae4ec5e3"
   },
-  "signature": "AUjgwiUVXBAYfdU9btQ7ik7NdE46eRE9cCQFoYtW8p7vl6QRE98qKWgriZZ9cJRpDd1Wgg3OlvGk1SySFO4Tfg=="
+  "signature": "MnFMcbw2EStklI2sNEVTXozgvn1lMEtbp/Ssb5ObKahEaCHOsWBSxGHkcyOdv/hKky/qFZ5S+e6NwUlJ1JA77Q=="
 }
