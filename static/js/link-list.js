@@ -69,18 +69,19 @@ export async function decodeText(blob) {
 export const SCHOOL_PREFIX = 'school:';
 export const isSchoolUrl = (u) => String(u || '').startsWith(SCHOOL_PREFIX);
 export const schoolPath = (u) => String(u || '').slice(SCHOOL_PREFIX.length);
-// 檔案類型 → 'pdf' | 'image' | 'text' | 'word' | 'doc' | ''（不顯示）
+// 檔案類型 → 'pdf' | 'image' | 'video' | 'text' | 'word' | 'doc' | ''（不顯示）
 export function docKind(name) {
   const n = String(name || '');
   if (/^~\$|^\./.test(n)) return ''; // Word 開啟中的暫存檔、隱藏檔
   if (/\.pdf$/i.test(n)) return 'pdf';
   if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n)) return 'image';
+  if (/\.(mp4|m4v|webm|ogv|mov)$/i.test(n)) return 'video';
   if (/\.docx$/i.test(n)) return 'word';
   if (/\.doc$/i.test(n)) return 'doc';
   if (/\.txt$/i.test(n) && !LINK_FILE_RE.test(n)) return 'text';
   return '';
 }
-export const DOC_ICON = { pdf: '📕', image: '🖼️', text: '📝', word: '📘', doc: '📘', web: '🌐' };
+export const DOC_ICON = { pdf: '📕', image: '🖼️', video: '🎬', text: '📝', word: '📘', doc: '📘', web: '🌐' };
 const byName = (a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true });
 
 // 讀取一個資料夾 → { files: [相對路徑], items: [{ group, name, url, file, doc }] }

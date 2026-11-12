@@ -20,7 +20,8 @@ export function absPathOf(store, ref) {
   return '';
 }
 
-async function localUrl(abs) {
+// 這台電腦上的完整路徑 → 網址（影片、PDF 從磁碟分段讀取）
+export async function localUrl(abs) {
   if (localServer) {
     try { return (await localServer()) + encodeURIComponent(abs.replace(/\//g, '\\')); } catch { /* 改用讀檔 */ }
   }

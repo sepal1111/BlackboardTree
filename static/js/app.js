@@ -897,7 +897,7 @@ function settingsDialog(tab = 'board') {
     const apply = (v) => { setSchoolDir(v); render(); };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(input.value); });
     main.append(sec('學校共用資料夾',
-      h('p', { class: 'muted' }, '教務處把試題疑義、更正說明（PDF、圖片、Word、文字檔，或網址清單.txt）放在全校教室電腦都讀得到的資料夾，在「📑 試卷釋疑」小工具就能挑選顯示；教務處更新檔案後，白板會自動顯示新的內容。'),
+      h('p', { class: 'muted' }, '教務處把試題疑義、更正說明（PDF、圖片、影片、Word、文字檔，或網址清單.txt）放在全校教室電腦都讀得到的資料夾，在「📑 試卷釋疑」小工具就能挑選顯示；教務處更新檔案後，白板會自動顯示新的內容。'),
       h('div', { class: 'row school-row' }, input,
         h('button', { class: 'btn', onclick: async () => {
           const p = await window.Neutralino.os.showFolderDialog('選擇學校共用資料夾').catch(() => '');

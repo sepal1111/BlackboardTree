@@ -392,9 +392,11 @@ const RENDER = {
   },
   examdoc(w) {
     const v = w.view || {};
-    const ICON = { pdf: '📕', image: '🖼️', text: '📝', word: '📘', doc: '📘', web: '🌐' };
+    const ICON = { pdf: '📕', image: '🖼️', video: '🎬', text: '📝', word: '📘', doc: '📘', web: '🌐' };
     if (!v.name) return [h('div', { class: 'muted' }, '尚未選擇檔案，請在電視上按「📂 選擇試卷釋疑」')];
     const out = [h('div', { class: 'card-title' }, (ICON[v.doc] || '📄') + ' ' + v.name)];
+    if (v.offline) out.push(h('div', { class: 'muted' }, '⚠ 教室電腦連不到原始檔案，正在顯示先前的副本'));
+    if (v.video) out.push(h('div', { class: 'row' }, btn(v.playing ? '⏸ 暫停' : '▶ 播放', () => wcmd(w, 'play'), 'primary'), btn('⏮ 從頭播放', () => wcmd(w, 'restart'))));
     if (v.scroll) out.push(h('div', { class: 'row' }, btn('▲ 上一頁', () => wcmd(w, 'up')), btn('▼ 下一頁', () => wcmd(w, 'down'), 'primary')));
     const chips = [];
     if (v.doc === 'text' || v.doc === 'word') chips.push(btn('A− 字變小', () => wcmd(w, 'smaller')), btn('A+ 字變大', () => wcmd(w, 'bigger')));

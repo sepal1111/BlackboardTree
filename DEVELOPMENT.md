@@ -123,6 +123,7 @@ npm test
 | `odf.test.mjs` | ODF 轉 HTML（用 `helpers.mjs` 的 `makeZip()`）：長度單位、.odt 的標題／對齊／粗體顏色／文字跳脫／超連結只接受 http(s)／清單／表格／圖片、不是 ODF 時的錯誤；.ods 去掉重複的空白列欄、空工作表、數字靠右；.odp 逐頁、物件位置百分比、標題放大、略過備忘稿與頁碼 |
 | `link-list.test.mjs` | 網址清單：分類標題、名稱與網址、CSV／Tab、說明行、檔名當分類（排除 Windows 的「 (1)」「 - 複製」）、搜尋與分組；試卷釋疑的學校共用資料夾（`loadSchoolLinks()`：子資料夾當分類、PDF／圖片／Word／文字檔變成 `school:` 網址、排除 `~$` 暫存檔與其他檔案、讀不到時的錯誤）、`docKind()`、`linkify()`、`school.json`（`parseSchoolConfig()`）；`toEmbedUrl()`（Google 簡報／雲端硬碟 /preview、Canva ?embed） |
 | `docx.test.mjs` | Word 轉 HTML（測試裡自己做 ZIP）：ZIP 壓縮／不壓縮、XML 實體字元、粗體／顏色／字大小（em）／置中／上下標、標題、換行與定位點、文字跳脫、超連結只接受 http(s)、編號（一、(1)）與數字格式、表格合併儲存格、圖片、追蹤修訂與隱藏文字、不是 Word 檔時的錯誤 |
+| `doc-cache.test.mjs` | 試卷釋疑的本機快取（假的檔案系統）：第一次開啟複製、沒變不再複製、同時開只複製一次、更新時換新版本並刪舊副本、舊副本被占用時之後再刪、複製中原始檔又變（還在寫入）時丟掉重試、離線用舊副本、副本被清掉時重新複製、30 天整理；`sourcePath()`（`school:`／`local:`）、影片的 `docKind()` |
 | `widgets.test.mjs` | 計時器時間格式、手機傳來的網址判斷（YouTube／社群網站／影片檔）、每個小工具的必要欄位、工具列圖示檔都存在、舊白板小工具升級（`upgradeWidget`）、時鐘日期的日期文字與月曆、學生投票計票（`castVote`：一人一票、改票、不能改票） |
 
 - `tests/helpers.mjs` 模擬瀏覽器環境（`localStorage`、`window`、`document`），並提供記憶體裡的資料夾 `MemFs`（介面同 `FsaAdapter`／`NeuAdapter`，`failing = true` 可模擬斷線）
@@ -211,6 +212,7 @@ static/                     前端（桌面版、網頁版共用）
   js/odf.js                 ODF（.odt／.ods／.odp）轉 HTML，不用外部套件（ZIP、XML 共用 docx.js）；文字一律跳脫
   js/web-url.js             網址判斷 classifyUrl（YouTube、社群影片、影片檔、網頁）、youtubeSrc、EMBED_SANDBOX、openExternal
   js/widgets/resource.js    匯入資源小工具：縮圖卡片（維持原本比例；影片、YouTube 顯示畫面）與單張切換；圖片、影片、音訊、PDF、文件、網頁；手機遙控
+  js/doc-cache.js           試卷釋疑的本機快取（DocCache）：開啟時把原始檔案複製到 %APPDATA%\MyScreen\cache\examdoc（檔名 來源雜湊-版本雜湊.副檔名），定時只比對大小＋修改時間，變了才複製新版本；複製後再查一次原始檔，還在寫入就丟掉；連不到時用舊副本（offline）；紀錄在 LS 的 ms:docCache，30 天沒開的刪除
   js/link-list.js           試卷釋疑的檔案清單：讀取學校共用資料夾（`loadSchoolLinks()`，子資料夾當分類）的 PDF、圖片、Word、文字檔（`school:` 網址、`docKind()`）與「網址清單*.txt」（解析分類／名稱／網址）、搜尋與分組、`toEmbedUrl()`、`linkify()`
   js/docx.js                Word（.docx）轉 HTML，不用外部套件：ZIP（DecompressionStream）、XML、樣式、編號、表格、圖片、超連結；文字一律跳脫
   js/school.js              學校共用資料夾的設定：程式資料夾的 school.json（安裝程式 /SCHOOLDIR 寫入）、這台電腦的 ms:schoolDir（⚙ 設定 → 🏫 學校共用資料夾）；只有桌面版
@@ -422,6 +424,8 @@ export const example = {
 - ⚙ 總設定：白板、班級名單、工具列（位置、圖示大小、顯示的工具），已用瀏覽器實際操作過
 
 ### 尚未驗證（需要在學校環境測）
+
+- [ ] **試卷釋疑的本機快取與自動更新**：開發機的桌面版已實測（本機資料夾 D:\）：選擇資料夾、PDF／圖片／文字檔／影片（.webm）從副本顯示、覆蓋原始檔後 10 秒內自動更新（文字檔保留捲動位置、影片保留播放位置）、資料夾不見時顯示「⚠ 離線副本」並在恢復後自動更新、舊副本有刪除。還沒測：真正的學校網路資料夾（UNC 路徑、斷線時查詢會不會卡住）、多台電腦同時讀、Word（.docx）、.mp4／.mov、手機遙控的影片按鈕
 
 - [ ] **系統匣選單**：已確認圖示有註冊到 Windows、關閉視窗時 relay 一起結束；選單內容與點選動作（顯示 QR Code、結束）還沒有實際點過
 - [ ] **網路變動時更新 IP**（`IPS`）：開發機沒有實際切換過網路
