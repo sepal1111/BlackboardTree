@@ -58,7 +58,7 @@ export function notesSince(manifest, current) {
 // ---- 數位簽章：latest.json 由發布者的私鑰簽章（desktop/make-latest.mjs），程式內建公鑰驗證
 // 就算 GitHub 上的檔案被竄改，沒有私鑰就做不出正確的簽章，黑板樹不會下載更新
 // 公鑰：ECDSA P-256（SPKI，Base64）；私鑰放在發布者電腦的 %USERPROFILE%\.blackboardtree\update-signing-key.pem
-export const UPDATE_PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN0e2TyDZedFopHaACHHwB4GtiYZ9bMBrazejUmaAlsZE8tJxPByAy3BDZjTlXfCPTcqegh2Ojmy62XlY19iElw==';
+export const UPDATE_PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBES4F9tN4wOwSZGGHASHkh3JYqhTp0YUBJ8YTUr1ydM+NqIQlv216o4xvTc3Px2+aU5mI7ftgImQfwFeSrZAhw==';
 
 // 簽章的內容：latest.json 去掉 signature 後的精簡 JSON（欄位順序與檔案相同）
 export function signedPayload(json) {

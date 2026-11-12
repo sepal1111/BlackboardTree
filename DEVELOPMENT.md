@@ -166,6 +166,7 @@ node desktop/relay/test-relay.mjs
 - **`latest.json` 有數位簽章**（1.9.1 起）：`make-latest.mjs` 用發布者的私鑰（ECDSA P-256）簽「去掉 `signature` 的精簡 JSON」，黑板樹用內建的 `UPDATE_PUBLIC_KEY` 驗證，簽章不對就不更新。就算有人改了 GitHub 上的檔案，沒有私鑰也做不出能讓黑板樹安裝的版本
   - 私鑰：`%USERPROFILE%\.blackboardtree\update-signing-key.pem`（可用環境變數 `BT_SIGNING_KEY` 指定別的位置），**不能放進 git，一定要備份**（例如加密的隨身碟、密碼管理器）。遺失私鑰，已安裝的黑板樹就再也無法自動更新，只能請老師手動下載新版
   - 換電腦發布：把備份的私鑰放回上面的位置即可。沒有私鑰或私鑰和 `UPDATE_PUBLIC_KEY` 不是同一組時，`build.ps1` 的最後一步會失敗
+  - 2.5.0 因為舊私鑰遺失，換了一組新金鑰（`UPDATE_PUBLIC_KEY` 已更新）；2.4.0 以前的版本只認舊公鑰，要手動安裝 2.5.0
   - 第一次（或私鑰外洩要換一組）：`node desktop/make-latest.mjs --init-key` 產生私鑰（已存在時不會覆蓋），把印出的公鑰貼到 `update.js` 的 `UPDATE_PUBLIC_KEY`。換了公鑰之後，舊版黑板樹只認舊公鑰，必須先讓大家手動更新到含新公鑰的版本
   - 測試假版本資訊時，`checkForUpdate({ publicKey })` 可以傳入測試用的公鑰（見 `tests/update.test.mjs`）
 - 下載的檔案和 `latest.json` 在同一個資料夾，會比對大小與 SHA-256，不符就不更新（避免 GitHub 還在更新、檔案不完整）
@@ -175,6 +176,7 @@ node desktop/relay/test-relay.mjs
 
 | 版本 | 內容 |
 |---|---|
+| 2.5.0 | 試卷釋疑：自選資料夾（`local:` 網址、`ms:examDocDir`）、影片（`docKind` 的 video，經 relay `/media` 播放）、本機快取（`doc-cache.js`，`%APPDATA%\MyScreen\cache\examdoc`）、每 10 秒比對大小＋修改時間自動更新（保留捲動與播放位置）、離線副本；**更新簽章換了新金鑰**（舊私鑰遺失），2.4.0 以前的版本要手動安裝 2.5.0 |
 | 2.4.0 | 匯入資源（`widgets/resource.js`）取代圖片與網頁／影片：`res-list.js`（類型判斷、狀態、舊小工具轉換）、`res-picker.js`（選檔視窗，多選可拖曳框選 `boxSelect()`）、`res-files.js`（檔案網址）、`odf.js`（ODF 文字、試算表、簡報轉 HTML）、`web-url.js`；200 MB 以上只記住 `abs` 路徑；桌面版本機檔案改由 relay 的 `/media`（啟動時的隨機 token、HTTP Range 分段讀取）播放，不再用 Neutralino 的 server.mount；`.mov` 當成 video/mp4 |
 | 2.3.0 | 圖片工具多張照片（`widgets/image.js`、`image-list.js`）：縮圖卡片與單張切換、手機遙控上一張／下一張；圖片選擇器（`image-picker.js`）可以瀏覽這台電腦的資料夾、多選，選到的檔案複製到 media；舊的單張 `state.ref` 自動轉成 `refs`；桌面版離開全螢幕後重新最大化（`desktopFullscreen()`，新增 window.isMaximized／maximize／unmaximize 權限） |
 | 2.2.0 | 試卷釋疑（`widgets/exam-doc.js`）：讀取學校共用資料夾（`school.js`：school.json／安裝程式 `/SCHOOLDIR`、`ms:schoolDir`）的 PDF、圖片、Word、文字檔、網址清單（`link-list.js` 的 `loadSchoolLinks()`）；Word 轉 HTML（`docx.js`）；每分鐘比對檔案大小與修改時間自動更新；設定頁「🏫 學校共用資料夾」；網頁／影片恢復成 2.0.0（移除白板資料夾的網址清單） |
