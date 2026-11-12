@@ -202,7 +202,7 @@ export const work = {
     body.append(h('div', { class: 'work' }, big, bar));
     function render() {
       const m = MODES.find((x) => x[0] === s.mode) || MODES[0];
-      big.innerHTML = `<div class="work-emoji">${m[1]}</div><div class="work-label">${s.custom || m[2]}</div>`;
+      big.replaceChildren(h('div', { class: 'work-emoji' }, m[1]), h('div', { class: 'work-label' }, s.custom || m[2]));
       big.className = 'work-big m-' + m[0];
       bar.innerHTML = '';
       MODES.forEach(([k, e, l]) => bar.append(h('button', { class: k === s.mode ? 'on' : '', title: l,
